@@ -261,12 +261,11 @@ final class LibraryCoordinator {
             }
         }
 
-        /// Whether Randomize applies.
-        ///
-        /// Never to the speed dial. Its whole value is that the fourth thing is
-        /// still fourth tomorrow; a shuffle would be the one change that
-        /// destroys the reason the page exists.
-        var canReshuffle: Bool { self != .pinned }
+        /// Every page can be redealt, including the speed dial — but on that
+        /// page it only ever touches the slots Cue filled in for you. Anything
+        /// you kept stays exactly where you put it, because the fourth thing
+        /// still being fourth tomorrow is the reason the page works.
+        var canReshuffle: Bool { true }
 
         var emptyMessage: String {
             switch self {
@@ -312,7 +311,10 @@ final class LibraryCoordinator {
     /// that started music would be a different verb wearing the same word, and
     /// this one is for looking.
     func reshuffle(_ page: Page) {
-        guard page.canReshuffle else { return }
+        guard page != .pinned else {
+            reshuffleSuggestions()
+            return
+        }
 
         let pool = pool(for: page)
         guard pool.count > SettingsStore.tileCount else {
@@ -325,9 +327,27 @@ final class LibraryCoordinator {
         deal[page] = Array(pool.indices.shuffled().prefix(SettingsStore.tileCount))
     }
 
-    /// Whether a page has more than it can show, and so has something to deal.
+    /// Redeals the speed dial's auto-filled slots, leaving every pin alone.
+    private func reshuffleSuggestions() {
+        let pinned = Set(settings.pinnedTiles.compactMap { $0?.id })
+        let available = suggestions.filter { !pinned.contains($0.id) }
+        guard available.count > 1 else { return }
+        suggestions = suggestions.shuffled()
+    }
+
+    /// Whether a page has something else to deal.
     func canReshuffle(_ page: Page) -> Bool {
-        page.canReshuffle && pool(for: page).count > SettingsStore.tileCount
+        switch page {
+        case .pinned:
+            // Only worth offering when there is at least one slot Cue filled in
+            // and something else it could have put there.
+            let pinnedCount = settings.pinnedTiles.compactMap { $0 }.count
+            return settings.autoFillsEmptyTiles
+                && pinnedCount < SettingsStore.tileCount
+                && suggestions.count > SettingsStore.tileCount - pinnedCount
+        case .liked, .albums:
+            return pool(for: page).count > SettingsStore.tileCount
+        }
     }
 
     // MARK: - Tiles

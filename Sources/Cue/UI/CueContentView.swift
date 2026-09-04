@@ -25,8 +25,11 @@ struct CueContentView: View {
     /// Arranging state: the panel is being positioned and sized rather than
     /// used, so it takes drags instead of clicks.
     let isEditing: Bool
-    let onDragMove: (CGSize, Bool) -> Void
-    let onDragResize: (CGSize, Bool, Bool) -> Void
+    /// Told only that a drag moved or ended. Where the pointer is comes from
+    /// the screen, not from the gesture — a translation measured relative to a
+    /// window that is itself being moved oscillates.
+    let onDragMove: (Bool) -> Void
+    let onDragResize: (Bool, Bool) -> Void
 
     @FocusState private var isSearchFocused: Bool
 
@@ -88,13 +91,22 @@ struct CueContentView: View {
         // does not, and rather than guess a fourth time at why, this handles
         // them through SwiftUI's own focus system as well — which only sees a
         // key the monitor declined to take.
-        .onKeyPress(.leftArrow) { movePage(by: -1) }
-        .onKeyPress(.rightArrow) { movePage(by: 1) }
+        .onKeyPress(.leftArrow) { horizontal(-1) }
+        .onKeyPress(.rightArrow) { horizontal(1) }
     }
 
-    private func movePage(by offset: Int) -> KeyPress.Result {
-        guard settings.panelDesign == .gallery, presenter.mode == .grid else { return .ignored }
-        presenter.movePage(by: offset)
+    /// Left and Right: pages in the gallery, selection in the compact grid.
+    ///
+    /// Here rather than in the window controller's event monitor, which never
+    /// received these keys at all — the arrows did nothing until this existed.
+    private func horizontal(_ offset: Int) -> KeyPress.Result {
+        guard presenter.mode == .grid, !isEditing else { return .ignored }
+
+        if settings.panelDesign == .gallery {
+            presenter.movePage(by: offset)
+        } else {
+            presenter.moveSelection(by: offset)
+        }
         return .handled
     }
 
@@ -129,24 +141,29 @@ struct CueContentView: View {
                 .contentShape(.rect)
                 .gesture(
                     DragGesture(minimumDistance: 1)
-                        .onChanged { onDragMove($0.translation, false) }
-                        .onEnded { onDragMove($0.translation, true) }
+                        .onChanged { _ in onDragMove(false) }
+                        .onEnded { _ in onDragMove(true) }
                 )
 
             // The grabber sits on the edge it resizes, which is the only place
             // it can be without needing a label to explain itself.
             Capsule()
                 .fill(CuePalette.accent)
-                .frame(width: 4, height: 46)
-                .padding(.trailing, 3)
-                .contentShape(.rect.inset(by: -10))
+                .frame(width: 5, height: 56)
+                .padding(.trailing, 4)
+                // Inside a wider transparent strip, because the hit area of a
+                // five-point capsule at the very edge would be clipped by the
+                // panel it sits in — leaving a control that can be seen and not
+                // grabbed.
+                .frame(width: 26, height: 80)
+                .contentShape(.rect)
                 .gesture(
                     DragGesture(minimumDistance: 1)
-                        .onChanged {
-                            onDragResize($0.translation, NSEvent.modifierFlags.contains(.shift), false)
+                        .onChanged { _ in
+                            onDragResize(NSEvent.modifierFlags.contains(.shift), false)
                         }
-                        .onEnded {
-                            onDragResize($0.translation, NSEvent.modifierFlags.contains(.shift), true)
+                        .onEnded { _ in
+                            onDragResize(NSEvent.modifierFlags.contains(.shift), true)
                         }
                 )
                 .help("Drag to resize · hold ⇧ for steps")

@@ -47,8 +47,15 @@ final class CueWindowController {
     /// focus loss, and shows its resize edge.
     private(set) var isEditing = false
 
-    /// The window's frame when the current drag began.
-    private var dragOrigin: NSRect?
+    /// Where the pointer and the window were when the current drag began.
+    ///
+    /// The pointer's position is taken from the screen rather than from
+    /// SwiftUI's translation, and that is the whole point: the translation a
+    /// gesture reports is measured relative to its own window, so moving the
+    /// window during the drag feeds straight back into the next measurement.
+    /// The panel shook itself across the screen. Global coordinates do not move
+    /// when the window does.
+    private var dragAnchor: (mouse: NSPoint, frame: NSRect)?
 
     init(
         coordinator: LibraryCoordinator,
@@ -172,25 +179,29 @@ final class CueWindowController {
     func endEditing() {
         guard isEditing else { return }
         isEditing = false
-        dragOrigin = nil
+        dragAnchor = nil
         configureContent()
     }
 
+    /// The pointer's movement since the drag began, in screen coordinates.
+    private func dragDelta() -> (delta: NSPoint, frame: NSRect) {
+        let mouse = NSEvent.mouseLocation
+        let anchor = dragAnchor ?? (mouse, panel.frame)
+        if dragAnchor == nil { dragAnchor = anchor }
+
+        return (
+            NSPoint(x: mouse.x - anchor.mouse.x, y: mouse.y - anchor.mouse.y),
+            anchor.frame
+        )
+    }
+
     /// Moves the window by a drag, pulling onto a guide when close.
-    func dragPanel(by translation: CGSize, isEnd: Bool) {
+    func dragPanel(isEnd: Bool) {
         guard let screen = panel.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
 
-        let start = dragOrigin ?? panel.frame
-        if dragOrigin == nil { dragOrigin = start }
-
-        // SwiftUI's y grows downward and AppKit's grows upward, so the
-        // vertical translation is inverted. Getting this wrong makes the panel
-        // run away from the pointer, which is the least ambiguous bug there is.
-        let proposed = NSPoint(
-            x: start.minX + translation.width,
-            y: start.minY - translation.height
-        )
+        let (delta, start) = dragDelta()
+        let proposed = NSPoint(x: start.minX + delta.x, y: start.minY + delta.y)
 
         let free = NSSize(
             width: max(visible.width - start.width, 0),
@@ -205,32 +216,40 @@ final class CueWindowController {
         panel.setFrameOrigin(snapped)
 
         if isEnd {
-            settings.panelPosition = CueLayout.position(
-                of: snapped,
-                size: start.size,
-                in: visible
-            )
-            dragOrigin = nil
+            settings.panelPosition = CueLayout.position(of: snapped, size: start.size, in: visible)
+            dragAnchor = nil
         }
     }
 
     /// Resizes by dragging the panel's edge.
-    func resizePanel(by translation: CGSize, stepped: Bool, isEnd: Bool) {
-        let start = dragOrigin ?? panel.frame
-        if dragOrigin == nil { dragOrigin = start }
+    func resizePanel(stepped: Bool, isEnd: Bool) {
+        let (delta, start) = dragDelta()
 
-        var width = start.width + translation.width
+        var width = start.width + delta.x
         if stepped { width = LayoutGuides.step(width) }
         width = min(max(width, CueLayout.panelWidthRange.lowerBound), CueLayout.panelWidthRange.upperBound)
 
         // Written through the setting rather than straight onto the window, so
-        // the contents resize with it — the whole reason the slider did not
-        // work was a size the views could not see.
+        // the contents resize with it — a size the views cannot see is exactly
+        // what made the slider do nothing.
         settings.panelWidth = Double(width)
         applyMetrics()
-        reposition()
 
-        if isEnd { dragOrigin = nil }
+        // The origin is left alone during the drag. Repositioning on every
+        // frame would move the panel out from under the edge being pulled,
+        // which is the other half of the shake.
+        panel.setFrameOrigin(start.origin)
+
+        if isEnd {
+            dragAnchor = nil
+            if let screen = panel.screen ?? NSScreen.main {
+                settings.panelPosition = CueLayout.position(
+                    of: panel.frame.origin,
+                    size: panel.frame.size,
+                    in: screen.visibleFrame
+                )
+            }
+        }
     }
 
     /// Puts the panel back where its saved position says, at its current size.
@@ -313,11 +332,9 @@ final class CueWindowController {
                 self?.container.contentHeight = height
             },
             isEditing: isEditing,
-            onDragMove: { [weak self] translation, isEnd in
-                self?.dragPanel(by: translation, isEnd: isEnd)
-            },
-            onDragResize: { [weak self] translation, stepped, isEnd in
-                self?.resizePanel(by: translation, stepped: stepped, isEnd: isEnd)
+            onDragMove: { [weak self] isEnd in self?.dragPanel(isEnd: isEnd) },
+            onDragResize: { [weak self] stepped, isEnd in
+                self?.resizePanel(stepped: stepped, isEnd: isEnd)
             }
         )
 
@@ -401,12 +418,6 @@ final class CueWindowController {
     private func handle(_ event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        if event.keyCode == 123 || event.keyCode == 124 {
-            logger.notice(
-                "Arrow \(event.keyCode, privacy: .public): mode=\(String(describing: self.presenter.mode), privacy: .public) gallery=\(self.isGallery, privacy: .public) page=\(self.presenter.page.rawValue, privacy: .public) modifiers=\(modifiers.rawValue, privacy: .public)"
-            )
-        }
-
         // ⌘1 … ⌘9 open a tile without looking at it. The whole reason the grid
         // has fixed positions.
         if modifiers == .command,
@@ -443,16 +454,10 @@ final class CueWindowController {
             presenter.moveSelection(by: presenter.mode == .grid ? -CueLayout.gridColumns : -1)
             return true
 
-        case 123 where presenter.mode == .grid: // Left
-            // In the gallery the arrows move between pages, which is the
-            // gesture the design promises with its dots. Selection moves by row
-            // on Up and Down and by one on Tab, so nothing is lost.
-            isGallery ? presenter.movePage(by: -1) : presenter.moveSelection(by: -1)
-            return true
-
-        case 124 where presenter.mode == .grid: // Right
-            isGallery ? presenter.movePage(by: 1) : presenter.moveSelection(by: 1)
-            return true
+        // Left and Right are deliberately absent. This monitor never received
+        // them — the panel's arrows did nothing until SwiftUI's focus system
+        // was given them in `CueContentView` — and leaving a second handler
+        // here would mean two mechanisms racing to move one page.
 
         case 48: // Tab
             presenter.moveSelection(by: modifiers == .shift ? -1 : 1)
