@@ -24,7 +24,7 @@ final class AppState {
 
     init() {
         let coordinator = LibraryCoordinator(settings: settings)
-        let player = PlayerService(session: coordinator.ytSession)
+        let player = PlayerService()
 
         self.coordinator = coordinator
         self.player = player

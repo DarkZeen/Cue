@@ -8,6 +8,10 @@ struct SearchBarView: View {
     let onClear: () -> Void
     let onSettings: () -> Void
 
+    /// What is playing, if anything, and the way back to it.
+    let nowPlaying: PlayerService.NowPlaying?
+    let onOpenPlayer: () -> Void
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -44,6 +48,11 @@ struct SearchBarView: View {
             }
             .frame(width: 16)
 
+            if let nowPlaying {
+                NowPlayingDisc(nowPlaying: nowPlaying, onOpen: onOpenPlayer)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+
             Divider()
                 .frame(height: 18)
 
@@ -63,5 +72,6 @@ struct SearchBarView: View {
         )
         .animation(.easeOut(duration: 0.12), value: isSearching)
         .animation(.easeOut(duration: 0.12), value: text.isEmpty)
+        .animation(CueAnimation.present, value: nowPlaying == nil)
     }
 }

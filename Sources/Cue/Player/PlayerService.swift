@@ -38,7 +38,6 @@ final class PlayerService: NSObject {
     private var window: NSWindow?
     private var webView: WKWebView?
 
-    private let session: YTMusicSessionService
     private let logger = Diagnostics.logger("player")
 
     /// The message handler's name on the JavaScript side.
@@ -47,16 +46,32 @@ final class PlayerService: NSObject {
     /// Where Home goes, and where the player starts.
     static let home = URL(string: "https://music.youtube.com/")!
 
+    /// Whether the page is signed in, as the page itself reports it.
+    ///
+    /// `nil` until something has loaded and said either way. Playing signed
+    /// out works, but it is not what someone with a Premium subscription is
+    /// paying for, so it is worth being able to say so.
+    private(set) var isSignedIn: Bool?
+
     struct NowPlaying: Equatable, Sendable {
         var title: String
         var artist: String?
+        var artworkURL: URL?
         var isPlaying: Bool
     }
 
-    init(session: YTMusicSessionService) {
-        self.session = session
-        super.init()
-    }
+    /// Where the window sits when it is not being looked at.
+    ///
+    /// Far off-screen rather than ordered out. A `WKWebView` whose window was
+    /// never made visible is not reliably given a rendering context, and the
+    /// media element inside it may never start — so the window is always
+    /// genuinely on screen as far as the window server is concerned, just at
+    /// coordinates no display covers.
+    private static let hiddenOrigin = NSPoint(x: -30_000, y: -30_000)
+
+    /// Where the window goes when it is shown. Remembered so that hiding and
+    /// showing does not reset a window the user has placed and sized.
+    private var visibleFrame: NSRect?
 
     // MARK: - Playing
 
@@ -67,8 +82,10 @@ final class PlayerService: NSObject {
             return false
         }
 
+        // Deliberately does *not* call `show()`. The player is furniture: it
+        // plays, and the panel is the interface. The window only appears when
+        // it is asked for, or when signing in genuinely needs one.
         let webView = prepareWebView()
-        show()
 
         logger.notice("Playing a \(item.kind.rawValue, privacy: .public) in the player.")
         webView.load(URLRequest(url: url))
@@ -84,6 +101,20 @@ final class PlayerService: NSObject {
         if !isLoaded {
             webView.load(URLRequest(url: Self.home))
             isLoaded = true
+        }
+    }
+
+    /// Brings the window up on whatever is currently playing.
+    ///
+    /// What the disc in the panel does when it is clicked: the page is already
+    /// showing the track, so this is purely a matter of putting the window
+    /// where it can be seen.
+    func showCurrent() {
+        _ = prepareWebView()
+        if !isLoaded {
+            showHome()
+        } else {
+            show()
         }
     }
 
@@ -139,13 +170,20 @@ final class PlayerService: NSObject {
 
     func show() {
         let window = prepareWindow()
+
+        if let visibleFrame {
+            window.setFrame(visibleFrame, display: true)
+        } else {
+            window.setFrameOrigin(Self.hiddenOrigin)
+        // Ordered in immediately, off-screen. See `hiddenOrigin`.
+        window.orderFrontRegardless()
+        }
+
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         isWindowVisible = true
 
-        logger.notice(
-            "Player shown at \(window.frame.debugDescription, privacy: .public) on \(window.screen?.localizedName ?? "no screen", privacy: .public)."
-        )
+        logger.notice("Player window shown.")
     }
 
     /// Hides the window without stopping the music.
@@ -154,7 +192,14 @@ final class PlayerService: NSObject {
     /// "get this off my screen", never "stop playing". An app that stopped the
     /// music when its window closed would be unusable as a music player.
     func hide() {
-        window?.orderOut(nil)
+        guard let window else { return }
+
+        // Moved off-screen rather than ordered out, and *not* ordered out
+        // afterwards: the web view keeps its rendering context, so the music
+        // keeps playing. Ordering the window out is the obvious thing to write
+        // here and it is how you get a player that stops when you close it.
+        visibleFrame = window.frame
+        window.setFrameOrigin(Self.hiddenOrigin)
         isWindowVisible = false
     }
 
@@ -194,7 +239,6 @@ final class PlayerService: NSObject {
         window.toolbarStyle = .unified
         window.center()
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("CuePlayer")
         window.minSize = NSSize(width: 420, height: 480)
         window.delegate = self
 
@@ -267,42 +311,23 @@ final class PlayerService: NSObject {
         webView.underPageBackgroundColor = .black
 
         self.webView = webView
-
-        adoptCapturedSession(into: webView)
-
         return webView
     }
 
-    /// Copies the cookies captured in Settings into the player.
-    ///
-    /// A convenience, not a requirement: someone who connected the YouTube
-    /// Music library in Settings should not then have to sign in a second time
-    /// in the player. If they never did, the player is simply a signed-out
-    /// music.youtube.com and they can sign in inside it.
-    private func adoptCapturedSession(into webView: WKWebView) {
-        guard let header = session.cookieHeader else { return }
-
-        let store = webView.configuration.websiteDataStore.httpCookieStore
-        let jar = YTMusicSessionService.parse(cookieHeader: header)
-
-        for (name, value) in jar {
-            guard let cookie = HTTPCookie(properties: [
-                .name: name,
-                .value: value,
-                // The domain the cookies were captured from. Google sets the
-                // same names on `.google.com` too, but the player only ever
-                // talks to YouTube.
-                .domain: ".youtube.com",
-                .path: "/",
-                .secure: "TRUE",
-                .expires: Date().addingTimeInterval(60 * 60 * 24 * 365),
-            ]) else { continue }
-
-            store.setCookie(cookie)
-        }
-
-        logger.notice("Seeded the player with \(jar.count, privacy: .public) captured cookies.")
-    }
+    // The player deliberately does *not* seed itself from the cookies captured
+    // in Settings, and this is worth writing down because doing so is the
+    // obvious idea and it is wrong.
+    //
+    // Those cookies are a flattened `name=value` snapshot taken once. Google
+    // sets several of the same names on `.google.com` and `.youtube.com` with
+    // *different* values, so flattening them picks one arbitrarily and the
+    // other domain gets a value that was never its own. Worse, `__Secure-3PSIDTS`
+    // rotates continuously — writing a stale copy of it over a live session is
+    // how you get an account that signs in, plays one track, and signs out.
+    //
+    // So the player owns its own persistent WebKit session and signs in once,
+    // exactly as a browser would, and WebKit handles rotation. The captured
+    // cookie is for the API provider and stays there.
 
     /// Reports what is playing back to Cue.
     ///
@@ -318,9 +343,15 @@ final class PlayerService: NSObject {
             const video = document.querySelector('video');
             if (!media || !media.metadata) { return; }
 
+            const artwork = media.metadata.artwork || [];
             const state = {
               title: media.metadata.title || '',
               artist: media.metadata.artist || '',
+              artwork: artwork.length ? artwork[artwork.length - 1].src : '',
+              // `ytcfg` is the page's own configuration blob, and LOGGED_IN is
+              // what the site itself checks. Far steadier than looking for a
+              // sign-in button whose markup changes with every redesign.
+              signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
               isPlaying: !!video && !video.paused
             };
 
@@ -399,10 +430,14 @@ extension PlayerService: WKScriptMessageHandler {
             guard !title.isEmpty else { return }
 
             let artist = body["artist"] as? String
+            let artwork = body["artwork"] as? String
+
+            self.isSignedIn = body["signedIn"] as? Bool
 
             self.nowPlaying = NowPlaying(
                 title: title,
                 artist: (artist?.isEmpty == false) ? artist : nil,
+                artworkURL: (artwork?.isEmpty == false) ? artwork.flatMap(URL.init(string:)) : nil,
                 isPlaying: body["isPlaying"] as? Bool ?? false
             )
         }

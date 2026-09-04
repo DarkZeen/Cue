@@ -12,9 +12,12 @@ struct CueContentView: View {
     let presenter: CuePresenter
     let thumbnails: ThumbnailProvider
     let settings: SettingsStore
+    let player: PlayerService
 
     let onOpen: (MusicItem) -> Void
     let onShowSettings: () -> Void
+    /// Raised by the disc: bring the player window up on what is playing.
+    let onOpenPlayer: () -> Void
     /// The window has to be resized in AppKit, and only this view knows how
     /// many results there are to be resized around.
     let onHeightChange: (CGFloat) -> Void
@@ -28,7 +31,9 @@ struct CueContentView: View {
                 isSearching: coordinator.isSearching,
                 isFocused: $isSearchFocused,
                 onClear: { coordinator.clearSearch() },
-                onSettings: onShowSettings
+                onSettings: onShowSettings,
+                nowPlaying: player.nowPlaying,
+                onOpenPlayer: onOpenPlayer
             )
 
             content

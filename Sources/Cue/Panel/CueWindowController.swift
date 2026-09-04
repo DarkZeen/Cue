@@ -172,10 +172,18 @@ final class CueWindowController {
             presenter: presenter,
             thumbnails: thumbnails,
             settings: settings,
+            player: playback.player,
             onOpen: { [weak self] item in self?.open(item) },
             onShowSettings: { [weak self] in
                 self?.dismiss()
                 self?.onShowSettings?()
+            },
+            onOpenPlayer: { [weak self] in
+                guard let self else { return }
+                // The panel goes away: the player window is the thing being
+                // asked for, and leaving a floating panel over it is clutter.
+                self.dismiss()
+                self.playback.player.showCurrent()
             },
             onHeightChange: { [weak self] height in
                 self?.container.contentHeight = height
