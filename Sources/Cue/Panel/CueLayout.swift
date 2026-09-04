@@ -63,10 +63,6 @@ enum CueLayout {
     /// because both designs ship and the window has to be built tall enough for
     /// whichever one is switched on.
     enum Gallery {
-        /// Square. Album art is square, and a rectangular tile either crops it
-        /// or letterboxes it — the first throws away part of the only thing on
-        /// the tile worth seeing, the second puts bars around it.
-        static var tileHeight: CGFloat { tileWidth }
         static let tileCornerRadius: CGFloat = 10
         static let tileSpacing: CGFloat = 10
 
@@ -75,28 +71,46 @@ enum CueLayout {
         /// The dots that say which of three pages this is.
         static let dotsHeight: CGFloat = 16
 
-        static var tileWidth: CGFloat {
+        /// Square. Album art is square, and a rectangular tile either crops it
+        /// or letterboxes it — the first throws away part of the only thing on
+        /// the tile worth seeing, the second puts bars around it.
+        static func tileSide(for panelWidth: CGFloat) -> CGFloat {
             let available = panelWidth - outerPadding * 2 - tileSpacing * CGFloat(gridColumns - 1)
             return available / CGFloat(gridColumns)
         }
 
-        static var gridHeight: CGFloat {
-            tileHeight * CGFloat(gridRows) + tileSpacing * CGFloat(gridRows - 1)
+        static func gridHeight(for panelWidth: CGFloat) -> CGFloat {
+            tileSide(for: panelWidth) * CGFloat(gridRows) + tileSpacing * CGFloat(gridRows - 1)
         }
 
         /// The width one page occupies, which is also how far the strip of
         /// pages slides when the page changes.
-        static var pageWidth: CGFloat {
+        static func pageWidth(for panelWidth: CGFloat) -> CGFloat {
             panelWidth - outerPadding * 2
         }
     }
 
-    /// The height of the whole panel showing the gallery.
-    static var galleryModeHeight: CGFloat {
+    /// The height of the whole panel showing the gallery, at a given width.
+    ///
+    /// Every one of these takes the width rather than reading the stored one.
+    /// A static `panelWidth` is invisible to SwiftUI — moving the slider
+    /// resized the window while the contents went on laying themselves out at
+    /// the old size, which is a mess that looks like a layout bug and is really
+    /// an observation bug.
+    static func galleryModeHeight(for panelWidth: CGFloat) -> CGFloat {
         outerPadding + searchHeight + sectionGap
             + Gallery.headerHeight + 6
-            + Gallery.gridHeight + 8
+            + Gallery.gridHeight(for: panelWidth) + 8
             + Gallery.dotsHeight + outerPadding
+    }
+
+    /// The window's height at a given width: tall enough for whichever design
+    /// and mode needs the most.
+    static func panelHeight(for panelWidth: CGFloat) -> CGFloat {
+        max(
+            galleryModeHeight(for: panelWidth),
+            max(gridModeHeight, resultsModeHeight(count: maximumVisibleResults))
+        )
     }
 
     // MARK: - Results
@@ -136,12 +150,7 @@ enum CueLayout {
     /// they are typing into it. The cost is a strip of transparent window
     /// below a short results list, and `CuePanelContentView` declines to hit-
     /// test that strip so it is not a dead zone over another app.
-    static var panelHeight: CGFloat {
-        max(
-            galleryModeHeight,
-            max(gridModeHeight, resultsModeHeight(count: maximumVisibleResults))
-        )
-    }
+    static var panelHeight: CGFloat { panelHeight(for: panelWidth) }
 
     /// Where the panel sits on screen, for the chosen anchor.
     static func origin(in screen: NSRect, panelHeight: CGFloat, anchor: PanelAnchor) -> NSPoint {

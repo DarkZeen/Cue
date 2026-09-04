@@ -181,12 +181,12 @@ final class MiniPlayerPanel: NSPanel {
         hidesOnDeactivate = false
         isRestorable = false
 
-        // Draggable, unlike the search panel. The plaque is permanent rather
-        // than summoned, so it has to be able to get out of the way of whatever
-        // else lives in that corner — menu bar items, another app's furniture —
-        // and only the person looking at the screen knows what that is.
+        // Draggable, unlike the search panel — but only while Command is held.
+        // The plaque is five small buttons in a strip you aim at without
+        // looking, and a surface that moves when you miss one is a surface that
+        // ends up somewhere you did not put it.
         isMovable = true
-        isMovableByWindowBackground = true
+        isMovableByWindowBackground = false
 
         // Above ordinary windows and above the search panel, so pressing Pause
         // never means hunting for the plaque underneath something.
@@ -206,4 +206,18 @@ final class MiniPlayerPanel: NSPanel {
     /// clicked would pull the user out of whatever they were writing in.
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    /// ⌘-drag moves the plaque; a plain drag does not.
+    ///
+    /// Intercepted here rather than by `isMovableByWindowBackground`, which
+    /// cannot be made conditional: it moves the window on any background drag,
+    /// including the one that starts a fraction outside the Pause button.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown,
+           event.modifierFlags.contains(.command) {
+            performDrag(with: event)
+            return
+        }
+        super.sendEvent(event)
+    }
 }

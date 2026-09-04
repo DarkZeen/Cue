@@ -10,7 +10,14 @@ struct GalleryView: View {
     let coordinator: LibraryCoordinator
     let presenter: CuePresenter
     let thumbnails: ThumbnailProvider
+    /// Everything in here is sized from this, so a change to it re-lays the
+    /// whole gallery out.
+    let panelWidth: CGFloat
     let onOpen: (MusicItem) -> Void
+
+    private var side: CGFloat { CueLayout.Gallery.tileSide(for: panelWidth) }
+    private var pageWidth: CGFloat { CueLayout.Gallery.pageWidth(for: panelWidth) }
+    private var gridHeight: CGFloat { CueLayout.Gallery.gridHeight(for: panelWidth) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +27,7 @@ struct GalleryView: View {
             Spacer(minLength: 6)
 
             pages
-                .frame(height: CueLayout.Gallery.gridHeight)
+                .frame(height: gridHeight)
 
             Spacer(minLength: 8)
 
@@ -50,7 +57,7 @@ struct GalleryView: View {
 
             Spacer()
 
-            if coordinator.canReshuffle(presenter.page) {
+            if presenter.page.canReshuffle {
                 Button {
                     coordinator.reshuffle(presenter.page)
                     presenter.select(nil)
@@ -62,7 +69,17 @@ struct GalleryView: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .help("Show a different nine  ⌘R")
+                // Shown but disabled when the page holds nine or fewer: a
+                // control that vanishes leaves you wondering whether the
+                // feature exists, and one that is visibly unavailable tells you
+                // there is simply nothing else to deal.
+                .disabled(!coordinator.canReshuffle(presenter.page))
+                .opacity(coordinator.canReshuffle(presenter.page) ? 1 : 0.35)
+                .help(
+                    coordinator.canReshuffle(presenter.page)
+                        ? "Show a different nine  ⌘R"
+                        : "Everything on this page already fits"
+                )
                 .accessibilityLabel("Show a different nine")
             }
         }
@@ -80,11 +97,11 @@ struct GalleryView: View {
         HStack(spacing: 0) {
             ForEach(LibraryCoordinator.Page.allCases, id: \.self) { page in
                 grid(for: page)
-                    .frame(width: CueLayout.Gallery.pageWidth)
+                    .frame(width: pageWidth)
             }
         }
-        .offset(x: -CGFloat(presenter.page.rawValue) * CueLayout.Gallery.pageWidth)
-        .frame(width: CueLayout.Gallery.pageWidth, alignment: .leading)
+        .offset(x: -CGFloat(presenter.page.rawValue) * pageWidth)
+        .frame(width: pageWidth, alignment: .leading)
         .clipped()
         .animation(CueAnimation.page, value: presenter.page)
     }
@@ -109,6 +126,7 @@ struct GalleryView: View {
                                 // On a page Cue fills for you, nine dashed
                                 // rectangles would just be nine absences.
                                 showsEmptySlots: page == .pinned,
+                                side: side,
                                 thumbnails: thumbnails,
                                 onOpen: {
                                     guard let item = tiles[index] else { return }

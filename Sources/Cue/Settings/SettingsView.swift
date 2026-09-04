@@ -110,7 +110,7 @@ private struct GeneralPane: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Drag the plaque anywhere; it stays where you leave it.")
+                    Text("Hold ⌘ and drag the plaque to move it. It stays where you leave it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 

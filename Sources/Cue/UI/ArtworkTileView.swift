@@ -11,6 +11,9 @@ struct ArtworkTileView: View {
     let isSelected: Bool
     let isPinned: Bool
     let showsEmptySlots: Bool
+    /// The tile's side. Passed in rather than read from a static, so moving the
+    /// size slider actually re-lays the tile out.
+    let side: CGFloat
     let thumbnails: ThumbnailProvider
 
     let onOpen: () -> Void
@@ -29,7 +32,7 @@ struct ArtworkTileView: View {
                 Color.clear
             }
         }
-        .frame(width: CueLayout.Gallery.tileWidth, height: CueLayout.Gallery.tileHeight)
+        .frame(width: side, height: side)
         .clipShape(.rect(cornerRadius: CueLayout.Gallery.tileCornerRadius))
         .overlay(selectionRing)
         .contentShape(.rect)
@@ -104,7 +107,7 @@ struct ArtworkTileView: View {
                 CueMark(height: 26, markerColor: .white.opacity(0.25), accentColor: .white.opacity(0.14))
             }
         }
-        .frame(width: CueLayout.Gallery.tileWidth, height: CueLayout.Gallery.tileHeight)
+        .frame(width: side, height: side)
         .clipped()
         .animation(.easeOut(duration: 0.2), value: thumbnails.image(for: item.thumbnailURL) != nil)
         .onAppear { thumbnails.prefetch(item.thumbnailURL) }

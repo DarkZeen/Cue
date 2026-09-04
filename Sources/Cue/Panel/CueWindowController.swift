@@ -104,7 +104,7 @@ final class CueWindowController {
 
         let origin = CueLayout.origin(
             in: visible,
-            panelHeight: CueLayout.panelHeight,
+            panelHeight: panel.frame.height,
             anchor: settings.panelAnchor
         )
 
@@ -173,9 +173,10 @@ final class CueWindowController {
     /// window that never moves — so this is the one place it changes, and it
     /// happens between presentations rather than during one.
     func applyMetrics() {
-        CueLayout.panelWidth = CGFloat(settings.panelWidth)
+        let width = CGFloat(settings.panelWidth)
+        CueLayout.panelWidth = width
 
-        let size = NSSize(width: CueLayout.panelWidth, height: CueLayout.panelHeight)
+        let size = NSSize(width: width, height: CueLayout.panelHeight(for: width))
         guard panel.frame.size != size else { return }
 
         panel.setContentSize(size)

@@ -24,6 +24,12 @@ struct CueContentView: View {
 
     @FocusState private var isSearchFocused: Bool
 
+    /// Read from settings rather than from `CueLayout`'s stored value, so the
+    /// size slider re-renders everything that depends on it. A static is
+    /// invisible to SwiftUI, which is why moving the slider used to resize the
+    /// window and leave the contents at their old size.
+    private var panelWidth: CGFloat { CGFloat(settings.panelWidth) }
+
     var body: some View {
         VStack(spacing: CueLayout.sectionGap) {
             SearchBarView(
@@ -39,7 +45,7 @@ struct CueContentView: View {
             content
         }
         .padding(CueLayout.outerPadding)
-        .frame(width: CueLayout.panelWidth, height: height, alignment: .top)
+        .frame(width: panelWidth, height: height, alignment: .top)
         .background(surface)
         .clipShape(.rect(cornerRadius: CueLayout.cornerRadius))
         .overlay(
@@ -68,6 +74,21 @@ struct CueContentView: View {
         .onChange(of: coordinator.query) { _, _ in sync() }
         .onChange(of: coordinator.results.count) { _, _ in sync() }
         .onChange(of: height) { _, height in onHeightChange(height) }
+        // Belt and braces for the arrow keys.
+        //
+        // `CueWindowController`'s event monitor should get these first and
+        // consume them, in which case nothing here ever runs. It reportedly
+        // does not, and rather than guess a fourth time at why, this handles
+        // them through SwiftUI's own focus system as well — which only sees a
+        // key the monitor declined to take.
+        .onKeyPress(.leftArrow) { movePage(by: -1) }
+        .onKeyPress(.rightArrow) { movePage(by: 1) }
+    }
+
+    private func movePage(by offset: Int) -> KeyPress.Result {
+        guard settings.panelDesign == .gallery, presenter.mode == .grid else { return .ignored }
+        presenter.movePage(by: offset)
+        return .handled
     }
 
     /// Brings the presenter in line with what is actually in the search field.
@@ -92,7 +113,9 @@ struct CueContentView: View {
     private var height: CGFloat {
         switch presenter.mode {
         case .grid:
-            settings.panelDesign == .gallery ? CueLayout.galleryModeHeight : CueLayout.gridModeHeight
+            settings.panelDesign == .gallery
+                ? CueLayout.galleryModeHeight(for: panelWidth)
+                : CueLayout.gridModeHeight
         case .results:
             CueLayout.resultsModeHeight(count: coordinator.results.count)
         }
@@ -109,6 +132,7 @@ struct CueContentView: View {
                         coordinator: coordinator,
                         presenter: presenter,
                         thumbnails: thumbnails,
+                        panelWidth: panelWidth,
                         onOpen: onOpen
                     )
                 case .classic:
