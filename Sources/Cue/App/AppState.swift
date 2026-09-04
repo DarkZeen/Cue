@@ -98,6 +98,11 @@ final class AppState {
             ))
         }
         if let query = Diagnostics.debugQuery { coordinator.query = query }
+        // Built at launch rather than on first play, so the window gets its one
+        // moment of visibility, and YouTube Music gets the seconds it needs to
+        // build a player, before anyone has asked for a song.
+        if settings.playbackDestination == .inApp { player.warmUp() }
+
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
         if Diagnostics.debugSettingsPane != nil { showSettings() }
     }

@@ -403,8 +403,69 @@ final class PlayerService: NSObject {
         // moment it exists and the first thing played starts on its own rather
         // than waiting for someone to open a window.
         conceal(window)
+        primeVisibility()
 
         return window
+    }
+
+    /// Gives the window one moment of genuine visibility, if it needs it.
+    ///
+    /// Measured rather than assumed, because the behaviour is peculiar and cost
+    /// several wrong guesses. A window that has *only ever* existed as a
+    /// one-pixel sliver is reported by the window server as not visible — so
+    /// WebKit treats the page as hidden and the autoplay policy refuses to
+    /// start it. Once the window has been genuinely on screen even briefly, the
+    /// same one-pixel sliver is reported as visible from then on, and playback
+    /// starts on its own for the rest of the session.
+    ///
+    ///     Player concealed; visible to the window server: false   ← at creation
+    ///     Player concealed; visible to the window server: true    ← after one show
+    ///
+    /// So: check, and only if the window server disagrees, put the window on
+    /// screen for a quarter of a second. Cue creates its player at launch, so
+    /// this happens once, before anyone has asked for music — not in the middle
+    /// of playing something.
+    private func primeVisibility() {
+        Task { [weak self] in
+            // Long enough for the window server to have formed an opinion; an
+            // occlusion state read in the same turn as the order-front is not
+            // yet meaningful.
+            try? await Task.sleep(for: .milliseconds(400))
+
+            guard let self, let window = self.window, !self.isWindowVisible else { return }
+            guard !window.occlusionState.contains(.visible) else {
+                self.logger.notice("Player already visible to the window server; no priming needed.")
+                return
+            }
+
+            if let screen = window.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                window.setFrameOrigin(NSPoint(x: visible.minX, y: visible.minY))
+            }
+            window.orderFrontRegardless()
+
+            try? await Task.sleep(for: .milliseconds(250))
+
+            guard !self.isWindowVisible, let window = self.window else { return }
+            self.conceal(window)
+            self.logger.notice(
+                "Primed; visible to the window server: \(window.occlusionState.contains(.visible), privacy: .public)"
+            )
+        }
+    }
+
+    /// Builds the player and loads YouTube Music without playing anything.
+    ///
+    /// Called at launch so the priming above, and the several seconds
+    /// YouTube Music takes to build itself, are spent before the first time
+    /// someone actually asks for a song rather than during it.
+    func warmUp() {
+        let webView = prepareWebView()
+        _ = prepareWindow()
+        guard !isLoaded else { return }
+        webView.load(URLRequest(url: Self.home))
+        isLoaded = true
+        logger.notice("Player warmed up.")
     }
 
     // MARK: - Toolbar
