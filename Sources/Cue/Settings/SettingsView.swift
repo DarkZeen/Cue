@@ -201,6 +201,27 @@ private struct GeneralPane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                HStack {
+                    Button("Quit Cue") {
+                        NSApp.terminate(nil)
+                    }
+
+                    Spacer()
+
+                    Text("⌘Q also works while Cue is in front.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                // Worth saying: an app with no Dock icon and no menu bar item
+                // is an app most people cannot work out how to quit, and
+                // reaching for Activity Monitor is not an answer.
+                Text("Cue has no Dock icon, so this is the way out. Quitting stops the music.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

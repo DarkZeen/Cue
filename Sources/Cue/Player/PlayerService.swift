@@ -79,6 +79,20 @@ final class PlayerService: NSObject {
         var isMuted: Bool = false
     }
 
+    /// How much of the concealed window is left on screen.
+    ///
+    /// The previous attempt kept the whole window on screen at 1.2% opacity and
+    /// did not work: macOS does not count a window that faint as visible, so
+    /// WebKit went on treating the page as hidden and the autoplay policy went
+    /// on refusing to start it. The symptom was exact — showing the window once
+    /// and hiding it again made everything work from then on.
+    ///
+    /// So the window is fully opaque and almost entirely off screen instead,
+    /// with a few pixels left in the corner. A partly-visible window is
+    /// unambiguously visible, and three pixels in the top-left corner is not
+    /// something anyone will find.
+    private static let visibleSliver: CGFloat = 1
+
     /// How opaque the window is while it is "hidden".
     ///
     /// Not zero, and not off-screen, and this is the whole trick. A window
@@ -91,11 +105,18 @@ final class PlayerService: NSObject {
     /// So the window stays on screen, above everything so nothing can occlude
     /// it, click-through so it cannot be interacted with, and at an opacity
     /// that is technically non-zero and practically invisible.
-    private static let hiddenAlpha: CGFloat = 0.012
+    /// Fully opaque, deliberately. Only the sliver is on screen, and opacity
+    /// is what macOS was judging visibility by.
+    private static let hiddenAlpha: CGFloat = 1
 
-    /// How big it is while concealed. Small enough to be nothing, large enough
-    /// that YouTube Music lays itself out and builds its player.
-    private static let hiddenSize = NSSize(width: 480, height: 360)
+    /// How big it is while concealed.
+    ///
+    /// Only `visibleSliver` of it is ever on screen, so this is not about how
+    /// much can be seen — it is about how much room YouTube Music has to lay
+    /// itself out in. There is a floor: below about 320 points the page drops
+    /// its player bar, and the controls Cue drives go with it. This is as small
+    /// as it goes while still building a player.
+    private static let hiddenSize = NSSize(width: 360, height: 280)
 
     /// The size the window opens at the first time it is actually shown.
     private static let shownSize = NSSize(width: 1_020, height: 700)
@@ -145,7 +166,14 @@ final class PlayerService: NSObject {
     private func nudgeIntoPlaying() {
         playbackNudge?.cancel()
         playbackNudge = Task { [weak self] in
-            for delay in [Duration.milliseconds(800), .milliseconds(1_500), .seconds(2), .seconds(3)] {
+            // Spread over twelve seconds rather than three. `didFinish` means
+            // the document loaded, not that YouTube Music has built its player,
+            // and on a cold start the gap between the two is seconds.
+            let schedule: [Duration] = [
+                .milliseconds(800), .milliseconds(1_200), .seconds(2),
+                .seconds(2), .seconds(3), .seconds(3),
+            ]
+            for delay in schedule {
                 try? await Task.sleep(for: delay)
                 guard !Task.isCancelled, let self, self.wantsPlayback else { return }
 
@@ -292,16 +320,31 @@ final class PlayerService: NSObject {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         window.setContentSize(Self.hiddenSize)
 
-        // Tucked into the bottom-left corner rather than left mid-screen. It
-        // cannot be seen or clicked, but it can be *captured* — a screen
-        // recording would otherwise carry a faint rectangle through the middle
-        // of every frame.
+        // Pushed down and left until only its top-right corner pokes into the
+        // bottom-left of the usable screen — `visibleSliver` square.
+        //
+        // `visibleFrame` rather than `frame`, so the sliver lands in the area
+        // the Dock does not cover. The rest of the window hangs below and to
+        // the left of the screen, which costs nothing: occlusion is judged on
+        // the part that is on screen, and this window sits above ordinary ones
+        // so nothing can cover that part.
         if let screen = window.screen ?? NSScreen.main {
             let visible = screen.visibleFrame
-            window.setFrameOrigin(NSPoint(x: visible.minX, y: visible.minY))
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(
+                x: visible.minX + Self.visibleSliver - size.width,
+                y: visible.minY + Self.visibleSliver - size.height
+            ))
         }
 
         window.orderFrontRegardless()
+
+        // Worth knowing for certain rather than inferring from whether the
+        // music started: if this says the window is not visible, the autoplay
+        // policy will refuse to start it and no amount of nudging will help.
+        logger.notice(
+            "Player concealed; visible to the window server: \(window.occlusionState.contains(.visible), privacy: .public)"
+        )
     }
 
     func toggleWindow() {

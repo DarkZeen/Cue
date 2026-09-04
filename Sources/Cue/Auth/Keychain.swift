@@ -135,11 +135,24 @@ enum Keychain {
     /// delete never happens unless the read produced something — a repair that
     /// can lose a refresh token is worse than the prompt it removes.
     @discardableResult
-    static func reclaim(_ accounts: [String]) -> Int {
+    static func reclaim(_ accounts: [String]) -> (repaired: Int, failed: Int) {
         var repaired = 0
+        var failed = 0
 
         for account in accounts {
-            guard let value = string(for: account), !value.isEmpty else { continue }
+            guard let value = string(for: account), !value.isEmpty else {
+                // Either there is nothing stored, or the read was refused. The
+                // second is why the caller must not record the repair as done:
+                // a declined prompt is exactly the case that needs retrying.
+                if SecItemCopyMatching([
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: account,
+                ] as CFDictionary, nil) != errSecItemNotFound {
+                    failed += 1
+                }
+                continue
+            }
 
             remove(account)
 
@@ -155,14 +168,15 @@ enum Keychain {
             if status == errSecSuccess {
                 repaired += 1
             } else {
+                failed += 1
                 logger.error("Could not rewrite \(account, privacy: .public): OSStatus \(status).")
             }
         }
 
-        if repaired > 0 {
-            logger.notice("Rewrote \(repaired, privacy: .public) keychain item(s) for this build.")
-        }
-        return repaired
+        logger.notice(
+            "Keychain repair: \(repaired, privacy: .public) rewritten, \(failed, privacy: .public) failed."
+        )
+        return (repaired, failed)
     }
 
     /// Everything Cue stores, for the repair above.

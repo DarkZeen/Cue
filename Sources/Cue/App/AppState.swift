@@ -24,6 +24,9 @@ final class AppState {
     private let logger = Diagnostics.logger("app-state")
 
     init() {
+        // Before anything that reads the keychain. See `repairKeychainIfNeeded`.
+        Self.repairKeychainIfNeeded()
+
         let coordinator = LibraryCoordinator(settings: settings)
         let player = PlayerService()
 
@@ -39,20 +42,24 @@ final class AppState {
 
     /// Repairs keychain items left behind by a differently-signed build.
     ///
-    /// Runs once. The prompts it removes only afflict someone who used a build
-    /// signed differently from this one — which, during development, is
-    /// everyone — and running it on every launch would rewrite four items for
-    /// no reason.
-    private func repairKeychainIfNeeded() {
+    /// Called from `init`, before anything else, and that ordering is the whole
+    /// point: `GoogleOAuthService` reads the refresh token in *its* init, so a
+    /// repair that ran later would fire after the prompts it exists to prevent.
+    ///
+    /// Recorded as done only when nothing failed. A declined prompt is exactly
+    /// the case that needs trying again, and marking it done regardless is how
+    /// the repair silently never happens.
+    private static func repairKeychainIfNeeded() {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Self.keychainRepairKey) else { return }
+        guard !defaults.bool(forKey: keychainRepairKey) else { return }
 
-        Keychain.reclaim(Keychain.allAccounts)
-        defaults.set(true, forKey: Self.keychainRepairKey)
+        let outcome = Keychain.reclaim(Keychain.allAccounts)
+        if outcome.failed == 0 {
+            defaults.set(true, forKey: keychainRepairKey)
+        }
     }
 
     func start() {
-        repairKeychainIfNeeded()
 
         let panel = CueWindowController(
             coordinator: coordinator,
