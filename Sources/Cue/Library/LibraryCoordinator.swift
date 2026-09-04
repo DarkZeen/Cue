@@ -36,6 +36,15 @@ final class LibraryCoordinator {
     var query: String = ""
 
     private(set) var results: [MusicItem] = []
+
+    /// Bumped whenever `results` is replaced.
+    ///
+    /// Read by the results list so that a settled search actually redraws it.
+    /// The log showed searches landing with fifty results while the screen kept
+    /// the first search's answer, and an explicit counter is a more honest
+    /// dependency than trusting an array read through a shared object to be
+    /// noticed.
+    private(set) var resultsVersion = 0
     private(set) var isSearching = false
     /// Set when something the user should know about went wrong. Deliberately
     /// one string: the panel has room for one line, and a list of per-provider
@@ -230,6 +239,7 @@ final class LibraryCoordinator {
             // out a debounce to show something the user already asked to stop
             // seeing is the wrong way round.
             results = []
+            resultsVersion &+= 1
             isSearching = false
             message = nil
             return
@@ -250,6 +260,7 @@ final class LibraryCoordinator {
         let providers = activeProviders
         guard !providers.isEmpty else {
             results = []
+            resultsVersion &+= 1
             isSearching = false
             message = "Connect an account in Settings to search."
             return
@@ -288,6 +299,7 @@ final class LibraryCoordinator {
         }
 
         results = merged
+        resultsVersion &+= 1
         isSearching = false
 
         logger.notice(
@@ -590,7 +602,15 @@ final class LibraryCoordinator {
         guard settings.autoFillsEmptyTiles else { return tiles }
 
         let pinned = Set(tiles.compactMap { $0?.id })
-        var candidates = suggestions.filter { !pinned.contains($0.id) }.makeIterator()
+
+        // Songs only. A speed dial is for the thing you want to hear right now,
+        // and a playlist in one of those nine positions is a container you have
+        // to go into — which is the opposite of what the grid is for. Anything
+        // pinned by hand stays whatever it is; this governs only what Cue fills
+        // the gaps with.
+        var candidates = suggestions
+            .filter { $0.videoID != nil && !pinned.contains($0.id) }
+            .makeIterator()
 
         for index in tiles.indices where tiles[index] == nil {
             tiles[index] = candidates.next()

@@ -8,7 +8,11 @@ struct ResultsListView: View {
     let onOpen: (MusicItem) -> Void
 
     var body: some View {
-        Group {
+        // Read so a settled search redraws the list. See
+        // `LibraryCoordinator.resultsVersion`.
+        let _ = coordinator.resultsVersion
+
+        return Group {
             if coordinator.results.isEmpty {
                 placeholder
             } else {
