@@ -116,7 +116,8 @@ private struct MiniPlayerHost: View {
                 onPrevious: { player.previous() },
                 onPlayPause: { player.togglePlayPause() },
                 onNext: { player.next() },
-                onToggleMute: { player.toggleMute() }
+                onToggleMute: { player.toggleMute() },
+                onAdjustVolume: { player.adjustVolume(by: $0) }
             )
         }
     }

@@ -14,6 +14,7 @@ struct MiniPlayerView: View {
     let onPlayPause: () -> Void
     let onNext: () -> Void
     let onToggleMute: () -> Void
+    let onAdjustVolume: (Double) -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -33,6 +34,9 @@ struct MiniPlayerView: View {
                 nowPlaying.isMuted ? "Unmute" : "Mute",
                 action: onToggleMute
             )
+            // Click mutes, scroll adjusts. A slider would need somewhere to
+            // live, and the plaque is deliberately five glyphs wide.
+            .onScrollWheel { delta in onAdjustVolume(delta) }
         }
         .padding(.horizontal, 16)
         .frame(height: 44)
@@ -52,7 +56,8 @@ struct MiniPlayerView: View {
         // without being clipped by it.
         .padding(.top, 14)
         .padding(.leading, 12)
-        .help(nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
+        .help((nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
+            + "  ·  scroll the speaker for volume")
     }
 
     private func button(

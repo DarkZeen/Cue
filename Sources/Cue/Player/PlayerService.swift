@@ -79,14 +79,26 @@ final class PlayerService: NSObject {
         var isMuted: Bool = false
     }
 
-    /// Where the window sits when it is not being looked at.
+    /// How opaque the window is while it is "hidden".
     ///
-    /// Far off-screen rather than ordered out. A `WKWebView` whose window was
-    /// never made visible is not reliably given a rendering context, and the
-    /// media element inside it may never start — so the window is always
-    /// genuinely on screen as far as the window server is concerned, just at
-    /// coordinates no display covers.
-    private static let hiddenOrigin = NSPoint(x: -30_000, y: -30_000)
+    /// Not zero, and not off-screen, and this is the whole trick. A window
+    /// parked at coordinates no display covers — or at `alphaValue` 0 — is
+    /// reported as not visible; WebKit then marks the page hidden, and the
+    /// autoplay policy refuses to start a hidden page. The symptom is precise
+    /// and baffling: skipping tracks works, but nothing ever *starts* until you
+    /// open the window.
+    ///
+    /// So the window stays on screen, above everything so nothing can occlude
+    /// it, click-through so it cannot be interacted with, and at an opacity
+    /// that is technically non-zero and practically invisible.
+    private static let hiddenAlpha: CGFloat = 0.012
+
+    /// How big it is while concealed. Small enough to be nothing, large enough
+    /// that YouTube Music lays itself out and builds its player.
+    private static let hiddenSize = NSSize(width: 480, height: 360)
+
+    /// The size the window opens at the first time it is actually shown.
+    private static let shownSize = NSSize(width: 1_020, height: 700)
 
     /// Where the window goes when it is shown. Remembered so that hiding and
     /// showing does not reset a window the user has placed and sized.
@@ -160,25 +172,32 @@ final class PlayerService: NSObject {
 
     /// Play or pause, without bringing the window forward.
     ///
-    /// Driven through the page's own player rather than by clicking a button
-    /// whose selector changes every few months: `video.play()` and
-    /// `video.pause()` are the media element itself, and YouTube Music's own
-    /// interface updates to match because it is watching the same element.
+    /// Driven through YouTube Music's own controls rather than the media
+    /// element, because the media element is not reliably reachable from
+    /// `document`: skip and previous worked while play/pause and mute did
+    /// nothing, and the only thing separating them was that the working two
+    /// clicked buttons. `__cue` falls back to the element — found by walking
+    /// shadow roots — when a selector stops matching, which is the failure
+    /// mode to expect from an interface nobody promised would stay the same.
     func togglePlayPause() {
-        evaluate("const v=document.querySelector('video'); if(v){v.paused?v.play():v.pause();}")
-    }
-
-    /// Mutes or unmutes, on the media element itself.
-    func toggleMute() {
-        evaluate("const v=document.querySelector('video'); if(v){v.muted=!v.muted;}")
+        evaluate("__cue.toggle()")
     }
 
     func next() {
-        evaluate("document.querySelector('.next-button, tp-yt-paper-icon-button.next-button')?.click();")
+        evaluate("__cue.next()")
     }
 
     func previous() {
-        evaluate("document.querySelector('.previous-button, tp-yt-paper-icon-button.previous-button')?.click();")
+        evaluate("__cue.previous()")
+    }
+
+    func toggleMute() {
+        evaluate("__cue.mute()")
+    }
+
+    /// Nudges the volume, for scrolling over the plaque's speaker.
+    func adjustVolume(by delta: Double) {
+        evaluate("__cue.nudgeVolume(\(delta))")
     }
 
     private func evaluate(_ script: String) {
@@ -195,12 +214,16 @@ final class PlayerService: NSObject {
     func show() {
         let window = prepareWindow()
 
+        window.alphaValue = 1
+        window.ignoresMouseEvents = false
+        window.level = .normal
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+
         if let visibleFrame {
             window.setFrame(visibleFrame, display: true)
         } else {
-            window.setFrameOrigin(Self.hiddenOrigin)
-        // Ordered in immediately, off-screen. See `hiddenOrigin`.
-        window.orderFrontRegardless()
+            window.setContentSize(Self.shownSize)
+            window.center()
         }
 
         NSApp.activate()
@@ -216,15 +239,34 @@ final class PlayerService: NSObject {
     /// "get this off my screen", never "stop playing". An app that stopped the
     /// music when its window closed would be unusable as a music player.
     func hide() {
-        guard let window else { return }
-
-        // Moved off-screen rather than ordered out, and *not* ordered out
-        // afterwards: the web view keeps its rendering context, so the music
-        // keeps playing. Ordering the window out is the obvious thing to write
-        // here and it is how you get a player that stops when you close it.
+        guard let window, isWindowVisible else { return }
         visibleFrame = window.frame
-        window.setFrameOrigin(Self.hiddenOrigin)
+        conceal(window)
         isWindowVisible = false
+    }
+
+    /// Puts the window into its invisible state: on screen, on top, small,
+    /// click-through and all but transparent. See `hiddenAlpha` for why every
+    /// one of those is load-bearing.
+    private func conceal(_ window: NSWindow) {
+        window.alphaValue = Self.hiddenAlpha
+        window.ignoresMouseEvents = true
+        // Above other windows so nothing can cover it: an occluded window is a
+        // hidden page, which is the thing being worked around.
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        window.setContentSize(Self.hiddenSize)
+
+        // Tucked into the bottom-left corner rather than left mid-screen. It
+        // cannot be seen or clicked, but it can be *captured* — a screen
+        // recording would otherwise carry a faint rectangle through the middle
+        // of every frame.
+        if let screen = window.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: visible.minX, y: visible.minY))
+        }
+
+        window.orderFrontRegardless()
     }
 
     func toggleWindow() {
@@ -278,6 +320,12 @@ final class PlayerService: NSObject {
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         self.window = window
+
+        // Born concealed, so the web view has a real, on-screen window from the
+        // moment it exists and the first thing played starts on its own rather
+        // than waiting for someone to open a window.
+        conceal(window)
+
         return window
     }
 
@@ -360,26 +408,97 @@ final class PlayerService: NSObject {
     /// and far more durable than scraping the player bar's CSS classes.
     private static let bridgeScript = """
         (function () {
+          // YouTube Music is built from custom elements, and what is in the
+          // light DOM moves between releases. Walking shadow roots costs a few
+          // milliseconds on a call nobody makes in a loop, and it keeps working
+          // when a control gets re-parented into a component.
+          function deep(selector, root) {
+            root = root || document;
+            const direct = root.querySelector(selector);
+            if (direct) { return direct; }
+            const hosts = root.querySelectorAll('*');
+            for (let i = 0; i < hosts.length; i++) {
+              if (hosts[i].shadowRoot) {
+                const found = deep(selector, hosts[i].shadowRoot);
+                if (found) { return found; }
+              }
+            }
+            return null;
+          }
+
+          const cue = {
+            _media: null,
+
+            media() {
+              if (this._media && this._media.isConnected) { return this._media; }
+              this._media = deep('video') || deep('audio');
+              return this._media;
+            },
+
+            press(selectors) {
+              for (const selector of selectors) {
+                const element = deep(selector);
+                if (element) { element.click(); return true; }
+              }
+              return false;
+            },
+
+            toggle() {
+              // The site's own button first: it knows about the queue, ads and
+              // whatever else is between a click and the sound changing.
+              if (this.press(['#play-pause-button', '.play-pause-button'])) { return; }
+              const media = this.media();
+              if (media) { media.paused ? media.play() : media.pause(); }
+            },
+
+            next() {
+              if (this.press(['.next-button', 'tp-yt-paper-icon-button.next-button'])) { return; }
+              const media = this.media();
+              if (media) { media.currentTime = media.duration || 0; }
+            },
+
+            previous() {
+              this.press(['.previous-button', 'tp-yt-paper-icon-button.previous-button']);
+            },
+
+            mute() {
+              const media = this.media();
+              if (media) { media.muted = !media.muted; return; }
+              this.press(['tp-yt-paper-icon-button.volume', '#volume-slider']);
+            },
+
+            nudgeVolume(delta) {
+              const media = this.media();
+              if (!media) { return; }
+              media.muted = false;
+              media.volume = Math.min(1, Math.max(0, media.volume + delta));
+            },
+
+            state() {
+              const session = navigator.mediaSession;
+              if (!session || !session.metadata) { return null; }
+              const media = this.media();
+              const artwork = session.metadata.artwork || [];
+              return {
+                title: session.metadata.title || '',
+                artist: session.metadata.artist || '',
+                artwork: artwork.length ? artwork[artwork.length - 1].src : '',
+                // `ytcfg` is the page's own configuration blob, and LOGGED_IN
+                // is what the site itself checks. Far steadier than looking for
+                // a sign-in button whose markup changes with every redesign.
+                signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
+                isPlaying: !!media && !media.paused,
+                muted: !!media && media.muted
+              };
+            }
+          };
+
+          window.__cue = cue;
+
           let last = null;
-
           function report() {
-            const media = navigator.mediaSession;
-            const video = document.querySelector('video');
-            if (!media || !media.metadata) { return; }
-
-            const artwork = media.metadata.artwork || [];
-            const state = {
-              title: media.metadata.title || '',
-              artist: media.metadata.artist || '',
-              artwork: artwork.length ? artwork[artwork.length - 1].src : '',
-              // `ytcfg` is the page's own configuration blob, and LOGGED_IN is
-              // what the site itself checks. Far steadier than looking for a
-              // sign-in button whose markup changes with every redesign.
-              signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
-              isPlaying: !!video && !video.paused,
-              muted: !!video && video.muted
-            };
-
+            const state = cue.state();
+            if (!state) { return; }
             const signature = JSON.stringify(state);
             if (signature === last) { return; }
             last = signature;
@@ -392,6 +511,7 @@ final class PlayerService: NSObject {
           setInterval(report, 1000);
           document.addEventListener('play', report, true);
           document.addEventListener('pause', report, true);
+          document.addEventListener('volumechange', report, true);
         })();
         """
 }
