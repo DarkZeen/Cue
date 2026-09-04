@@ -33,7 +33,7 @@ final class AppState {
 
         self.coordinator = coordinator
         self.player = player
-        self.playback = PlaybackService(settings: settings, player: player)
+        self.playback = PlaybackService(settings: settings, player: player, coordinator: coordinator)
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
     }
 

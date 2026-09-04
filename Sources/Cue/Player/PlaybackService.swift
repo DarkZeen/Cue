@@ -11,11 +11,13 @@ final class PlaybackService {
     let player: PlayerService
 
     private let settings: SettingsStore
+    private let coordinator: LibraryCoordinator
     private let logger = Diagnostics.logger("playback")
 
-    init(settings: SettingsStore, player: PlayerService) {
+    init(settings: SettingsStore, player: PlayerService, coordinator: LibraryCoordinator) {
         self.settings = settings
         self.player = player
+        self.coordinator = coordinator
     }
 
     /// Plays or hands off, depending on the setting. Returns false when it
@@ -25,7 +27,15 @@ final class PlaybackService {
     func open(_ item: MusicItem) -> Bool {
         switch settings.playbackDestination {
         case .inApp:
-            return player.play(item)
+            // An album has to be resolved to its playlist before it can play,
+            // and that costs a request. Started rather than awaited, so the
+            // panel closes on the click instead of after the network — the
+            // whole point of the app is that picking something is instant.
+            Task { [player, coordinator] in
+                let playable = await coordinator.playable(for: item)
+                _ = player.play(playable, shuffled: item.kind == .album)
+            }
+            return true
 
         case .browser:
             guard let url = item.playbackURL else {

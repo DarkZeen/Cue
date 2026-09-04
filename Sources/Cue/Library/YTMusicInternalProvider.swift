@@ -110,6 +110,40 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         return Self.deduplicated(cards + rows)
     }
 
+    /// Resolves an album page to the playlist behind it.
+    ///
+    /// The album page carries an `audioPlaylistId` — the `OLAK5uy_…` list of
+    /// its tracks — and a `/playlist?list=…` URL built from it plays, which the
+    /// `/browse/…` address never did. Costs one request, and only when an album
+    /// is actually clicked rather than for all nine on the page.
+    func playable(_ item: MusicItem) async -> MusicItem {
+        guard item.kind == .album, item.playlistID == nil, let browseID = item.browseID else {
+            return item
+        }
+
+        guard let response = try? await post("browse", body: ["browseId": browseID]) else {
+            logger.notice("Could not resolve an album to its playlist.")
+            return item
+        }
+
+        // The named field first, then any list id in a watch endpoint. Albums
+        // whose page shape has moved still tend to carry one of the two.
+        let playlistID = response.firstValue(forKey: "audioPlaylistId")?.string
+            ?? response.collect("watchEndpoint")
+                .compactMap { $0["playlistId"]?.string }
+                .first { $0.hasPrefix("OLAK5uy_") }
+
+        guard let playlistID else {
+            logger.notice("An album page carried no playlist id.")
+            return item
+        }
+
+        var resolved = item
+        resolved.playlistID = playlistID
+        resolved.browseID = nil
+        return resolved
+    }
+
     /// History first, then the home feed's mixes.
     ///
     /// Both are best-effort: a new account has no history, and the home feed

@@ -139,7 +139,7 @@ final class PlayerService: NSObject {
     // MARK: - Playing
 
     /// Plays an item, building the player the first time it is needed.
-    func play(_ item: MusicItem) -> Bool {
+    func play(_ item: MusicItem, shuffled: Bool = false) -> Bool {
         guard let url = item.playbackURL else {
             logger.error("No playable URL for a \(item.kind.rawValue, privacy: .public).")
             return false
@@ -152,9 +152,7 @@ final class PlayerService: NSObject {
 
         logger.notice("Playing a \(item.kind.rawValue, privacy: .public) in the player.")
         wantsPlayback = true
-        // An album is a page rather than a watch URL: nothing plays until its
-        // own Shuffle button is pressed.
-        wantsAlbumShuffle = item.kind == .album && item.videoID == nil
+        wantsAlbumShuffle = shuffled
         webView.load(URLRequest(url: url))
         isLoaded = true
         return true
@@ -184,11 +182,18 @@ final class PlayerService: NSObject {
 
                 if self.nowPlaying?.isPlaying == true {
                     self.wantsPlayback = false
-                    self.wantsAlbumShuffle = false
+
+                    // Shuffled only once it is actually playing: the control
+                    // does not exist until the player bar does, and toggling it
+                    // before then does nothing and reports success.
+                    if self.wantsAlbumShuffle {
+                        self.wantsAlbumShuffle = false
+                        self.evaluate("__cue.setShuffle(true)")
+                    }
                     return
                 }
 
-                self.evaluate(self.wantsAlbumShuffle ? "__cue.shuffleAlbum()" : "__cue.ensurePlaying()")
+                self.evaluate("__cue.ensurePlaying()")
             }
             self?.wantsPlayback = false
             self?.wantsAlbumShuffle = false
@@ -632,21 +637,27 @@ final class PlayerService: NSObject {
               return false;
             },
 
-            // Starts an album shuffled.
+            // Turns shuffle on, and only on.
             //
-            // An album's address is a *page*, not a watch URL, so opening one
-            // plays nothing at all — pressing its own Shuffle button is what
-            // turns a tile that merely navigated into a tile that plays.
-            shuffleAlbum() {
-              if (this.pressLabelled(/shuffle/i)) { return true; }
-              // Failing that, start it in order and shuffle the queue.
-              if (this.pressLabelled(/^play$/i)) {
-                setTimeout(() => this.press([
-                  'tp-yt-paper-icon-button.shuffle', '.shuffle'
-                ]), 1200);
-                return true;
-              }
-              return false;
+            // A plain click toggles, so a queue that was already shuffled would
+            // be un-shuffled by asking for shuffle — which is the kind of bug
+            // that looks like the feature working half the time.
+            setShuffle(on) {
+              const button = deep('tp-yt-paper-icon-button.shuffle')
+                || deep('ytmusic-player-bar tp-yt-paper-icon-button[aria-label*="huffle"]')
+                || deep('[aria-label*="huffle"]');
+              if (!button) { return false; }
+
+              const pressed = button.getAttribute('aria-pressed') === 'true'
+                || button.classList.contains('style-primary-text');
+              if (pressed === on) { return true; }
+
+              button.click();
+              // Shuffling reorders what comes *after* the current track, so
+              // without this the album still starts on track one and only then
+              // becomes random.
+              if (on) { setTimeout(() => this.next(), 400); }
+              return true;
             },
 
             toggle() {

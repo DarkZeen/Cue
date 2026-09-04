@@ -70,6 +70,15 @@ protocol MusicLibraryProvider: AnyObject {
     /// grid's second page is made of songs.
     func likedSongs() async throws -> [MusicItem]
 
+    /// Turns something that merely navigates into something that plays.
+    ///
+    /// An album's address is a *page* — `/browse/MPREb_…` — so opening one
+    /// navigates and stops. Behind every album is a real playlist id, and
+    /// resolving it is the difference between a tile that looks at an album and
+    /// a tile that plays it. Returns the item unchanged when there is nothing
+    /// to resolve.
+    func playable(_ item: MusicItem) async -> MusicItem
+
     /// Saved albums, as containers.
     ///
     /// Deliberately not flattened into tracks: an album is a thing you put on,
@@ -86,4 +95,8 @@ extension MusicLibraryProvider {
     /// says so; it does not become an error.
     func likedSongs() async throws -> [MusicItem] { [] }
     func albums() async throws -> [MusicItem] { [] }
+
+    /// Most items already play. Only the internal provider can resolve an
+    /// album page, and only it overrides this.
+    func playable(_ item: MusicItem) async -> MusicItem { item }
 }

@@ -267,6 +267,21 @@ final class LibraryCoordinator {
         )
     }
 
+    // MARK: - Playing
+
+    /// Asks whichever provider can turn this into something that plays.
+    func playable(for item: MusicItem) async -> MusicItem {
+        for provider in activeProviders where provider.id == item.source {
+            return await provider.playable(item)
+        }
+        // Nothing from this provider is connected any more; try whoever is.
+        for provider in activeProviders {
+            let resolved = await provider.playable(item)
+            if resolved.playlistID != nil { return resolved }
+        }
+        return item
+    }
+
     // MARK: - Gallery pages
 
     /// Which nine things the grid is showing.
