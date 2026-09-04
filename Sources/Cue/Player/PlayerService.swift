@@ -308,6 +308,18 @@ final class PlayerService: NSObject {
         isWindowVisible = false
     }
 
+    /// The screen to hide against.
+    ///
+    /// `NSScreen.main` is the screen holding the window with keyboard focus,
+    /// and it is `nil` when nothing has focus — which for an agent app at
+    /// launch is every single time. Reading it through an `if let` and simply
+    /// not positioning the window when it fails is how the player ends up
+    /// sitting in the bottom-left corner of the screen, fully visible, doing
+    /// an excellent impression of a bug in the hiding code.
+    private var concealmentScreen: NSScreen? {
+        window?.screen ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
     /// Puts the window into its invisible state: on screen, on top, small,
     /// click-through and all but transparent. See `hiddenAlpha` for why every
     /// one of those is load-bearing.
@@ -328,14 +340,17 @@ final class PlayerService: NSObject {
         // the left of the screen, which costs nothing: occlusion is judged on
         // the part that is on screen, and this window sits above ordinary ones
         // so nothing can cover that part.
-        if let screen = window.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            let size = window.frame.size
-            window.setFrameOrigin(NSPoint(
-                x: visible.minX + Self.visibleSliver - size.width,
-                y: visible.minY + Self.visibleSliver - size.height
-            ))
-        }
+        // Sized first, then positioned from the frame that resulted: the
+        // window's frame is its content plus a title bar and a toolbar, and
+        // positioning from the content size alone leaves it tens of points off.
+        let size = window.frame.size
+        let visible = (concealmentScreen ?? NSScreen.screens.first)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        window.setFrameOrigin(NSPoint(
+            x: visible.minX + Self.visibleSliver - size.width,
+            y: visible.minY + Self.visibleSliver - size.height
+        ))
 
         window.orderFrontRegardless()
 
@@ -343,7 +358,7 @@ final class PlayerService: NSObject {
         // music started: if this says the window is not visible, the autoplay
         // policy will refuse to start it and no amount of nudging will help.
         logger.notice(
-            "Player concealed; visible to the window server: \(window.occlusionState.contains(.visible), privacy: .public)"
+            "Player concealed at \(window.frame.debugDescription, privacy: .public); visible to the window server: \(window.occlusionState.contains(.visible), privacy: .public)"
         )
     }
 
@@ -356,7 +371,7 @@ final class PlayerService: NSObject {
 
         let webView = prepareWebView()
 
-        let window = NSWindow(
+        let window = PlayerWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1_020, height: 700),
             // Deliberately *without* `.fullSizeContentView`. With it, the page
             // runs under the title bar and Cue's own back/forward/home buttons
@@ -383,7 +398,9 @@ final class PlayerService: NSObject {
         window.toolbarStyle = .unified
         window.center()
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 420, height: 480)
+        // No larger than the concealed size, or `setContentSize` is clamped and
+        // the window is bigger than intended while hiding.
+        window.minSize = Self.hiddenSize
         window.delegate = self
 
         // Without this the player opens on the desktop Space while you are in a
@@ -438,10 +455,9 @@ final class PlayerService: NSObject {
                 return
             }
 
-            if let screen = window.screen ?? NSScreen.main {
-                let visible = screen.visibleFrame
-                window.setFrameOrigin(NSPoint(x: visible.minX, y: visible.minY))
-            }
+            let visible = (self.concealmentScreen ?? NSScreen.screens.first)?.visibleFrame
+                ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
+            window.setFrameOrigin(NSPoint(x: visible.minX, y: visible.minY))
             window.orderFrontRegardless()
 
             try? await Task.sleep(for: .milliseconds(250))
@@ -808,5 +824,22 @@ extension PlayerService: NSWindowDelegate {
             self.hide()
         }
         return false
+    }
+}
+
+/// The player's own window.
+///
+/// It exists for one reason: AppKit will not leave a titled window where you
+/// put it. `constrainFrameRect(_:to_:)` quietly drags any window whose title bar
+/// would leave the screen back into view, so setting an origin that hides the
+/// window off the corner is silently undone — the frame comes back as
+/// `(0, 0, 360, 332)`, sitting in the bottom-left corner in full view, looking
+/// exactly like a bug in the hiding code rather than in the placing code.
+///
+/// Overriding it to return the rectangle unchanged is the supported way to say
+/// that this window means it.
+final class PlayerWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
     }
 }
