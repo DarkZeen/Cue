@@ -227,7 +227,9 @@ final class LibraryCoordinator {
 
     /// Called by the panel whenever the field changes.
     func queryChanged() {
-        logger.notice("Field now holds \(self.query, privacy: .private).")
+        // Debug rather than notice: this fires on every keystroke, and a log
+        // that records everything anyone types is not one to leave switched on.
+        logger.debug("Field now holds \(self.query, privacy: .private).")
         scheduleSearch()
     }
 

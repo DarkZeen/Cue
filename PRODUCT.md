@@ -113,6 +113,12 @@ Screen Recording, Input Monitoring or Full Disk Access. Development builds
 require a stable local signing identity, without which the keychain treats every
 rebuild as a different application.
 
+**The panel has two designs and they both ship.** The gallery is three pages of
+artwork — a speed dial, liked songs, and a shelf curated by hand — with ⌘E
+swapping all three for Explore. The compact grid is the original. Which one is a
+setting, because artwork is what people recognise and titles are what they read
+when the covers all look alike.
+
 **Explicitly undecided.** Media keys and Now Playing in Control Centre were
 scoped and agreed but not built. Badging results that are not in YouTube Music's
 catalogue — which redirect the player to youtube.com — was chosen but not built.
@@ -168,7 +174,12 @@ author's. Any surface that needs social proof does not currently have any.
    are improvements that would remove the reason it is fast.
 4. **The unofficial layer must be able to fail alone.** It is undocumented and
    will change without notice. It degrades, it is switchable, and it never takes
-   the official path down with it.
+   the official path down with it. Two habits earned during a long day of
+   debugging it belong here: it answers a caller who asks too often with an
+   empty page rather than an error, so Cue asks rarely and caches what it gets;
+   and an empty answer never overwrites a page that was working, because
+   "nothing came back" and "there is nothing" are indistinguishable from
+   outside.
 5. **Nothing appears that was not asked for.** No window on play, no dock icon,
    no notification, no focus stolen. The plaque is the single exception, and it
    earns that by being the only thing that can say the app is doing anything.

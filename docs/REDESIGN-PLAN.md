@@ -1,6 +1,7 @@
 # Panel redesign — plan of record
 
-Agreed with the user, not yet built. Resume here.
+**Done and shipped.** Kept for the reasoning behind the decisions, not as
+outstanding work.
 
 ## Decisions already taken
 
@@ -80,3 +81,31 @@ From PRODUCT.md, and each already paid for once:
 - Nothing appears that was not asked for.
 - The unofficial layer must be able to fail alone — pages that depend on it
   degrade to an empty state with a reason, never a broken panel.
+
+
+## What it took, in the end
+
+Worth recording, because the failures were not where they looked.
+
+- **The API was fetching as a stranger for most of a day.** Promotional
+  playlists instead of the account's own, and empty pages where the library
+  should be. The cause was a decision made and then not followed through: the
+  player stopped seeding itself from the captured cookie because Google rotates
+  `__Secure-3PSIDTS`, and the API provider was left drinking from that same
+  stale snapshot. It fails silently by design — a stale cookie is not rejected,
+  it is treated as nobody. The API now borrows the player's live session.
+- **A hundred liked songs collapsed into one.** Identity was built as
+  `browseID ?? playlistID ?? videoID`, and every row on a playlist page carries
+  the same playlist id. Search was unaffected, because there each song's context
+  is its own radio — which is why it hid for so long.
+- **Rate limiting looks exactly like an empty library.** These endpoints answer
+  a caller who asks too often with a perfectly good empty page. Cue now asks
+  every fifteen minutes rather than every one, fetches half as much per refresh,
+  and caches the library to disk so a throttled launch still has a grid.
+- **Three view-layer fixes chased a bug that was not in the view.** Search
+  results were being fetched, parsed and assigned, and the screen kept showing
+  the first answer. Logging what was actually in the field settled in one round
+  what three rounds of observation theory could not.
+
+The pattern across all four: a log line beats a theory, and every one of these
+was diagnosed the moment something printed a number.
