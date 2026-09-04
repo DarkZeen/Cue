@@ -232,8 +232,11 @@ final class YTMusicSessionService: NSObject {
             if cookies.contains(where: { Self.hashCookieNames.contains($0.name) }) {
                 var byName: [String: String] = [:]
                 for cookie in cookies { byName[cookie.name] = cookie.value }
+                logger.notice("Using the player's live session (\(byName.count, privacy: .public) cookies).")
                 return byName.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "; ")
             }
+
+            logger.notice("The player has no session cookies yet; falling back to the stored one.")
         }
 
         return cookieHeader

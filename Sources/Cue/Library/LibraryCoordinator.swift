@@ -211,6 +211,17 @@ final class LibraryCoordinator {
     /// Rate-limited to once a minute unless forced: the panel is opened often
     /// and briefly, and refetching a playlist list on every keystroke-sized
     /// visit is how an app becomes the reason someone's quota ran out.
+    /// Refreshes regardless of the rate limit or anything already running.
+    ///
+    /// For the one case that genuinely invalidates a previous answer: the
+    /// credentials changed, so whatever the last refresh returned was fetched
+    /// as somebody else.
+    func refreshNow() {
+        refreshTask?.cancel()
+        lastRefresh = nil
+        refreshTask = Task { [weak self] in await self?.performRefresh() }
+    }
+
     func refresh(force: Bool = false) {
         // A refresh already running is left alone. Cancelling it to start
         // another achieves nothing except losing the first one's answers, and

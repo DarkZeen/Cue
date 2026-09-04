@@ -715,11 +715,17 @@ final class PlayerService: NSObject {
               media.volume = Math.min(1, Math.max(0, media.volume + delta));
             },
 
+            // Reported whether or not anything is playing.
+            //
+            // This used to return null until `mediaSession.metadata` existed,
+            // which is to say until music was already playing — so the page's
+            // signed-in flag, which the API provider depends on, was never sent
+            // at startup and the library went on being fetched as a stranger.
             state() {
               const session = navigator.mediaSession;
-              if (!session || !session.metadata) { return null; }
+              const metadata = session && session.metadata;
               const media = this.media();
-              const artwork = session.metadata.artwork || [];
+              const artwork = (metadata && metadata.artwork) || [];
               // `playbackState` is the site's own answer and does not depend on
               // having found the media element. The element is only consulted
               // when the site has not said.
@@ -727,8 +733,8 @@ final class PlayerService: NSObject {
                 ? session.playbackState === 'playing'
                 : !!media && !media.paused;
               return {
-                title: session.metadata.title || '',
-                artist: session.metadata.artist || '',
+                title: (metadata && metadata.title) || '',
+                artist: (metadata && metadata.artist) || '',
                 artwork: artwork.length ? artwork[artwork.length - 1].src : '',
                 // `ytcfg` is the page's own configuration blob, and LOGGED_IN
                 // is what the site itself checks. Far steadier than looking for
@@ -826,13 +832,19 @@ extension PlayerService: WKScriptMessageHandler {
         MainActor.assumeIsolated {
             guard let body = message.body as? [String: Any] else { return }
 
+            // Read first, and unconditionally. Returning early on a missing
+            // title threw away the signed-in flag along with it, which is the
+            // one piece of this message that matters before any music plays.
+            if let signedIn = body["signedIn"] as? Bool, signedIn != self.isSignedIn {
+                self.isSignedIn = signedIn
+                self.logger.notice("Player signed in: \(signedIn, privacy: .public)")
+            }
+
             let title = body["title"] as? String ?? ""
             guard !title.isEmpty else { return }
 
             let artist = body["artist"] as? String
             let artwork = body["artwork"] as? String
-
-            self.isSignedIn = body["signedIn"] as? Bool
 
             self.nowPlaying = NowPlaying(
                 title: title,

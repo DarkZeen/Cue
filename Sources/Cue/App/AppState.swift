@@ -114,7 +114,11 @@ final class AppState {
             if let signedIn = self.player.isSignedIn,
                signedIn != self.coordinator.ytSession.playerIsSignedIn {
                 self.coordinator.ytSession.playerIsSignedIn = signedIn
-                self.coordinator.refresh(force: true)
+                // The first refresh runs before the player has loaded, so it
+                // goes out with the stale stored cookie and comes back as a
+                // stranger's library. This is the moment to ask again with
+                // credentials that work.
+                self.coordinator.refreshNow()
             }
         }
         settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
