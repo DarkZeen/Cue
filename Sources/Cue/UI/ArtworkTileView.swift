@@ -116,7 +116,13 @@ struct ArtworkTileView: View {
         .frame(width: side, height: side)
         .clipped()
         .animation(.easeOut(duration: 0.2), value: thumbnails.image(for: item.thumbnailURL) != nil)
-        .onAppear { thumbnails.prefetch(item.thumbnailURL, soon: true) }
+        // `task(id:)` rather than `onAppear`, which fires once — while the tile
+        // is still empty, before any data has arrived. Nothing was ever
+        // requested for an item that turned up later, which is why covers only
+        // appeared once changing page rebuilt the tiles.
+        .task(id: item.thumbnailURL) {
+            thumbnails.prefetch(item.thumbnailURL, soon: true)
+        }
     }
 
     private var empty: some View {

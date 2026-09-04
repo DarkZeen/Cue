@@ -49,8 +49,6 @@ final class LibraryCoordinator {
 
     /// The grid's second page: liked songs, as individual tracks.
     private(set) var likedSongs: [MusicItem] = []
-    /// The grid's third page: saved albums, as containers.
-    private(set) var albums: [MusicItem] = []
 
     private(set) var isRefreshing = false
 
@@ -232,7 +230,6 @@ final class LibraryCoordinator {
 
         var gathered: [MusicItem] = []
         var liked: [MusicItem] = []
-        var saved: [MusicItem] = []
 
         for provider in activeProviders {
             guard !Task.isCancelled else { return }
@@ -267,23 +264,18 @@ final class LibraryCoordinator {
                 }
             }
 
-            do {
-                let owned = try await provider.albums()
-                saved = Self.merge(saved, with: owned)
-                logger.notice("\(provider.id.rawValue, privacy: .public) albums: \(owned.count, privacy: .public)")
-            } catch {
-                logger.error("\(provider.id.rawValue, privacy: .public) albums failed: \(error.localizedDescription, privacy: .public)")
-            }
+            // Albums are not fetched any more: the third page is the shelf you
+            // fill by hand, so asking the service for a list nothing reads is
+            // two requests per refresh spent on nothing.
         }
 
         guard !Task.isCancelled else { return }
 
         suggestions = gathered
         likedSongs = liked
-        albums = saved
         lastRefresh = Date()
         logger.debug(
-            "Refreshed: \(gathered.count, privacy: .public) suggestion(s), \(liked.count, privacy: .public) liked, \(saved.count, privacy: .public) album(s)."
+            "Refreshed: \(gathered.count, privacy: .public) suggestion(s), \(liked.count, privacy: .public) liked."
         )
     }
 

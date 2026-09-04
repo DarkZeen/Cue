@@ -423,10 +423,12 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         defaultKind: MusicItemKind
     ) -> MusicItem {
         let kind = destination.kind ?? defaultKind
-        // Identity comes from whichever identifier is most specific, so that
-        // the same album reached from search and from the library is one
-        // pinned tile rather than two.
-        let identity = destination.browseID ?? destination.playlistID ?? destination.videoID ?? title
+        // The video first, and the order matters more than it looks. Every row
+        // on a playlist page carries the *same* playlist id as its context, so
+        // identifying a song by that collapsed a hundred liked songs into one
+        // during de-duplication. A track is identified by its track; a playlist
+        // id only identifies a container.
+        let identity = destination.videoID ?? destination.browseID ?? destination.playlistID ?? title
 
         return MusicItem(
             id: "\(ProviderID.ytMusic.rawValue):\(kind.rawValue):\(identity)",

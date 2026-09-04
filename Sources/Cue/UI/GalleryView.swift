@@ -40,6 +40,10 @@ struct GalleryView: View {
             prefetchNeighbours()
         }
         .onChange(of: presenter.page) { _, _ in prefetchNeighbours() }
+        // The library arrives after the panel does. Without this the warming
+        // pass runs once against nine empty slots and never again.
+        .onChange(of: coordinator.suggestions.count) { _, _ in prefetchNeighbours() }
+        .onChange(of: coordinator.likedSongs.count) { _, _ in prefetchNeighbours() }
     }
 
     // MARK: - Header

@@ -220,3 +220,48 @@ struct YTMusicParsingTests {
         #expect(YTMusicInternalProvider.thumbnailURL(in: try parse("{}")) == nil)
     }
 }
+
+@Suite("Playlist pages")
+struct PlaylistPageTests {
+    /// Two rows from a playlist page: different songs, same playlist context.
+    ///
+    /// This is the shape that broke liked songs. Every row on a playlist page
+    /// carries that playlist's id, so identifying a song by it collapsed a
+    /// hundred tracks into one — the log said `100 rows, 1 usable`.
+    private func row(_ videoID: String, _ title: String) -> String {
+        """
+        {"flexColumns": [
+          {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "\(title)"}]}}}
+        ],
+        "overlay": {"musicItemThumbnailOverlayRenderer": {"content": {"musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {"watchEndpoint": {"videoId": "\(videoID)", "playlistId": "LM"}}
+        }}}}}
+        """
+    }
+
+    @Test("Songs sharing a playlist are still separate songs")
+    func songsAreNotCollapsedByTheirPlaylist() throws {
+        let response = try JSONValue(data: Data("""
+            {"contents": [
+              {"musicResponsiveListItemRenderer": \(row("v1", "First"))},
+              {"musicResponsiveListItemRenderer": \(row("v2", "Second"))},
+              {"musicResponsiveListItemRenderer": \(row("v3", "Third"))}
+            ]}
+            """.utf8))
+
+        let items = YTMusicInternalProvider.items(in: response)
+
+        #expect(items.count == 3)
+        #expect(Set(items.map(\.id)).count == 3)
+        #expect(items.map(\.title) == ["First", "Second", "Third"])
+    }
+
+    @Test("A song's identity is its video, not its playlist")
+    func identityPrefersTheVideo() throws {
+        let renderer = try JSONValue(data: Data(row("abc", "Song").utf8))
+        let item = try #require(YTMusicInternalProvider.row(from: renderer))
+
+        #expect(item.id.hasSuffix("abc"))
+        #expect(item.playlistID == "LM")
+    }
+}
