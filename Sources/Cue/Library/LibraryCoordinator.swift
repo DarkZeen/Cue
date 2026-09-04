@@ -227,6 +227,7 @@ final class LibraryCoordinator {
 
     /// Called by the panel whenever the field changes.
     func queryChanged() {
+        logger.notice("Field now holds \(self.query, privacy: .private).")
         scheduleSearch()
     }
 
@@ -266,7 +267,7 @@ final class LibraryCoordinator {
             return
         }
 
-        logger.notice("Search #\(generation, privacy: .public) running.")
+        logger.notice("Search #\(generation, privacy: .public) running for \(query, privacy: .private).")
 
         var merged: [MusicItem] = []
         var failures: [MusicLibraryError] = []
@@ -303,7 +304,7 @@ final class LibraryCoordinator {
         isSearching = false
 
         logger.notice(
-            "Search #\(generation, privacy: .public) settled: \(merged.count, privacy: .public) result(s)."
+            "Search #\(generation, privacy: .public) settled for \(query, privacy: .private): \(merged.count, privacy: .public) result(s), first \(merged.first?.title ?? "—", privacy: .private)."
         )
         // A failure only becomes a message when it left the user with nothing.
         // One backend being down while the other answers is not something to

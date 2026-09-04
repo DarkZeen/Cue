@@ -262,6 +262,11 @@ struct CueContentView: View {
                 thumbnails: thumbnails,
                 onOpen: onOpen
             )
+            // Rebuilt outright on each settled search rather than relying on
+            // the list noticing that the array behind it changed. Observation
+            // through a shared object has now failed twice here; this removes
+            // it from the question entirely.
+            .id(coordinator.resultsVersion)
         }
     }
 
