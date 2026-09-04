@@ -33,7 +33,27 @@ final class AppState {
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
     }
 
+    /// Set once the keychain items have been rewritten by a stably-signed
+    /// build. See `Keychain.reclaim`.
+    private static let keychainRepairKey = "keychainReclaimed"
+
+    /// Repairs keychain items left behind by a differently-signed build.
+    ///
+    /// Runs once. The prompts it removes only afflict someone who used a build
+    /// signed differently from this one — which, during development, is
+    /// everyone — and running it on every launch would rewrite four items for
+    /// no reason.
+    private func repairKeychainIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.keychainRepairKey) else { return }
+
+        Keychain.reclaim(Keychain.allAccounts)
+        defaults.set(true, forKey: Self.keychainRepairKey)
+    }
+
     func start() {
+        repairKeychainIfNeeded()
+
         let panel = CueWindowController(
             coordinator: coordinator,
             settings: settings,

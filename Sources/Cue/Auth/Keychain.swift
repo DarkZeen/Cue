@@ -114,6 +114,65 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    // MARK: - Repair
+
+    /// Re-creates the stored items so they belong to *this* build.
+    ///
+    /// A keychain item's access list is built when the item is written, and it
+    /// names the application that wrote it. Items written by an earlier build
+    /// with a different code signature therefore name an application that no
+    /// longer exists — and macOS asks for the login keychain password on every
+    /// read, forever. "Always Allow" appears to fix it and does not: it grafts
+    /// a grant onto a list that is still being evaluated against entries that
+    /// can never match again.
+    ///
+    /// The only real cure is for the item to be written afresh by the app that
+    /// will be reading it, which is what this does: read the value once, delete
+    /// the item, write it back. There is one last prompt per item on the read,
+    /// and then silence.
+    ///
+    /// Values are held only in memory between the delete and the write, and the
+    /// delete never happens unless the read produced something — a repair that
+    /// can lose a refresh token is worse than the prompt it removes.
+    @discardableResult
+    static func reclaim(_ accounts: [String]) -> Int {
+        var repaired = 0
+
+        for account in accounts {
+            guard let value = string(for: account), !value.isEmpty else { continue }
+
+            remove(account)
+
+            var query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+            ]
+            query[kSecValueData as String] = Data(value.utf8)
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+
+            let status = SecItemAdd(query as CFDictionary, nil)
+            if status == errSecSuccess {
+                repaired += 1
+            } else {
+                logger.error("Could not rewrite \(account, privacy: .public): OSStatus \(status).")
+            }
+        }
+
+        if repaired > 0 {
+            logger.notice("Rewrote \(repaired, privacy: .public) keychain item(s) for this build.")
+        }
+        return repaired
+    }
+
+    /// Everything Cue stores, for the repair above.
+    static let allAccounts = [
+        Account.googleClientID,
+        Account.googleClientSecret,
+        Account.googleRefreshToken,
+        Account.ytMusicCookie,
+    ]
+
     // MARK: - Accounts
 
     /// One constant per secret, so a typo is a compile error rather than a
