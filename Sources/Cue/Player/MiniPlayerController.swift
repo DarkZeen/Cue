@@ -58,11 +58,33 @@ final class MiniPlayerController {
     /// Called whenever anything it depends on changes, rather than each caller
     /// deciding for itself whether to show or hide — there are four conditions
     /// and every one of them has to agree.
+    /// True while the layout is being arranged: the plaque stays on screen even
+    /// with nothing playing, and moves on a plain drag.
+    private(set) var isEditing = false
+
+    func beginEditing() {
+        isEditing = true
+        panel?.isEditing = true
+        show()
+        panel?.isEditing = true
+    }
+
+    func endEditing() {
+        isEditing = false
+        panel?.isEditing = false
+        sync()
+    }
+
     func sync() {
-        let shouldShow = settings.showsMiniPlayer
-            && player.nowPlaying != nil
-            // Two players on screen saying the same thing is one too many.
-            && !player.isWindowVisible
+        // Shown regardless while arranging: you cannot place a thing that is
+        // not on screen, and requiring music to be playing before the plaque
+        // can be positioned would be a strange condition to discover.
+        let shouldShow = isEditing || (
+            settings.showsMiniPlayer
+                && player.nowPlaying != nil
+                // Two players on screen saying the same thing is one too many.
+                && !player.isWindowVisible
+        )
 
         shouldShow ? show() : hide()
     }
@@ -107,6 +129,7 @@ final class MiniPlayerController {
         let panel = MiniPlayerPanel(
             contentRect: NSRect(origin: .zero, size: Self.size)
         )
+        panel.isEditing = isEditing
 
         let view = AnyView(
             MiniPlayerHost(player: player)
@@ -147,6 +170,7 @@ private struct MiniPlayerHost: View {
 
     var body: some View {
         if let nowPlaying = player.nowPlaying {
+
             MiniPlayerView(
                 nowPlaying: nowPlaying,
                 onOpen: { player.showCurrent() },
@@ -207,6 +231,9 @@ final class MiniPlayerPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
+    /// Set while the layout is being arranged, when a plain drag moves it.
+    var isEditing = false
+
     /// ⌘-drag moves the plaque; a plain drag does not.
     ///
     /// Intercepted here rather than by `isMovableByWindowBackground`, which
@@ -214,7 +241,7 @@ final class MiniPlayerPanel: NSPanel {
     /// including the one that starts a fraction outside the Pause button.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown,
-           event.modifierFlags.contains(.command) {
+           isEditing || event.modifierFlags.contains(.command) {
             performDrag(with: event)
             return
         }

@@ -17,6 +17,7 @@ final class AppState {
     let player: PlayerService
     let playback: PlaybackService
     let miniPlayer: MiniPlayerController
+    let layoutEditor = LayoutEditor()
 
     private var panel: CueWindowController?
     private var settingsWindow: NSWindow?
@@ -87,6 +88,16 @@ final class AppState {
         CueLayout.panelWidth = CGFloat(settings.panelWidth)
         settings.onPanelMetricsChange = { [weak self] in self?.panel?.applyMetrics() }
 
+        layoutEditor.onBegin = { [weak self] in
+            self?.panel?.beginEditing()
+            self?.miniPlayer.beginEditing()
+        }
+        layoutEditor.onEnd = { [weak self] in
+            self?.panel?.endEditing()
+            self?.miniPlayer.endEditing()
+        }
+        panel.onEndEditing = { [weak self] in self?.layoutEditor.end() }
+
         player.onStateChange = { [weak self] in self?.miniPlayer.sync() }
         settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
 
@@ -154,7 +165,8 @@ final class AppState {
             launchAtLogin: launchAtLogin,
             hotKey: hotKey,
             player: player,
-            onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() }
+            onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() },
+            onEditLayout: { [weak self] in self?.layoutEditor.begin() }
         )
 
         let window = NSWindow(

@@ -39,6 +39,16 @@ final class CueWindowController {
 
     /// Raised when the user asks for Settings from inside the panel.
     var onShowSettings: (() -> Void)?
+    /// Raised when Escape ends an edit, so the session's owner can tear the
+    /// guides down too.
+    var onEndEditing: (() -> Void)?
+
+    /// True while the layout is being arranged. The panel stays put, ignores
+    /// focus loss, and shows its resize edge.
+    private(set) var isEditing = false
+
+    /// The window's frame when the current drag began.
+    private var dragOrigin: NSRect?
 
     init(
         coordinator: LibraryCoordinator,
@@ -104,8 +114,8 @@ final class CueWindowController {
 
         let origin = CueLayout.origin(
             in: visible,
-            panelHeight: panel.frame.height,
-            anchor: settings.panelAnchor
+            size: panel.frame.size,
+            position: settings.panelPosition
         )
 
         presentedAt = Date()
@@ -145,6 +155,92 @@ final class CueWindowController {
 
     func toggle() {
         presenter.state == .visible ? dismiss() : present()
+    }
+
+    // MARK: - Editing the layout
+
+    /// Puts the panel into the arranging state and leaves it on screen.
+    func beginEditing() {
+        isEditing = true
+        if presenter.state != .visible { present() }
+        // The root view captures `isEditing` when it is built, so the chrome
+        // only appears once the content is rebuilt around the new value.
+        configureContent()
+        panel.orderFrontRegardless()
+    }
+
+    func endEditing() {
+        guard isEditing else { return }
+        isEditing = false
+        dragOrigin = nil
+        configureContent()
+    }
+
+    /// Moves the window by a drag, pulling onto a guide when close.
+    func dragPanel(by translation: CGSize, isEnd: Bool) {
+        guard let screen = panel.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+
+        let start = dragOrigin ?? panel.frame
+        if dragOrigin == nil { dragOrigin = start }
+
+        // SwiftUI's y grows downward and AppKit's grows upward, so the
+        // vertical translation is inverted. Getting this wrong makes the panel
+        // run away from the pointer, which is the least ambiguous bug there is.
+        let proposed = NSPoint(
+            x: start.minX + translation.width,
+            y: start.minY - translation.height
+        )
+
+        let free = NSSize(
+            width: max(visible.width - start.width, 0),
+            height: max(visible.height - start.height, 0)
+        )
+
+        let snapped = NSPoint(
+            x: visible.minX + LayoutGuides.snap(offset: proposed.x - visible.minX, free: free.width),
+            y: visible.minY + LayoutGuides.snap(offset: proposed.y - visible.minY, free: free.height)
+        )
+
+        panel.setFrameOrigin(snapped)
+
+        if isEnd {
+            settings.panelPosition = CueLayout.position(
+                of: snapped,
+                size: start.size,
+                in: visible
+            )
+            dragOrigin = nil
+        }
+    }
+
+    /// Resizes by dragging the panel's edge.
+    func resizePanel(by translation: CGSize, stepped: Bool, isEnd: Bool) {
+        let start = dragOrigin ?? panel.frame
+        if dragOrigin == nil { dragOrigin = start }
+
+        var width = start.width + translation.width
+        if stepped { width = LayoutGuides.step(width) }
+        width = min(max(width, CueLayout.panelWidthRange.lowerBound), CueLayout.panelWidthRange.upperBound)
+
+        // Written through the setting rather than straight onto the window, so
+        // the contents resize with it — the whole reason the slider did not
+        // work was a size the views could not see.
+        settings.panelWidth = Double(width)
+        applyMetrics()
+        reposition()
+
+        if isEnd { dragOrigin = nil }
+    }
+
+    /// Puts the panel back where its saved position says, at its current size.
+    func reposition() {
+        guard let screen = panel.screen ?? NSScreen.main else { return }
+        panel.setFrameOrigin(CueLayout.origin(
+            in: screen.visibleFrame,
+            size: panel.frame.size,
+            position: settings.panelPosition
+        ))
     }
 
     /// Whether a loss of focus this soon after presenting should be believed.
@@ -215,9 +311,17 @@ final class CueWindowController {
             },
             onHeightChange: { [weak self] height in
                 self?.container.contentHeight = height
+            },
+            isEditing: isEditing,
+            onDragMove: { [weak self] translation, isEnd in
+                self?.dragPanel(by: translation, isEnd: isEnd)
+            },
+            onDragResize: { [weak self] translation, stepped, isEnd in
+                self?.resizePanel(by: translation, stepped: stepped, isEnd: isEnd)
             }
         )
 
+        hostingView?.removeFromSuperview()
         hostingView = NSHostingView(rootView: AnyView(
             // Top-aligned inside a window that is always the taller of the two
             // layouts, so that shrinking the contents leaves empty space at the
@@ -253,7 +357,7 @@ final class CueWindowController {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                guard !Diagnostics.holdsPanelOpen else { return }
+                guard !Diagnostics.holdsPanelOpen, !self.isEditing else { return }
 
                 if self.shouldReassertFocus {
                     // Not the user clicking away — see `shouldReassertFocus`.
@@ -366,6 +470,10 @@ final class CueWindowController {
     /// panel too, and the user has to press the shortcut again to get back to
     /// where they already were.
     private func escape() {
+        if isEditing {
+            onEndEditing?()
+            return
+        }
         if !coordinator.query.isEmpty {
             coordinator.clearSearch()
         } else {

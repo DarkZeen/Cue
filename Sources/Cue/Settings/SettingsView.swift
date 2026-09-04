@@ -13,6 +13,7 @@ struct SettingsView: View {
     let hotKey: HotKeyService
     let player: PlayerService
     let onResetMiniPlayer: () -> Void
+    let onEditLayout: () -> Void
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -31,7 +32,8 @@ struct SettingsView: View {
                     launchAtLogin: launchAtLogin,
                     hotKey: hotKey,
                     player: player,
-                    onResetMiniPlayer: onResetMiniPlayer
+                    onResetMiniPlayer: onResetMiniPlayer,
+                    onEditLayout: onEditLayout
                 )
             } label: {
                 Label("General", systemImage: "gearshape")
@@ -62,11 +64,7 @@ private struct GeneralPane: View {
     let hotKey: HotKeyService
     let player: PlayerService
     let onResetMiniPlayer: () -> Void
-
-    /// The slider's bounds, named because a range spelled inline across two
-    /// lines is a parse error waiting to happen.
-    private static let widthRange =
-        Double(CueLayout.panelWidthRange.lowerBound)...Double(CueLayout.panelWidthRange.upperBound)
+    let onEditLayout: () -> Void
 
     @State private var didCopyCommand = false
 
@@ -133,22 +131,25 @@ private struct GeneralPane: View {
             }
 
             Section("Panel") {
-                LabeledContent("Size") {
+                LabeledContent("Size and position") {
                     HStack(spacing: 10) {
-                        Slider(value: $settings.panelWidth, in: Self.widthRange)
-                            .frame(width: 170)
+                        Button("Edit Layout…", action: onEditLayout)
 
-                        Button("Reset") { settings.resetPanelWidth() }
+                        Button("Reset") { settings.resetPanelLayout() }
                             .buttonStyle(.borderless)
-                            .disabled(Int(settings.panelWidth) == Int(CueLayout.defaultPanelWidth))
                     }
                 }
 
-                LabeledContent("Position") {
-                    AnchorPicker(selection: $settings.panelAnchor)
-                }
-
-                Text("The covers scale with the panel. Position is per display — the panel opens on whichever screen your pointer is on.")
+                // Direct manipulation instead of a slider and a picker: size
+                // and position are spatial, and the honest control for a
+                // spatial property is the thing itself.
+                Text("""
+                    Puts the panel and the plaque on screen with alignment \
+                    guides: drag either to move it, drag the panel's edge to \
+                    resize, hold ⇧ to move in steps. The covers scale with the \
+                    panel. Position is kept as a proportion of the screen, so \
+                    it means the same thing on any display.
+                    """)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

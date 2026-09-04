@@ -35,8 +35,12 @@ final class SettingsStore {
                        Double(CueLayout.panelWidthRange.upperBound))
         }()
 
-        panelAnchor = defaults.string(forKey: Key.panelAnchor)
-            .flatMap(PanelAnchor.init(rawValue:)) ?? .center
+        panelPosition = {
+            guard let stored = defaults.array(forKey: Key.panelPosition) as? [Double],
+                  stored.count == 2
+            else { return SettingsStore.defaultPanelPosition }
+            return CGPoint(x: min(max(stored[0], 0), 1), y: min(max(stored[1], 0), 1))
+        }()
 
         miniPlayerOrigin = {
             guard let stored = defaults.array(forKey: Key.miniPlayerOrigin) as? [Double],
@@ -60,12 +64,26 @@ final class SettingsStore {
         }
     }
 
-    /// Where on the display the panel appears.
-    var panelAnchor: PanelAnchor {
+    /// Where the panel appears, as a fraction of the room it has to move in.
+    ///
+    /// Fractions rather than points, because the panel opens on whichever
+    /// display the pointer is on. A position saved in screen coordinates means
+    /// something different on a second monitor and nothing at all once that
+    /// monitor is unplugged; a fraction of the free space means the same thing
+    /// everywhere.
+    var panelPosition: CGPoint {
         didSet {
-            defaults.set(panelAnchor.rawValue, forKey: Key.panelAnchor)
-            onPanelMetricsChange?()
+            defaults.set([panelPosition.x, panelPosition.y], forKey: Key.panelPosition)
         }
+    }
+
+    /// Centred, and above the middle. The optical centre of a screen sits
+    /// higher than its geometric one.
+    static let defaultPanelPosition = CGPoint(x: 0.5, y: 0.72)
+
+    func resetPanelLayout() {
+        panelPosition = Self.defaultPanelPosition
+        panelWidth = Double(CueLayout.defaultPanelWidth)
     }
 
     /// Where the plaque was last left, or `nil` for its default corner.
@@ -259,7 +277,7 @@ final class SettingsStore {
         static let showsMiniPlayer = "showsMiniPlayer"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
-        static let panelAnchor = "panelAnchor"
+        static let panelPosition = "panelPosition"
         static let miniPlayerOrigin = "miniPlayerOrigin"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"

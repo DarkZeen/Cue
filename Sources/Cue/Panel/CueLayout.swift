@@ -152,8 +152,29 @@ enum CueLayout {
     /// test that strip so it is not a dead zone over another app.
     static var panelHeight: CGFloat { panelHeight(for: panelWidth) }
 
-    /// Where the panel sits on screen, for the chosen anchor.
-    static func origin(in screen: NSRect, panelHeight: CGFloat, anchor: PanelAnchor) -> NSPoint {
-        anchor.origin(for: NSSize(width: panelWidth, height: panelHeight), in: screen)
+    /// Where the panel sits, given a position expressed as a fraction of the
+    /// room it has to move in.
+    static func origin(in visible: NSRect, size: NSSize, position: CGPoint) -> NSPoint {
+        let free = NSSize(
+            width: max(visible.width - size.width, 0),
+            height: max(visible.height - size.height, 0)
+        )
+        return NSPoint(
+            x: visible.minX + free.width * position.x,
+            y: visible.minY + free.height * position.y
+        )
+    }
+
+    /// The inverse: what fraction a given origin represents. Used while
+    /// dragging, so the position that gets saved is display-independent.
+    static func position(of origin: NSPoint, size: NSSize, in visible: NSRect) -> CGPoint {
+        let free = NSSize(
+            width: max(visible.width - size.width, 0),
+            height: max(visible.height - size.height, 0)
+        )
+        return CGPoint(
+            x: free.width > 0 ? min(max((origin.x - visible.minX) / free.width, 0), 1) : 0.5,
+            y: free.height > 0 ? min(max((origin.y - visible.minY) / free.height, 0), 1) : 0.5
+        )
     }
 }

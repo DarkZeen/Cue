@@ -22,6 +22,12 @@ struct CueContentView: View {
     /// many results there are to be resized around.
     let onHeightChange: (CGFloat) -> Void
 
+    /// Arranging state: the panel is being positioned and sized rather than
+    /// used, so it takes drags instead of clicks.
+    let isEditing: Bool
+    let onDragMove: (CGSize, Bool) -> Void
+    let onDragResize: (CGSize, Bool, Bool) -> Void
+
     @FocusState private var isSearchFocused: Bool
 
     /// Read from settings rather than from `CueLayout`'s stored value, so the
@@ -54,6 +60,7 @@ struct CueContentView: View {
             RoundedRectangle(cornerRadius: CueLayout.cornerRadius)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 1)
         )
+        .overlay { if isEditing { editChrome } }
         .scaleEffect(isPresented ? 1 : CueAnimation.startScale)
         .offset(y: isPresented ? 0 : CueAnimation.startOffset)
         .opacity(isPresented ? 1 : 0)
@@ -109,6 +116,46 @@ struct CueContentView: View {
     }
 
     private var isPresented: Bool { presenter.state == .visible }
+
+    /// What the panel wears while it is being arranged.
+    ///
+    /// A layer over the whole surface, deliberately: in this mode the panel is
+    /// the thing being moved rather than a thing being used, and leaving the
+    /// tiles clickable underneath would mean a mis-aimed drag starts a song.
+    @ViewBuilder
+    private var editChrome: some View {
+        ZStack(alignment: .trailing) {
+            Color.white.opacity(0.001)
+                .contentShape(.rect)
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { onDragMove($0.translation, false) }
+                        .onEnded { onDragMove($0.translation, true) }
+                )
+
+            // The grabber sits on the edge it resizes, which is the only place
+            // it can be without needing a label to explain itself.
+            Capsule()
+                .fill(CuePalette.accent)
+                .frame(width: 4, height: 46)
+                .padding(.trailing, 3)
+                .contentShape(.rect.inset(by: -10))
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged {
+                            onDragResize($0.translation, NSEvent.modifierFlags.contains(.shift), false)
+                        }
+                        .onEnded {
+                            onDragResize($0.translation, NSEvent.modifierFlags.contains(.shift), true)
+                        }
+                )
+                .help("Drag to resize · hold ⇧ for steps")
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: CueLayout.cornerRadius)
+                .strokeBorder(CuePalette.accent.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        )
+    }
 
     private var height: CGFloat {
         switch presenter.mode {
