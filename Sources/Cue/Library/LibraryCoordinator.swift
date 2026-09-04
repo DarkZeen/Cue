@@ -15,7 +15,7 @@ final class LibraryCoordinator {
     /// more here than in most search fields: a Data API `search.list` call
     /// costs a hundredth of the day's quota, so a request per keystroke would
     /// exhaust an account in a couple of minutes of typing.
-    private static let searchDebounce = Duration.milliseconds(280)
+    private static let searchDebounce = Duration.milliseconds(400)
 
     let google: GoogleOAuthService
     let ytSession: YTMusicSessionService
@@ -129,6 +129,15 @@ final class LibraryCoordinator {
     private var refreshTask: Task<Void, Never>?
     private var lastRefresh: Date?
 
+    /// How long a fetched library is trusted before asking again.
+    ///
+    /// Fifteen minutes, not one. These endpoints are undocumented and
+    /// rate-limited, and the punishment for asking too often is not an error —
+    /// it is an empty answer that looks exactly like an empty library. A
+    /// playlist you made last week does not need re-fetching every time the
+    /// panel opens.
+    private static let refreshInterval: TimeInterval = 15 * 60
+
     init(settings: SettingsStore) {
         self.settings = settings
 
@@ -143,6 +152,31 @@ final class LibraryCoordinator {
         ytSession.onSessionChange = { [weak self] in
             self?.refresh(force: true)
         }
+
+        // Shown immediately, from the last time it was fetched successfully.
+        // The grid should be there the instant the panel opens, and it should
+        // still be there when the network is not.
+        suggestions = Self.loadCache(Key.suggestions, from: settings.defaults)
+        likedSongs = Self.loadCache(Key.likedSongs, from: settings.defaults)
+    }
+
+    private enum Key {
+        static let suggestions = "cache.suggestions"
+        static let likedSongs = "cache.likedSongs"
+    }
+
+    private static func loadCache(_ key: String, from defaults: UserDefaults) -> [MusicItem] {
+        guard let data = defaults.data(forKey: key),
+              let items = try? JSONDecoder().decode([MusicItem].self, from: data)
+        else { return [] }
+        return items
+    }
+
+    private func saveCache(_ items: [MusicItem], to key: String) {
+        // Capped: a library of thousands is not worth writing on every refresh,
+        // and the grid deals from a few dozen.
+        guard let data = try? JSONEncoder().encode(Array(items.prefix(120))) else { return }
+        settings.defaults.set(data, forKey: key)
     }
 
     // MARK: - Providers
@@ -221,6 +255,8 @@ final class LibraryCoordinator {
             return
         }
 
+        logger.notice("Search #\(generation, privacy: .public) running.")
+
         var merged: [MusicItem] = []
         var failures: [MusicLibraryError] = []
 
@@ -229,7 +265,10 @@ final class LibraryCoordinator {
         // that order; running them in parallel would save a few hundred
         // milliseconds and then need the order restored anyway.
         for provider in providers {
-            guard generation == searchGeneration else { return }
+            guard generation == searchGeneration else {
+                logger.notice("Search #\(generation, privacy: .public) abandoned; #\(self.searchGeneration, privacy: .public) is newer.")
+                return
+            }
             do {
                 merged = Self.merge(merged, with: try await provider.search(query))
             } catch let error as MusicLibraryError {
@@ -243,10 +282,17 @@ final class LibraryCoordinator {
         // Only the newest search writes. An older one that finished late must
         // leave the screen alone rather than replacing newer results with the
         // answer to a question nobody is asking any more.
-        guard generation == searchGeneration else { return }
+        guard generation == searchGeneration else {
+            logger.notice("Search #\(generation, privacy: .public) finished late; discarded.")
+            return
+        }
 
         results = merged
         isSearching = false
+
+        logger.notice(
+            "Search #\(generation, privacy: .public) settled: \(merged.count, privacy: .public) result(s)."
+        )
         // A failure only becomes a message when it left the user with nothing.
         // One backend being down while the other answers is not something to
         // interrupt a search with.
@@ -291,7 +337,7 @@ final class LibraryCoordinator {
         // another achieves nothing except losing the first one's answers, and
         // the logs showed exactly that: "albums failed: cancelled".
         if isRefreshing, !force { return }
-        if !force, let lastRefresh, Date().timeIntervalSince(lastRefresh) < 60 { return }
+        if !force, let lastRefresh, Date().timeIntervalSince(lastRefresh) < Self.refreshInterval { return }
         guard !activeProviders.isEmpty else {
             suggestions = []
             return
@@ -354,8 +400,17 @@ final class LibraryCoordinator {
         // empty. A request that failed, was cancelled, or was answered as
         // logged-out all return nothing, and none of them are grounds for
         // wiping a page that was working a minute ago.
-        if !gathered.isEmpty || suggestions.isEmpty { suggestions = gathered }
-        if !liked.isEmpty || likedSongs.isEmpty { likedSongs = liked }
+        // A page that already has something keeps it when a refresh comes back
+        // empty — and it now stays kept across launches, because being
+        // rate-limited at the wrong moment should not cost you your grid.
+        if !gathered.isEmpty {
+            suggestions = gathered
+            saveCache(gathered, to: Key.suggestions)
+        }
+        if !liked.isEmpty {
+            likedSongs = liked
+            saveCache(liked, to: Key.likedSongs)
+        }
 
         lastRefresh = Date()
         logger.debug(

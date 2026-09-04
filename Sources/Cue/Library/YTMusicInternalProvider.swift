@@ -102,6 +102,15 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
             return songs
         }
 
+        // Empty is what being rate-limited looks like here, and hammering three
+        // more endpoints immediately is the surest way to stay that way. One
+        // pause, one retry, then the alternatives.
+        try? await Task.sleep(for: .seconds(2))
+        if let retried = try? await tracks(inPlaylistPage: BrowseID.likedSongsPage), !retried.isEmpty {
+            logger.notice("Liked songs arrived on a second attempt.")
+            return retried
+        }
+
         logger.notice("\(BrowseID.likedSongsPage, privacy: .public) held no songs; trying the queue endpoint.")
 
         // A different mechanism, not a different guess. `next` returns the
@@ -272,13 +281,18 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     /// promotional content. Either failing is not a reason to fail the other,
     /// which is why they are gathered rather than awaited in sequence.
     func recent() async throws -> [MusicItem] {
-        async let history = try? post("browse", body: ["browseId": BrowseID.history])
-        async let home = try? post("browse", body: ["browseId": BrowseID.home])
-
-        var items = await history.map(Self.items(in:)) ?? []
-        items += await home.map(Self.items(in:)) ?? []
-
-        return Self.deduplicated(items)
+        // History only. This used to fetch the home feed as well, which doubled
+        // the request count for every refresh and returned mostly promotional
+        // shelves — and these endpoints answer a caller who asks too often with
+        // an empty page rather than an error, so the cost of asking twice is
+        // paid in a library that silently disappears.
+        //
+        // The home feed is still fetched, but only in Explore, where it is
+        // actually the point.
+        guard let history = try? await post("browse", body: ["browseId": BrowseID.history]) else {
+            return []
+        }
+        return Self.items(in: history)
     }
 
     // MARK: - Transport

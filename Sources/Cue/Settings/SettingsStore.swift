@@ -15,7 +15,9 @@ final class SettingsStore {
     /// setting the layout has to work at every value it can take.
     static let tileCount = 9
 
-    private let defaults: UserDefaults
+    /// Exposed so the library can keep its own cache beside the settings,
+    /// rather than opening a second store for the same app.
+    let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
