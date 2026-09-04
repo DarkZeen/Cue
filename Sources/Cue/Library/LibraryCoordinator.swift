@@ -53,6 +53,15 @@ final class LibraryCoordinator {
     private(set) var isRefreshing = false
 
     private var searchTask: Task<Void, Never>?
+
+    /// Which search the results on screen belong to.
+    ///
+    /// `Task.isCancelled` alone was not enough: a cancelled search returned
+    /// without clearing `isSearching`, so the spinner ran forever, and a slow
+    /// provider answering after a newer query had already been typed could
+    /// still write its stale list. Every search takes a number, and only the
+    /// current number may touch the results.
+    private var searchGeneration = 0
     private var refreshTask: Task<Void, Never>?
     private var lastRefresh: Date?
 
@@ -91,6 +100,11 @@ final class LibraryCoordinator {
 
     var isConnectedToAnything: Bool { !activeProviders.isEmpty }
 
+    /// Whether the real YouTube Music library is reachable.
+    var hasMusicSession: Bool {
+        settings.unofficialProviderEnabled && ytMusic.isConnected
+    }
+
     /// What Settings needs to explain the current state, and what the empty
     /// panel needs to say instead of nothing.
     var connectionSummary: String {
@@ -119,15 +133,17 @@ final class LibraryCoordinator {
         }
 
         isSearching = true
+        searchGeneration += 1
+        let generation = searchGeneration
 
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: Self.searchDebounce)
             guard !Task.isCancelled, let self else { return }
-            await self.performSearch(trimmed)
+            await self.performSearch(trimmed, generation: generation)
         }
     }
 
-    private func performSearch(_ query: String) async {
+    private func performSearch(_ query: String, generation: Int) async {
         let providers = activeProviders
         guard !providers.isEmpty else {
             results = []
@@ -144,7 +160,7 @@ final class LibraryCoordinator {
         // that order; running them in parallel would save a few hundred
         // milliseconds and then need the order restored anyway.
         for provider in providers {
-            guard !Task.isCancelled else { return }
+            guard generation == searchGeneration else { return }
             do {
                 merged = Self.merge(merged, with: try await provider.search(query))
             } catch let error as MusicLibraryError {
@@ -155,7 +171,10 @@ final class LibraryCoordinator {
             }
         }
 
-        guard !Task.isCancelled else { return }
+        // Only the newest search writes. An older one that finished late must
+        // leave the screen alone rather than replacing newer results with the
+        // answer to a question nobody is asking any more.
+        guard generation == searchGeneration else { return }
 
         results = merged
         isSearching = false
@@ -226,7 +245,14 @@ final class LibraryCoordinator {
             // Gathered separately and forgivingly: the grid's pages are three
             // independent surfaces, and one of them failing must leave the
             // other two full rather than emptying the panel.
-            liked = Self.merge(liked, with: (try? await provider.likedSongs()) ?? [])
+            //
+            // Liked songs come from YouTube Music alone when it is available.
+            // The official API's "likes" are YouTube's — every video you ever
+            // thumbed up — which is a different list wearing the same word, and
+            // mixing the two makes the page unrecognisable as your music.
+            if provider.id == .ytMusic || !hasMusicSession {
+                liked = Self.merge(liked, with: (try? await provider.likedSongs()) ?? [])
+            }
             saved = Self.merge(saved, with: (try? await provider.albums()) ?? [])
         }
 

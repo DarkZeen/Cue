@@ -129,10 +129,11 @@ final class LayoutGuidesPanel: NSPanel {
         isMovable = false
         isRestorable = false
 
-        // Below the panel and the plaque, which are the things being arranged
-        // on top of it, and above everything else so the screen being described
-        // is the screen you can see.
-        level = .floating
+        // Genuinely below the panel and the plaque, not merely ordered behind
+        // them. Both are `.floating`; a full-screen window at the same level
+        // ordered in last sits on top and swallows every drag aimed at the
+        // things it is supposed to be helping you place.
+        level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         animationBehavior = .none
     }
@@ -190,6 +191,10 @@ final class LayoutEditor {
         panel.orderFrontRegardless()
 
         onBegin?()
+
+        // The surfaces are ordered front after the guides on purpose: the
+        // guides are the backdrop, and the things being arranged have to be
+        // both visible and clickable above them.
         logger.notice("Arranging the layout.")
     }
 

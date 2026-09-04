@@ -187,6 +187,14 @@ struct GalleryView: View {
             for tile in coordinator.tiles(for: page) {
                 thumbnails.prefetch(tile?.thumbnailURL)
             }
+
+            // And the rest of the pool, because Shuffle deals from all of it.
+            // Fetching only what is on screen means every redeal starts with
+            // nine grey rectangles — the one interaction that should feel
+            // instant, waiting on the network.
+            for item in coordinator.pool(for: page).prefix(48) {
+                thumbnails.prefetch(item.thumbnailURL)
+            }
         }
     }
 }

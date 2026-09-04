@@ -128,6 +128,8 @@ final class PlayerService: NSObject {
     /// *any* navigation would restart the music every time the user paused it
     /// and clicked something.
     private var wantsPlayback = false
+    /// Set when what was opened is an album, which has to be started by hand.
+    private var wantsAlbumShuffle = false
     private var playbackNudge: Task<Void, Never>?
 
     /// Where the window goes when it is shown. Remembered so that hiding and
@@ -150,6 +152,9 @@ final class PlayerService: NSObject {
 
         logger.notice("Playing a \(item.kind.rawValue, privacy: .public) in the player.")
         wantsPlayback = true
+        // An album is a page rather than a watch URL: nothing plays until its
+        // own Shuffle button is pressed.
+        wantsAlbumShuffle = item.kind == .album && item.videoID == nil
         webView.load(URLRequest(url: url))
         isLoaded = true
         return true
@@ -179,11 +184,14 @@ final class PlayerService: NSObject {
 
                 if self.nowPlaying?.isPlaying == true {
                     self.wantsPlayback = false
+                    self.wantsAlbumShuffle = false
                     return
                 }
-                self.evaluate("__cue.ensurePlaying()")
+
+                self.evaluate(self.wantsAlbumShuffle ? "__cue.shuffleAlbum()" : "__cue.ensurePlaying()")
             }
             self?.wantsPlayback = false
+            self?.wantsAlbumShuffle = false
         }
     }
 
@@ -606,6 +614,37 @@ final class PlayerService: NSObject {
               for (const selector of selectors) {
                 const element = deep(selector);
                 if (element) { element.click(); return true; }
+              }
+              return false;
+            },
+
+            // Finds a control by what it says rather than by where it lives.
+            // An album page's Shuffle button has moved between markup shapes
+            // several times; the word on it has not.
+            pressLabelled(pattern) {
+              const candidates = document.querySelectorAll(
+                'button, a, tp-yt-paper-button, yt-button-shape, ytmusic-play-button-renderer'
+              );
+              for (const node of candidates) {
+                const label = (node.getAttribute('aria-label') || node.textContent || '').trim();
+                if (label && pattern.test(label)) { node.click(); return true; }
+              }
+              return false;
+            },
+
+            // Starts an album shuffled.
+            //
+            // An album's address is a *page*, not a watch URL, so opening one
+            // plays nothing at all — pressing its own Shuffle button is what
+            // turns a tile that merely navigated into a tile that plays.
+            shuffleAlbum() {
+              if (this.pressLabelled(/shuffle/i)) { return true; }
+              // Failing that, start it in order and shuffle the queue.
+              if (this.pressLabelled(/^play$/i)) {
+                setTimeout(() => this.press([
+                  'tp-yt-paper-icon-button.shuffle', '.shuffle'
+                ]), 1200);
+                return true;
               }
               return false;
             },

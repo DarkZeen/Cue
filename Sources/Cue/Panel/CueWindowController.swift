@@ -222,10 +222,12 @@ final class CueWindowController {
     }
 
     /// Resizes by dragging the panel's edge.
-    func resizePanel(stepped: Bool, isEnd: Bool) {
+    func resizePanel(edge: Int, stepped: Bool, isEnd: Bool) {
         let (delta, start) = dragDelta()
 
-        var width = start.width + delta.x
+        // Dragging the left edge grows the panel leftwards, so the pointer's
+        // movement counts the other way and the far edge is what stays put.
+        var width = start.width + delta.x * CGFloat(edge)
         if stepped { width = LayoutGuides.step(width) }
         width = min(max(width, CueLayout.panelWidthRange.lowerBound), CueLayout.panelWidthRange.upperBound)
 
@@ -235,10 +237,14 @@ final class CueWindowController {
         settings.panelWidth = Double(width)
         applyMetrics()
 
-        // The origin is left alone during the drag. Repositioning on every
-        // frame would move the panel out from under the edge being pulled,
-        // which is the other half of the shake.
-        panel.setFrameOrigin(start.origin)
+        // The edge being dragged is the one that moves; the opposite one stays
+        // where it is. Repositioning from the saved fraction instead would pull
+        // the panel out from under the pointer on every frame, which was the
+        // other half of the shake.
+        let origin = edge < 0
+            ? NSPoint(x: start.maxX - panel.frame.width, y: start.minY)
+            : start.origin
+        panel.setFrameOrigin(origin)
 
         if isEnd {
             dragAnchor = nil
@@ -333,8 +339,8 @@ final class CueWindowController {
             },
             isEditing: isEditing,
             onDragMove: { [weak self] isEnd in self?.dragPanel(isEnd: isEnd) },
-            onDragResize: { [weak self] stepped, isEnd in
-                self?.resizePanel(stepped: stepped, isEnd: isEnd)
+            onDragResize: { [weak self] edge, stepped, isEnd in
+                self?.resizePanel(edge: edge, stepped: stepped, isEnd: isEnd)
             }
         )
 

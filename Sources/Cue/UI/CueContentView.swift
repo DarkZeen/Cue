@@ -29,7 +29,8 @@ struct CueContentView: View {
     /// the screen, not from the gesture — a translation measured relative to a
     /// window that is itself being moved oscillates.
     let onDragMove: (Bool) -> Void
-    let onDragResize: (Bool, Bool) -> Void
+    /// `edge` is -1 for the left side and +1 for the right.
+    let onDragResize: (Int, Bool, Bool) -> Void
 
     @FocusState private var isSearchFocused: Bool
 
@@ -129,51 +130,6 @@ struct CueContentView: View {
 
     private var isPresented: Bool { presenter.state == .visible }
 
-    /// What the panel wears while it is being arranged.
-    ///
-    /// A layer over the whole surface, deliberately: in this mode the panel is
-    /// the thing being moved rather than a thing being used, and leaving the
-    /// tiles clickable underneath would mean a mis-aimed drag starts a song.
-    @ViewBuilder
-    private var editChrome: some View {
-        ZStack(alignment: .trailing) {
-            Color.white.opacity(0.001)
-                .contentShape(.rect)
-                .gesture(
-                    DragGesture(minimumDistance: 1)
-                        .onChanged { _ in onDragMove(false) }
-                        .onEnded { _ in onDragMove(true) }
-                )
-
-            // The grabber sits on the edge it resizes, which is the only place
-            // it can be without needing a label to explain itself.
-            Capsule()
-                .fill(CuePalette.accent)
-                .frame(width: 5, height: 56)
-                .padding(.trailing, 4)
-                // Inside a wider transparent strip, because the hit area of a
-                // five-point capsule at the very edge would be clipped by the
-                // panel it sits in — leaving a control that can be seen and not
-                // grabbed.
-                .frame(width: 26, height: 80)
-                .contentShape(.rect)
-                .gesture(
-                    DragGesture(minimumDistance: 1)
-                        .onChanged { _ in
-                            onDragResize(NSEvent.modifierFlags.contains(.shift), false)
-                        }
-                        .onEnded { _ in
-                            onDragResize(NSEvent.modifierFlags.contains(.shift), true)
-                        }
-                )
-                .help("Drag to resize · hold ⇧ for steps")
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: CueLayout.cornerRadius)
-                .strokeBorder(CuePalette.accent.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-        )
-    }
-
     private var height: CGFloat {
         switch presenter.mode {
         case .grid:
@@ -183,6 +139,83 @@ struct CueContentView: View {
         case .results:
             CueLayout.resultsModeHeight(count: coordinator.results.count)
         }
+    }
+
+    /// What the panel wears while it is being arranged.
+    ///
+    /// A layer over the whole surface, deliberately: in this mode the panel is
+    /// the thing being moved rather than a thing being used, and leaving the
+    /// tiles clickable underneath would mean a mis-aimed drag starts a song.
+    @ViewBuilder
+    private var editChrome: some View {
+        ZStack {
+            Color.white.opacity(0.001)
+                .contentShape(.rect)
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { _ in onDragMove(false) }
+                        .onEnded { _ in onDragMove(true) }
+                )
+
+            // Both sides and both bottom corners. A resize handle on one edge
+            // only is a handle you have to go and find; putting them where the
+            // pointer already is when you reach for the panel's boundary is the
+            // difference between a control and a puzzle.
+            HStack(spacing: 0) {
+                resizeEdge(-1)
+                Spacer(minLength: 0)
+                resizeEdge(1)
+            }
+
+            VStack {
+                Spacer(minLength: 0)
+                HStack {
+                    corner(-1)
+                    Spacer(minLength: 0)
+                    corner(1)
+                }
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: CueLayout.cornerRadius)
+                .strokeBorder(CuePalette.accent.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        )
+    }
+
+    /// A full-height strip down one side of the panel.
+    private func resizeEdge(_ edge: Int) -> some View {
+        Capsule()
+            .fill(CuePalette.accent)
+            .frame(width: 5, height: 56)
+            // Inside a wider transparent strip: the hit area of a five-point
+            // capsule at the very edge is clipped by the panel it sits in,
+            // leaving a control that can be seen and not grabbed.
+            .frame(width: 22)
+            .frame(maxHeight: .infinity)
+            .contentShape(.rect)
+            .gesture(resizeGesture(edge))
+            .help("Drag to resize · hold ⇧ for steps")
+    }
+
+    /// The bottom corners, which resize the same way. The panel's height
+    /// follows its width, so there is no second axis for a corner to offer —
+    /// it is here because it is where a hand reaches, not because it does
+    /// something different.
+    private func corner(_ edge: Int) -> some View {
+        Color.white.opacity(0.001)
+            .frame(width: 26, height: 26)
+            .contentShape(.rect)
+            .gesture(resizeGesture(edge))
+    }
+
+    private func resizeGesture(_ edge: Int) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { _ in
+                onDragResize(edge, NSEvent.modifierFlags.contains(.shift), false)
+            }
+            .onEnded { _ in
+                onDragResize(edge, NSEvent.modifierFlags.contains(.shift), true)
+            }
     }
 
     @ViewBuilder

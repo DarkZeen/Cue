@@ -99,9 +99,15 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     /// Saved albums, as containers rather than flattened into tracks.
     func albums() async throws -> [MusicItem] {
         let response = try await post("browse", body: ["browseId": BrowseID.libraryAlbums])
-        return Self.deduplicated(
-            response.collect("musicTwoRowItemRenderer").compactMap(Self.card(from:))
-        )
+
+        // Both renderers, because the library page follows the display mode the
+        // account last chose: as a grid it returns cards, as a list it returns
+        // rows. Collecting only cards is why this page came back empty for an
+        // account whose library happens to be set to list view.
+        let cards = response.collect("musicTwoRowItemRenderer").compactMap(Self.card(from:))
+        let rows = response.collect("musicResponsiveListItemRenderer").compactMap(Self.row(from:))
+
+        return Self.deduplicated(cards + rows)
     }
 
     /// History first, then the home feed's mixes.
