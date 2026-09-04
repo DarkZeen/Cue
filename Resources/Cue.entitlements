@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Cue is not sandboxed: it is distributed directly, so the sandbox would buy
+  nothing here. The hardened runtime is still applied at signing time because
+  notarization requires it, and it blocks nothing this app does.
+
+  No Accessibility, no Screen Recording, no Full Disk Access, no Input
+  Monitoring. The global shortcut is a URL open, not a keyboard tap, precisely
+  so that none of those are needed. The only things Cue talks to are Google's
+  own hosts, and only after you sign in.
+-->
+<dict/>
+</plist>

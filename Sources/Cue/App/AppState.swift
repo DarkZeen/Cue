@@ -1,0 +1,94 @@
+import AppKit
+import SwiftUI
+
+/// Where everything is built and held.
+///
+/// One composition root rather than singletons scattered through the app: the
+/// providers, the coordinator, the panel and the settings window are all made
+/// here, once, and handed to whatever needs them. It is the only place in Cue
+/// that knows the whole shape of the app.
+@MainActor
+final class AppState {
+    let settings = SettingsStore()
+    let thumbnails = ThumbnailProvider()
+    let launchAtLogin = LaunchAtLoginService()
+    let coordinator: LibraryCoordinator
+
+    private var panel: CueWindowController?
+    private var settingsWindow: NSWindow?
+
+    private let logger = Diagnostics.logger("app-state")
+
+    init() {
+        coordinator = LibraryCoordinator(settings: settings)
+    }
+
+    func start() {
+        let panel = CueWindowController(
+            coordinator: coordinator,
+            settings: settings,
+            thumbnails: thumbnails
+        )
+        panel.onShowSettings = { [weak self] in self?.showSettings() }
+        self.panel = panel
+
+        logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public).")
+
+        if let query = Diagnostics.debugQuery { coordinator.query = query }
+        if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
+        if Diagnostics.debugSettingsPane != nil { showSettings() }
+    }
+
+    // MARK: - Panel
+
+    func openPanel() {
+        panel?.present()
+    }
+
+    func togglePanel() {
+        panel?.toggle()
+    }
+
+    func closePanel() {
+        panel?.dismiss()
+    }
+
+    // MARK: - Settings
+
+    func showSettings() {
+        // The panel and the settings window are two different answers to the
+        // same question and should never be on screen together — the panel
+        // closes when it loses focus anyway, but doing it here means the
+        // settings window is not competing with a dismissal animation.
+        closePanel()
+
+        if let settingsWindow {
+            NSApp.activate()
+            settingsWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let view = SettingsView(
+            settings: settings,
+            coordinator: coordinator,
+            launchAtLogin: launchAtLogin
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Cue Settings"
+        window.contentView = NSHostingView(rootView: view)
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.setFrameAutosaveName("CueSettings")
+
+        settingsWindow = window
+
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+    }
+}
