@@ -2,14 +2,15 @@
 
 // Draws Cue's app icon and writes Cue.icns.
 //
-// Generated rather than checked in as a binary, so the icon is readable,
+// Generated rather than checked in as a binary, so the mark is readable,
 // reviewable and editable as code — and so a fresh clone with the Command Line
 // Tools produces exactly the same asset with no design app in the loop.
 //
-// The mark is the app: a three-by-three grid with the middle cell playing.
-// Eight dots and a triangle. It reads as a speed dial at 512 points and as a
-// dial with something at its centre at 16, which is the only size that is
-// genuinely hard.
+// The mark is a cue point: a marker bar, a gap, and a play triangle. In an
+// editor a cue is the marked place a track starts from, which is precisely what
+// this app does — you mark the thing you want and it starts. It beats a generic
+// note or disc because it means something specific here, and it survives being
+// sixteen points wide, which most clever marks do not.
 
 import AppKit
 import Foundation
@@ -27,7 +28,7 @@ let iconset = FileManager.default.temporaryDirectory
 try? FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 
 /// Everything below is expressed against a 1024-point canvas and scaled, so the
-/// numbers can be reasoned about at the size the icon was actually designed at.
+/// numbers can be reasoned about at the size the icon was designed at.
 func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     let pixels = Int(size)
     let rep = NSBitmapImageRep(
@@ -44,9 +45,8 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-    // The plate. macOS icons are a rounded square with a squircle-ish radius;
-    // 22.5% of the side is the proportion Apple's own icons use, and being
-    // wrong about it is instantly visible next to them in the Dock.
+    // The plate. 22.5% of the side is the corner proportion Apple's own icons
+    // use, and being wrong about it is instantly visible next to them.
     let inset = 92 * unit
     let plate = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let plateShape = NSBezierPath(
@@ -55,73 +55,66 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
         yRadius: plate.width * 0.225
     )
 
-    // Warm dark rather than black: a black plate disappears into a dark Dock,
-    // and the grid needs something to sit on.
+    // Near-black rather than black: the same ground YouTube Music uses, and a
+    // truly black plate disappears into a dark Dock.
     NSGradient(colors: [
-        NSColor(calibratedRed: 0.16, green: 0.09, blue: 0.12, alpha: 1),
-        NSColor(calibratedRed: 0.07, green: 0.05, blue: 0.07, alpha: 1),
+        NSColor(calibratedRed: 0.10, green: 0.10, blue: 0.11, alpha: 1),
+        NSColor(calibratedRed: 0.03, green: 0.03, blue: 0.035, alpha: 1),
     ])?.draw(in: plateShape, angle: -90)
 
     plateShape.addClip()
 
-    // The grid. Three by three, generously spaced — a tight grid reads as
-    // texture, and this one has to read as *positions*.
-    let dotSize = 118 * unit
-    let spacing = 196 * unit
-    let centre = NSPoint(x: size / 2, y: size / 2)
+    let accent = NSColor(calibratedRed: 1.0, green: 0.13, blue: 0.24, alpha: 1)
 
-    for row in -1...1 {
-        for column in -1...1 {
-            let cell = NSRect(
-                x: centre.x + CGFloat(column) * spacing - dotSize / 2,
-                y: centre.y - CGFloat(row) * spacing - dotSize / 2,
-                width: dotSize,
-                height: dotSize
-            )
+    // The mark, centred as a group rather than individually: the triangle's
+    // optical centre sits behind its point, so centring the two shapes
+    // separately leaves the pair looking pushed to the left.
+    //
+    // The marker is deliberately unlike the triangle in every way available —
+    // thin where it is wide, taller than it, and a different colour. A bar of
+    // similar weight beside a play triangle is the universal "skip forward"
+    // glyph, which is what the first draft of this drew.
+    let triangleHeight = 300 * unit
+    let markerHeight = 470 * unit
+    let markerWidth = 34 * unit
+    let gap = 62 * unit
+    let triangleWidth = 250 * unit
+    let markWidth = markerWidth + gap + triangleWidth
 
-            if row == 0 && column == 0 {
-                // The middle cell is a play triangle: the one thing the grid is
-                // for. Drawn slightly larger than a dot so it carries the same
-                // optical weight — a triangle inside a circle's bounds always
-                // looks smaller than the circle did.
-                let scale: CGFloat = 1.34
-                let triangle = NSRect(
-                    x: cell.midX - dotSize * scale / 2,
-                    y: cell.midY - dotSize * scale / 2,
-                    width: dotSize * scale,
-                    height: dotSize * scale
-                )
-                let path = NSBezierPath()
-                // Nudged right, because a triangle's visual centre sits behind
-                // its point rather than in the middle of its bounding box.
-                let shift = triangle.width * 0.09
-                path.move(to: NSPoint(x: triangle.minX + shift, y: triangle.minY))
-                path.line(to: NSPoint(x: triangle.minX + shift, y: triangle.maxY))
-                path.line(to: NSPoint(x: triangle.maxX + shift, y: triangle.midY))
-                path.close()
-                path.lineJoinStyle = .round
-                path.lineWidth = 26 * unit
+    let originX = size / 2 - markWidth / 2
+    let centreY = size / 2
 
-                NSColor(calibratedRed: 1.0, green: 0.31, blue: 0.36, alpha: 1).setFill()
-                NSColor(calibratedRed: 1.0, green: 0.31, blue: 0.36, alpha: 1).setStroke()
-                path.fill()
-                // Stroked as well as filled, to round the corners off a shape
-                // that is otherwise unpleasantly sharp at 16 points.
-                path.stroke()
-            } else {
-                // The dots fade with distance from the middle, so the eye
-                // lands on the triangle rather than sweeping the grid. Manhattan
-                // distance rather than Chebyshev: the corners are genuinely
-                // further away than the edge cells, and treating them as equal
-                // — which `max(abs(row), abs(column))` does — is a vignette
-                // that does not actually vignette anything.
-                let distance = abs(row) + abs(column)
-                let alpha = distance >= 2 ? 0.5 : 0.78
-                NSColor(calibratedWhite: 0.98, alpha: alpha).setFill()
-                NSBezierPath(ovalIn: cell).fill()
-            }
-        }
-    }
+    // The playhead. White rather than the accent, so the eye reads a marker
+    // against a coloured triangle rather than two halves of one control.
+    NSColor(calibratedWhite: 0.97, alpha: 1).setFill()
+    NSBezierPath(
+        roundedRect: NSRect(
+            x: originX,
+            y: centreY - markerHeight / 2,
+            width: markerWidth,
+            height: markerHeight
+        ),
+        xRadius: markerWidth / 2,
+        yRadius: markerWidth / 2
+    ).fill()
+
+    accent.setFill()
+    accent.setStroke()
+
+    // The triangle is stroked as well as filled, which is what rounds its
+    // corners. Sharp points at sixteen pixels alias into grey mush.
+    let triangleLeft = originX + markerWidth + gap
+    let corner = 30 * unit
+
+    let triangle = NSBezierPath()
+    triangle.move(to: NSPoint(x: triangleLeft, y: centreY - triangleHeight / 2 + corner / 2))
+    triangle.line(to: NSPoint(x: triangleLeft, y: centreY + triangleHeight / 2 - corner / 2))
+    triangle.line(to: NSPoint(x: triangleLeft + triangleWidth - corner / 2, y: centreY))
+    triangle.close()
+    triangle.lineJoinStyle = .round
+    triangle.lineWidth = corner
+    triangle.fill()
+    triangle.stroke()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep
