@@ -12,6 +12,7 @@ final class AppState {
     let settings = SettingsStore()
     let thumbnails = ThumbnailProvider()
     let launchAtLogin = LaunchAtLoginService()
+    let hotKey = HotKeyService()
     let coordinator: LibraryCoordinator
 
     private var panel: CueWindowController?
@@ -32,7 +33,17 @@ final class AppState {
         panel.onShowSettings = { [weak self] in self?.showSettings() }
         self.panel = panel
 
-        logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public).")
+        // Toggle rather than open: a shortcut that only ever opens leaves the
+        // user reaching for Escape to undo a keystroke they pressed by mistake.
+        hotKey.onFire = { [weak self] in self?.togglePanel() }
+        settings.onHotKeyChange = { [weak self] in
+            guard let self else { return }
+            self.hotKey.register(self.settings.hotKey)
+        }
+        hotKey.register(settings.hotKey)
+
+        let shortcut = settings.hotKey?.displayString ?? "none"
+        logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public); shortcut \(shortcut, privacy: .public).")
 
         if let query = Diagnostics.debugQuery { coordinator.query = query }
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
@@ -71,7 +82,8 @@ final class AppState {
         let view = SettingsView(
             settings: settings,
             coordinator: coordinator,
-            launchAtLogin: launchAtLogin
+            launchAtLogin: launchAtLogin,
+            hotKey: hotKey
         )
 
         let window = NSWindow(

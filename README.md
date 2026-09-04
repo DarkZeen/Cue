@@ -27,20 +27,30 @@ lives. Without a stable identity you are signed out after every build.
 
 ## The keyboard shortcut
 
-Cue registers no hotkey. Registering one would mean asking for Accessibility
-access to your keyboard, and it does not need it — so instead, bind any key you
-like to a shortcut that runs:
+**⌥Space** out of the box, changeable in Settings → General, and it needs no
+permission at all.
+
+That last part is worth being precise about, because most apps with a global
+shortcut ask for Accessibility. Cue uses `RegisterEventHotKey`, which hands the
+window server one combination and asks to be told when it is pressed. It is
+never shown any other keystroke, so there is nothing to grant. Accessibility and
+Input Monitoring are what you need to *watch* the keyboard — an event tap — and
+watching the keyboard is exactly what Cue has no business doing.
+
+If pressing it does nothing, another app already owns that combination. macOS
+gives a hotkey to whoever asked first and says nothing about the loser, so pick
+a different one.
+
+Cue also answers a URL, which is the way in for Shortcuts.app, a launcher you
+already use, or anything that can run a command:
 
 ```sh
 open cue://open
 ```
 
-Shortcuts.app will do it, so will System Settings → Keyboard → Keyboard
-Shortcuts, so will any launcher you already have. `cue://toggle` closes the
-panel again if it is already open; `cue://settings` opens Settings.
-
-A `--dev` build claims `cue-dev://` instead, so a development copy and an
-installed release do not fight over the same scheme.
+`cue://toggle` closes the panel again if it is already open; `cue://settings`
+opens Settings. A `--dev` build claims `cue-dev://` instead, so a development
+copy and an installed release do not fight over the same scheme.
 
 ## Connecting an account
 
@@ -68,6 +78,7 @@ Search asks both and merges the answers, preferring whichever knows more.
 
 | Key | Does |
 |---|---|
+| ⌥Space | Open the panel, or close it if it is already open |
 | ⌘1 – ⌘9 | Open that position in the grid |
 | ↑ ↓ ← → | Move around the grid, or up and down the results |
 | Return | Open what is highlighted, or the first result |
@@ -86,7 +97,7 @@ Sources/Cue/
 ├── UI/        search field, grid, tiles, results
 ├── Library/   the model, the provider protocol, both backends, the merge
 ├── Auth/      OAuth, the loopback listener, the Music session, the keychain
-├── Services/  thumbnails, launch at login
+├── Services/  the global shortcut, thumbnails, launch at login
 └── Settings/  settings window and stored preferences
 ```
 
@@ -132,8 +143,9 @@ logs a search query, a title, or any part of a credential unless you turn on
 `CUE_DEBUG_NETWORK` yourself in a debug build.
 
 No Accessibility, no Screen Recording, no Full Disk Access, no Input
-Monitoring. The shortcut is a URL open rather than a keyboard tap precisely so
-that none of those are needed.
+Monitoring. The global shortcut is a registered hotkey rather than an event tap,
+so Cue is told when its own combination is pressed and is never shown anything
+else you type.
 
 ## License
 

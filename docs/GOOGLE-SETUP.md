@@ -99,7 +99,8 @@ this problem.
 
 ## 6. Paste it into Cue
 
-Settings → Accounts → paste the client ID and secret → **Sign in with Google**.
+Open Cue's Settings — press ⌥Space then the gear, or run `open cue://settings`
+— then **Accounts** → paste the client ID and secret → **Sign in with Google**.
 
 Your browser opens on Google's own sign-in page — Cue never sees your password.
 On an unverified app you will get a screen saying *Google hasn't verified this

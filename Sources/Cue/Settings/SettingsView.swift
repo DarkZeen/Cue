@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Bindable var settings: SettingsStore
     let coordinator: LibraryCoordinator
     @Bindable var launchAtLogin: LaunchAtLoginService
+    let hotKey: HotKeyService
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -23,7 +24,7 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $selection) {
             Tab(value: .general) {
-                GeneralPane(settings: settings, launchAtLogin: launchAtLogin)
+                GeneralPane(settings: settings, launchAtLogin: launchAtLogin, hotKey: hotKey)
             } label: {
                 Label("General", systemImage: "gearshape")
             }
@@ -50,6 +51,7 @@ struct SettingsView: View {
 private struct GeneralPane: View {
     @Bindable var settings: SettingsStore
     @Bindable var launchAtLogin: LaunchAtLoginService
+    let hotKey: HotKeyService
 
     @State private var didCopyCommand = false
 
@@ -74,18 +76,50 @@ private struct GeneralPane: View {
             }
 
             Section("Keyboard shortcut") {
-                // Cue registers no hotkey of its own. Explaining that plainly
-                // is better than a shortcut recorder that would need
-                // Accessibility access to work — the permission this whole
-                // design exists to avoid.
-                Text("""
-                    Cue has no built-in hotkey, on purpose: registering one \
-                    would mean asking for Accessibility access to your \
-                    keyboard, and it does not need it.
+                LabeledContent("Open Cue") {
+                    ShortcutRecorder(combination: $settings.hotKey)
+                }
 
-                    Instead, make a shortcut that runs this command, and give \
-                    it whatever key you like — in Shortcuts.app, or with any \
-                    launcher you already use.
+                // Worth saying out loud, because every other app that puts a
+                // shortcut recorder in front of someone follows it with a
+                // permission prompt. This one does not: a registered hotkey is
+                // told when its own combination is pressed and never sees any
+                // other keystroke, which is why it needs nothing granted.
+                Text("""
+                    Works over any app, including full-screen ones, and needs \
+                    no Accessibility or Input Monitoring permission — a \
+                    registered shortcut is never shown any keystroke but its \
+                    own.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let error = hotKey.lastError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if settings.hotKey != nil, !hotKey.isRegistered {
+                    Text("The shortcut is not registered.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("""
+                    If pressing it does nothing, another app already owns that \
+                    combination — macOS gives it to whoever asked first, and \
+                    says nothing about it. Pick a different one.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("From a script") {
+                Text("""
+                    Cue also answers a URL, for Shortcuts.app, a launcher you \
+                    already use, or anything else that can run a command.
                     """)
                     .font(.callout)
                     .foregroundStyle(.secondary)

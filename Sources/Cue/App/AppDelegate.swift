@@ -24,13 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// The `cue://` URLs, which is how a keyboard shortcut reaches the panel.
+    /// The `cue://` URLs: the way in for anything that is not the global
+    /// shortcut.
     ///
-    /// There is no hotkey code in this app and no Accessibility permission
-    /// request. The user binds a key to `open cue://open` — in Shortcuts.app,
-    /// or in System Settings → Keyboard → Keyboard Shortcuts — and macOS
-    /// delivers it here. It costs one launch of `open` and buys the app out of
-    /// the single most invasive permission a Mac utility can ask for.
+    /// `HotKeyService` handles the shortcut itself. This is for Shortcuts.app,
+    /// a launcher the user already has, a script, or a Stream Deck — anything
+    /// that can run `open cue://open`. Keeping both costs almost nothing and
+    /// means Cue is drivable by something other than the one key it registered.
     ///
     ///     cue://open       show the panel
     ///     cue://toggle     show it, or hide it if it is already up

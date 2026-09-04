@@ -24,6 +24,24 @@ final class SettingsStore {
         closesAfterOpening = defaults.object(forKey: Key.closesAfterOpening) as? Bool ?? true
         autoFillsEmptyTiles = defaults.object(forKey: Key.autoFillsEmptyTiles) as? Bool ?? true
         pinnedTiles = Self.loadPinnedTiles(from: defaults)
+        hotKey = Self.loadHotKey(from: defaults)
+    }
+
+    /// Raised when the shortcut changes, so it can be re-registered without
+    /// this type knowing what a hotkey is.
+    var onHotKeyChange: (() -> Void)?
+
+    /// The global shortcut, or `nil` for none.
+    ///
+    /// `nil` is a real choice rather than an unset value — someone driving Cue
+    /// from Shortcuts or a launcher wants no registration at all — which is why
+    /// it is stored in a way that can tell "cleared" from "never touched".
+    var hotKey: KeyCombination? {
+        didSet {
+            guard hotKey != oldValue else { return }
+            saveHotKey()
+            onHotKeyChange?()
+        }
     }
 
     /// Turns the internal YouTube Music backend on.
@@ -115,7 +133,28 @@ final class SettingsStore {
         return tiles
     }
 
+    // MARK: - Shortcut persistence
+
+    /// Stored as a list so that absent, empty and set are three distinct
+    /// states: no key at all means a fresh install and gets the default, an
+    /// empty list means the user cleared it, and one element is a shortcut.
+    /// An optional encoded directly could not tell the first two apart.
+    private func saveHotKey() {
+        let box = hotKey.map { [$0] } ?? []
+        guard let data = try? JSONEncoder().encode(box) else { return }
+        defaults.set(data, forKey: Key.hotKey)
+    }
+
+    private static func loadHotKey(from defaults: UserDefaults) -> KeyCombination? {
+        guard let data = defaults.data(forKey: Key.hotKey) else { return .default }
+        guard let box = try? JSONDecoder().decode([KeyCombination].self, from: data) else {
+            return .default
+        }
+        return box.first
+    }
+
     private enum Key {
+        static let hotKey = "hotKey"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

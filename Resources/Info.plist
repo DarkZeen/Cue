@@ -28,11 +28,10 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-	<!-- How a keyboard shortcut reaches the panel. There is no Carbon hotkey
-	     registration and no Accessibility permission: the user binds a key to
-	     `open cue://open` in Shortcuts.app or System Settings, and macOS does
-	     the rest. Opening the app is not enough on its own — an agent app with
-	     no windows treats being opened as "show Settings". -->
+	<!-- The scripting way in, alongside the registered global hotkey: anything
+	     that can run `open cue://open` can raise the panel — Shortcuts.app, a
+	     launcher, a script. Opening the app is not enough on its own, because
+	     an agent app with no windows treats being opened as "show Settings". -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

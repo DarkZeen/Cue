@@ -64,9 +64,14 @@ independently of anything Cue does.
 ## macOS permissions
 
 None. Cue requests no Accessibility, Screen Recording, Full Disk Access,
-Input Monitoring, camera, microphone, location, or contacts access. Its
-keyboard shortcut is a URL open rather than a keyboard tap specifically so that
-none of those are needed.
+Input Monitoring, camera, microphone, location, or contacts access.
+
+Its global keyboard shortcut is a *registered hotkey*, not an event tap. Cue
+asks the window server to be told when one specific combination is pressed, and
+that is the only keystroke it is ever shown. It cannot see, and does not
+receive, anything else you type — in Cue or in any other application. This is
+why no permission is requested for it, and it is the reason that API was chosen
+over the ones that would have needed one.
 
 ## Logging
 

@@ -7,9 +7,10 @@
   notarization requires it, and it blocks nothing this app does.
 
   No Accessibility, no Screen Recording, no Full Disk Access, no Input
-  Monitoring. The global shortcut is a URL open, not a keyboard tap, precisely
-  so that none of those are needed. The only things Cue talks to are Google's
-  own hosts, and only after you sign in.
+  Monitoring. The global shortcut is a registered hotkey rather than an event
+  tap: the window server tells Cue when its own combination is pressed and shows
+  it nothing else, so there is nothing to grant. The only things Cue talks to
+  are Google's own hosts, and only after you sign in.
 -->
 <dict/>
 </plist>
