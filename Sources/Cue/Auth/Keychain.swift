@@ -179,6 +179,19 @@ enum Keychain {
         return (repaired, failed)
     }
 
+    /// Whether the stored items belong to this build.
+    ///
+    /// Reading the marker costs the same prompt as reading anything else when
+    /// the answer is no — which is the point: one round of prompts per change
+    /// of signature, then silence, rather than a round on every launch forever.
+    static var needsRepair: Bool {
+        string(for: Account.repairMarker) != repairMarkerValue
+    }
+
+    static func markRepaired() {
+        set(repairMarkerValue, for: Account.repairMarker)
+    }
+
     /// Everything Cue stores, for the repair above.
     static let allAccounts = [
         Account.googleClientID,
@@ -196,5 +209,19 @@ enum Keychain {
         static let googleClientSecret = "google.client-secret"
         static let googleRefreshToken = "google.refresh-token"
         static let ytMusicCookie = "ytmusic.cookie"
+
+        /// Written by `reclaim` when it finishes, and read on every launch to
+        /// decide whether it needs to run again.
+        ///
+        /// It lives in the keychain rather than in preferences on purpose. A
+        /// flag in `UserDefaults` records that *a* build repaired the items,
+        /// and every later build then skips — including one signed differently,
+        /// which is the only situation the repair exists for. A marker in the
+        /// keychain answers the question actually being asked: can this build
+        /// read what it wrote? A build that cannot, repairs.
+        static let repairMarker = "repair.marker"
     }
+
+    /// Bumped only if the repair's own behaviour changes.
+    private static let repairMarkerValue = "1"
 }

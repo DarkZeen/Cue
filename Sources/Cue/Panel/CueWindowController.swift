@@ -268,6 +268,12 @@ final class CueWindowController {
     private func handle(_ event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
+        if event.keyCode == 123 || event.keyCode == 124 {
+            logger.notice(
+                "Arrow \(event.keyCode, privacy: .public): mode=\(String(describing: self.presenter.mode), privacy: .public) gallery=\(self.isGallery, privacy: .public) page=\(self.presenter.page.rawValue, privacy: .public) modifiers=\(modifiers.rawValue, privacy: .public)"
+            )
+        }
+
         // ⌘1 … ⌘9 open a tile without looking at it. The whole reason the grid
         // has fixed positions.
         if modifiers == .command,

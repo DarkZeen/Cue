@@ -8,9 +8,13 @@ import SwiftUI
 /// while the contents are drawn in SwiftUI. Two sets of constants that have to
 /// agree is one set of constants.
 enum CueLayout {
-    /// Wide enough for three tiles that can hold a real playlist name, narrow
-    /// enough to read as an overlay rather than a window.
-    static let panelWidth: CGFloat = 620
+    /// Narrowed from 620 when the gallery's tiles became square.
+    ///
+    /// Three squares across a 620-point panel are 192 each, which makes the
+    /// grid alone 596 tall and the panel over 730 — most of the height of a
+    /// laptop screen, for an overlay that is supposed to be a glance. At 540
+    /// the squares are 165 and the whole panel fits in 654.
+    static let panelWidth: CGFloat = 540
 
     static let cornerRadius: CGFloat = 20
     static let outerPadding: CGFloat = 12
@@ -49,9 +53,10 @@ enum CueLayout {
     /// because both designs ship and the window has to be built tall enough for
     /// whichever one is switched on.
     enum Gallery {
-        /// Slightly wider than tall, so three across read as a row of covers
-        /// rather than a block of squares.
-        static let tileHeight: CGFloat = 152
+        /// Square. Album art is square, and a rectangular tile either crops it
+        /// or letterboxes it — the first throws away part of the only thing on
+        /// the tile worth seeing, the second puts bars around it.
+        static var tileHeight: CGFloat { tileWidth }
         static let tileCornerRadius: CGFloat = 10
         static let tileSpacing: CGFloat = 10
 

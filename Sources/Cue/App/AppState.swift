@@ -36,9 +36,6 @@ final class AppState {
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
     }
 
-    /// Set once the keychain items have been rewritten by a stably-signed
-    /// build. See `Keychain.reclaim`.
-    private static let keychainRepairKey = "keychainReclaimed"
 
     /// Repairs keychain items left behind by a differently-signed build.
     ///
@@ -46,16 +43,19 @@ final class AppState {
     /// point: `GoogleOAuthService` reads the refresh token in *its* init, so a
     /// repair that ran later would fire after the prompts it exists to prevent.
     ///
-    /// Recorded as done only when nothing failed. A declined prompt is exactly
-    /// the case that needs trying again, and marking it done regardless is how
-    /// the repair silently never happens.
+    /// Whether it is needed is asked of the keychain rather than of
+    /// preferences — see `Keychain.needsRepair`. A preference recording that
+    /// the repair has run is true of the build that ran it and useless to every
+    /// other one.
     private static func repairKeychainIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: keychainRepairKey) else { return }
+        guard Keychain.needsRepair else { return }
 
         let outcome = Keychain.reclaim(Keychain.allAccounts)
+        // Marked only when nothing failed. A declined prompt is exactly the
+        // case that needs trying again, and marking it done regardless is how
+        // the repair silently never happens.
         if outcome.failed == 0 {
-            defaults.set(true, forKey: keychainRepairKey)
+            Keychain.markRepaired()
         }
     }
 
