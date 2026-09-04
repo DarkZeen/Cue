@@ -26,9 +26,26 @@ final class SettingsStore {
         pinnedTiles = Self.loadPinnedTiles(from: defaults)
         hotKey = Self.loadHotKey(from: defaults)
 
+        showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
+
         let storedDestination = defaults.string(forKey: Key.playbackDestination)
         playbackDestination = storedDestination.flatMap(PlaybackDestination.init(rawValue:)) ?? .inApp
     }
+
+    /// Whether the plaque appears in the corner of the screen while playing.
+    ///
+    /// On, because with the player window parked off screen it is the only
+    /// thing that says Cue is playing at all — and the only way to pause
+    /// without summoning something.
+    var showsMiniPlayer: Bool {
+        didSet {
+            defaults.set(showsMiniPlayer, forKey: Key.showsMiniPlayer)
+            onMiniPlayerChange?()
+        }
+    }
+
+    /// Raised when the plaque should be reconsidered.
+    var onMiniPlayerChange: (() -> Void)?
 
     /// Whether picking something plays it in Cue or hands it to the browser.
     ///
@@ -168,6 +185,7 @@ final class SettingsStore {
     private enum Key {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
+        static let showsMiniPlayer = "showsMiniPlayer"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

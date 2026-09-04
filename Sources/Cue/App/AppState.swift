@@ -16,6 +16,7 @@ final class AppState {
     let coordinator: LibraryCoordinator
     let player: PlayerService
     let playback: PlaybackService
+    let miniPlayer: MiniPlayerController
 
     private var panel: CueWindowController?
     private var settingsWindow: NSWindow?
@@ -29,6 +30,7 @@ final class AppState {
         self.coordinator = coordinator
         self.player = player
         self.playback = PlaybackService(settings: settings, player: player)
+        self.miniPlayer = MiniPlayerController(player: player, settings: settings)
     }
 
     func start() {
@@ -49,6 +51,12 @@ final class AppState {
             self.hotKey.register(self.settings.hotKey)
         }
         hotKey.register(settings.hotKey)
+
+        // The plaque is the only thing on screen that says Cue is playing, so
+        // it has to keep up with both the music and the window it stands in
+        // for.
+        player.onStateChange = { [weak self] in self?.miniPlayer.sync() }
+        settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
 
         let shortcut = settings.hotKey?.displayString ?? "none"
         logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public); shortcut \(shortcut, privacy: .public).")

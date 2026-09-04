@@ -28,17 +28,35 @@ final class PlayerService: NSObject {
     private(set) var isLoaded = false
     /// Whether the window is on screen. The window can be closed while
     /// playback continues, so this is not "is playing".
-    private(set) var isWindowVisible = false
+    private(set) var isWindowVisible = false {
+        didSet {
+            guard isWindowVisible != oldValue else { return }
+            onStateChange?()
+        }
+    }
     private(set) var lastError: String?
 
     /// What is playing, as the page reports it through the Media Session API.
     /// `nil` when nothing has started yet.
-    private(set) var nowPlaying: NowPlaying?
+    private(set) var nowPlaying: NowPlaying? {
+        didSet {
+            guard nowPlaying != oldValue else { return }
+            onStateChange?()
+        }
+    }
 
     private var window: NSWindow?
     private var webView: WKWebView?
 
     private let logger = Diagnostics.logger("player")
+
+    /// Raised whenever what is playing, or whether the window is up, changes.
+    ///
+    /// A callback rather than the mini player observing this object directly:
+    /// showing and hiding a window is not something to do from inside a
+    /// SwiftUI dependency read, and there are four conditions to weigh which
+    /// belong in one place.
+    var onStateChange: (() -> Void)?
 
     /// The message handler's name on the JavaScript side.
     private static let bridgeName = "cue"
@@ -58,6 +76,7 @@ final class PlayerService: NSObject {
         var artist: String?
         var artworkURL: URL?
         var isPlaying: Bool
+        var isMuted: Bool = false
     }
 
     /// Where the window sits when it is not being looked at.
@@ -147,6 +166,11 @@ final class PlayerService: NSObject {
     /// interface updates to match because it is watching the same element.
     func togglePlayPause() {
         evaluate("const v=document.querySelector('video'); if(v){v.paused?v.play():v.pause();}")
+    }
+
+    /// Mutes or unmutes, on the media element itself.
+    func toggleMute() {
+        evaluate("const v=document.querySelector('video'); if(v){v.muted=!v.muted;}")
     }
 
     func next() {
@@ -352,7 +376,8 @@ final class PlayerService: NSObject {
               // what the site itself checks. Far steadier than looking for a
               // sign-in button whose markup changes with every redesign.
               signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
-              isPlaying: !!video && !video.paused
+              isPlaying: !!video && !video.paused,
+              muted: !!video && video.muted
             };
 
             const signature = JSON.stringify(state);
@@ -438,7 +463,8 @@ extension PlayerService: WKScriptMessageHandler {
                 title: title,
                 artist: (artist?.isEmpty == false) ? artist : nil,
                 artworkURL: (artwork?.isEmpty == false) ? artwork.flatMap(URL.init(string:)) : nil,
-                isPlaying: body["isPlaying"] as? Bool ?? false
+                isPlaying: body["isPlaying"] as? Bool ?? false,
+                isMuted: body["muted"] as? Bool ?? false
             )
         }
     }

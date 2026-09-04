@@ -81,6 +81,18 @@ private struct GeneralPane: View {
                 }
 
                 if settings.playbackDestination == .inApp {
+                    Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
+
+                    Text("""
+                        A small plaque in the top-right corner of the screen, \
+                        over every app: play, pause, skip and mute without \
+                        opening anything. Click the record to see the full \
+                        player.
+                        """)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     Text("""
                         Cue plays it in its own window, signed in as you. Closing \
                         that window hides it — the music keeps going — and \

@@ -12,6 +12,9 @@ import SwiftUI
 struct NowPlayingDisc: View {
     let nowPlaying: PlayerService.NowPlaying
     let onOpen: () -> Void
+    /// Nudges the disc into a corner. The panel tucks it against the search
+    /// bar's edge; the mini player wants it centred in its own slot.
+    var nudge: CGSize = CGSize(width: 5, height: 4)
 
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -93,7 +96,7 @@ struct NowPlayingDisc: View {
         }
         .scaleEffect(isHovered ? 1.12 : 1)
         .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
-        .offset(x: 5, y: 4)
+        .offset(x: nudge.width, y: nudge.height)
     }
 
     // MARK: - The notes
