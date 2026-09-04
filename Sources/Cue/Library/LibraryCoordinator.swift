@@ -567,10 +567,10 @@ final class LibraryCoordinator {
 
     /// Redeals the speed dial's auto-filled slots, leaving every pin alone.
     private func reshuffleSuggestions() {
-        let pinned = Set(settings.pinnedTiles.compactMap { $0?.id })
-        let available = suggestions.filter { !pinned.contains($0.id) }
-        guard available.count > 1 else { return }
+        guard autoFillCandidates.count > 1 else { return }
+        // Both pools are shuffled, since the speed dial now deals from either.
         suggestions = suggestions.shuffled()
+        likedSongs = likedSongs.shuffled()
     }
 
     /// Whether a page has something else to deal.
@@ -586,7 +586,7 @@ final class LibraryCoordinator {
             let pinnedCount = settings.pinnedTiles.compactMap { $0 }.count
             return settings.autoFillsEmptyTiles
                 && pinnedCount < SettingsStore.tileCount
-                && suggestions.count > SettingsStore.tileCount - pinnedCount
+                && autoFillCandidates.count > SettingsStore.tileCount - pinnedCount
         case .liked, .albums:
             return pool(for: page).count > SettingsStore.tileCount
         }
@@ -608,8 +608,8 @@ final class LibraryCoordinator {
         // to go into — which is the opposite of what the grid is for. Anything
         // pinned by hand stays whatever it is; this governs only what Cue fills
         // the gaps with.
-        var candidates = suggestions
-            .filter { $0.videoID != nil && !pinned.contains($0.id) }
+        var candidates = autoFillCandidates
+            .filter { !pinned.contains($0.id) }
             .makeIterator()
 
         for index in tiles.indices where tiles[index] == nil {
@@ -617,6 +617,19 @@ final class LibraryCoordinator {
         }
 
         return tiles
+    }
+
+    /// What Cue puts in the speed dial's empty slots.
+    ///
+    /// What you played recently first, then what you have liked. History alone
+    /// left the grid empty: once playlists are excluded — and they are, because
+    /// a container in a speed-dial slot is something you have to go *into* —
+    /// history on its own is thin, and after a cold start it is nothing at all.
+    /// Ninety-nine liked songs are a better answer than nine dashed rectangles.
+    private var autoFillCandidates: [MusicItem] {
+        let recent = suggestions.filter { $0.videoID != nil }
+        let liked = likedSongs.filter { $0.videoID != nil }
+        return Self.merge(recent, with: liked)
     }
 
     /// Whether the tile at this position is a real pin or a guess. Guesses are
