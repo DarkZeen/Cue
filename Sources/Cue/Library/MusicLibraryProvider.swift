@@ -70,6 +70,13 @@ protocol MusicLibraryProvider: AnyObject {
     /// grid's second page is made of songs.
     func likedSongs() async throws -> [MusicItem]
 
+    /// What the service is recommending, for the Explore grid's first page.
+    func recommendations() async throws -> [MusicItem]
+    /// Recently released albums and singles.
+    func newReleases() async throws -> [MusicItem]
+    /// What is rising.
+    func charts() async throws -> [MusicItem]
+
     /// Turns something that merely navigates into something that plays.
     ///
     /// An album's address is a *page* — `/browse/MPREb_…` — so opening one
@@ -95,6 +102,10 @@ extension MusicLibraryProvider {
     /// says so; it does not become an error.
     func likedSongs() async throws -> [MusicItem] { [] }
     func albums() async throws -> [MusicItem] { [] }
+
+    func recommendations() async throws -> [MusicItem] { [] }
+    func newReleases() async throws -> [MusicItem] { [] }
+    func charts() async throws -> [MusicItem] { [] }
 
     /// Most items already play. Only the internal provider can resolve an
     /// album page, and only it overrides this.

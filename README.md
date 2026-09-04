@@ -112,6 +112,8 @@ Search asks both and merges the answers, preferring whichever knows more.
 | ⌥Space | Open the panel, or close it if it is already open |
 | Scroll the plaque's speaker | Volume |
 | ⌘1 – ⌘9 | Open that position in the grid |
+| ⌘E | Swap between your own music and Explore |
+| ⌘R | Deal a different nine on this page |
 | ↑ ↓ ← → | Move around the grid, or up and down the results |
 | Return | Open what is highlighted, or the first result |
 | Escape | Clear the search; on an empty panel, close it |

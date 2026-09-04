@@ -95,6 +95,14 @@ struct CueContentView: View {
         // does not, and rather than guess a fourth time at why, this handles
         // them through SwiftUI's own focus system as well — which only sees a
         // key the monitor declined to take.
+        // ⌘E swaps between your own music and Explore. Through SwiftUI rather
+        // than the window's event monitor, for the same reason the arrows are:
+        // the monitor does not receive the panel's keys.
+        .onKeyPress(keys: ["e"], phases: .down) { press in
+            guard press.modifiers.contains(.command), presenter.mode == .grid else { return .ignored }
+            coordinator.toggleExplore()
+            return .handled
+        }
         .onKeyPress(.leftArrow) { horizontal(-1) }
         .onKeyPress(.rightArrow) { horizontal(1) }
     }

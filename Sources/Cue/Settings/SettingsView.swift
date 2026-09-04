@@ -169,7 +169,7 @@ private struct GeneralPane: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if settings.panelDesign == .gallery {
-                    Text("⌘1 to ⌘9 open a tile on the page you are looking at. ⌘R deals a different nine.")
+                    Text("⌘1 to ⌘9 open a tile on the page you are looking at. ⌘R deals a different nine. ⌘E swaps between your own music and Explore.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

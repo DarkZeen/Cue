@@ -52,6 +52,70 @@ final class LibraryCoordinator {
 
     private(set) var isRefreshing = false
 
+    /// Explore's three pages.
+    private(set) var recommendations: [MusicItem] = []
+    private(set) var newReleases: [MusicItem] = []
+    private(set) var charts: [MusicItem] = []
+    private var exploreTask: Task<Void, Never>?
+
+    /// Everything the account already knows about, for filtering Explore.
+    ///
+    /// Built from likes, library and history. Without it Explore is a second
+    /// copy of the front page, and the whole request was for music you have not
+    /// heard.
+    private var knownIdentifiers: Set<String> {
+        var known: Set<String> = []
+        for item in likedSongs + suggestions + settings.albumCollection {
+            if let video = item.videoID { known.insert("v:" + video) }
+            if let list = item.playlistID { known.insert("p:" + list) }
+            if let browse = item.browseID { known.insert("b:" + browse) }
+        }
+        return known
+    }
+
+    private func unfamiliar(_ items: [MusicItem]) -> [MusicItem] {
+        let known = knownIdentifiers
+        return items.filter { item in
+            if let video = item.videoID, known.contains("v:" + video) { return false }
+            if let list = item.playlistID, known.contains("p:" + list) { return false }
+            if let browse = item.browseID, known.contains("b:" + browse) { return false }
+            return true
+        }
+    }
+
+    /// Fetches the three Explore pages.
+    func refreshExplore() {
+        guard !activeProviders.isEmpty else { return }
+        exploreTask?.cancel()
+        exploreTask = Task { [weak self] in await self?.performExploreRefresh() }
+    }
+
+    private func performExploreRefresh() async {
+        var suggested: [MusicItem] = []
+        var released: [MusicItem] = []
+        var trending: [MusicItem] = []
+
+        for provider in activeProviders {
+            guard !Task.isCancelled else { return }
+            suggested = Self.merge(suggested, with: (try? await provider.recommendations()) ?? [])
+            released = Self.merge(released, with: (try? await provider.newReleases()) ?? [])
+            trending = Self.merge(trending, with: (try? await provider.charts()) ?? [])
+        }
+
+        guard !Task.isCancelled else { return }
+
+        // Only the first page is filtered. New releases are new by definition,
+        // and a chart with your own music removed would be a chart that lies
+        // about what is popular.
+        recommendations = unfamiliar(suggested)
+        newReleases = released
+        charts = trending
+
+        logger.notice(
+            "Explore: \(self.recommendations.count, privacy: .public) for you, \(released.count, privacy: .public) new, \(trending.count, privacy: .public) charting."
+        )
+    }
+
     private var searchTask: Task<Void, Never>?
 
     /// Which search the results on screen belong to.
@@ -326,11 +390,20 @@ final class LibraryCoordinator {
         case liked
         case albums
 
-        var title: String {
+        /// What this page is called, which depends on which world the grid is
+        /// showing. The three positions are the same; what fills them is not.
+        func title(exploring: Bool) -> String {
+            guard exploring else {
+                switch self {
+                case .pinned: return "Speed dial"
+                case .liked: return "Liked songs"
+                case .albums: return "Albums"
+                }
+            }
             switch self {
-            case .pinned: "Speed dial"
-            case .liked: "Liked songs"
-            case .albums: "Albums"
+            case .pinned: return "For you"
+            case .liked: return "New releases"
+            case .albums: return "Charts"
             }
         }
 
@@ -340,32 +413,54 @@ final class LibraryCoordinator {
         /// still being fourth tomorrow is the reason the page works.
         var canReshuffle: Bool { true }
 
-        var emptyMessage: String {
-            switch self {
-            case .pinned: "Search for something, then keep it here."
-            case .liked: "Songs you like in YouTube Music will appear here."
-            case .albums: "Right-click anything and choose Add to Albums."
+        func emptyMessage(exploring: Bool) -> String {
+            guard exploring else {
+                switch self {
+                case .pinned: return "Search for something, then keep it here."
+                case .liked: return "Songs you like in YouTube Music will appear here."
+                case .albums: return "Right-click anything and choose Add to Albums."
+                }
             }
+            return "Nothing here yet — Cue is still looking."
         }
     }
 
     /// Which slice of each pool is on show. Empty means "the first nine".
     private var deal: [Page: [Int]] = [:]
 
+    /// Whether the grid is showing Explore.
+    var isExploring: Bool { settings.isExploring }
+
+    /// Swaps the world the grid is drawn from, and fetches it if need be.
+    func toggleExplore() {
+        settings.isExploring.toggle()
+        if settings.isExploring { refreshExplore() }
+    }
+
     func pool(for page: Page) -> [MusicItem] {
+        if settings.isExploring {
+            switch page {
+            case .pinned: return recommendations
+            case .liked: return newReleases
+            case .albums: return charts
+            }
+        }
+
         switch page {
-        case .pinned: []
-        case .liked: likedSongs
+        case .pinned: return []
+        case .liked: return likedSongs
         // Curated, not fetched. What the library reports as your albums and
         // what you would actually want on a speed dial turned out to be
         // different lists.
-        case .albums: settings.albumCollection
+        case .albums: return settings.albumCollection
         }
     }
 
     /// The nine tiles of a page, in reading order.
     func tiles(for page: Page) -> [MusicItem?] {
-        guard page != .pinned else { return tiles }
+        // In Explore every page is dealt from a pool, including the first —
+        // there is nothing pinned in a world you are visiting.
+        guard settings.isExploring || page != .pinned else { return tiles }
 
         let pool = pool(for: page)
         guard !pool.isEmpty else {
@@ -387,7 +482,7 @@ final class LibraryCoordinator {
     /// that started music would be a different verb wearing the same word, and
     /// this one is for looking.
     func reshuffle(_ page: Page) {
-        guard page != .pinned else {
+        guard settings.isExploring || page != .pinned else {
             reshuffleSuggestions()
             return
         }
@@ -413,6 +508,10 @@ final class LibraryCoordinator {
 
     /// Whether a page has something else to deal.
     func canReshuffle(_ page: Page) -> Bool {
+        if settings.isExploring {
+            return pool(for: page).count > SettingsStore.tileCount
+        }
+
         switch page {
         case .pinned:
             // Only worth offering when there is at least one slot Cue filled in

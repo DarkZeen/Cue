@@ -48,6 +48,10 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         static let likedSongsPage = "VLLM"
         /// Saved albums in the library.
         static let libraryAlbums = "FEmusic_liked_albums"
+        /// Recently released albums and singles.
+        static let newReleases = "FEmusic_new_releases"
+        /// Trending.
+        static let charts = "FEmusic_charts"
     }
 
     init(session: YTMusicSessionService, urlSession: URLSession = .shared) {
@@ -204,6 +208,27 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         let rows = response.collect("musicResponsiveListItemRenderer").compactMap(Self.row(from:))
 
         return Self.deduplicated(cards + rows)
+    }
+
+    // MARK: - Explore
+
+    /// What the home feed suggests, which is the closest thing the service has
+    /// to "music for you". Filtered against what you already know by the
+    /// coordinator, which is the half that makes it discovery rather than a
+    /// second copy of the front page.
+    func recommendations() async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": BrowseID.home])
+        return Self.items(in: response)
+    }
+
+    func newReleases() async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": BrowseID.newReleases])
+        return Self.items(in: response)
+    }
+
+    func charts() async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": BrowseID.charts])
+        return Self.items(in: response)
     }
 
     /// Resolves an album page to the playlist behind it.

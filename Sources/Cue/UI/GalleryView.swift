@@ -37,6 +37,7 @@ struct GalleryView: View {
         .onAppear {
             presenter.setSelectableCount(SettingsStore.tileCount)
             coordinator.refresh()
+            if coordinator.isExploring { coordinator.refreshExplore() }
             prefetchNeighbours()
         }
         .onChange(of: presenter.page) { _, _ in prefetchNeighbours() }
@@ -44,13 +45,18 @@ struct GalleryView: View {
         // pass runs once against nine empty slots and never again.
         .onChange(of: coordinator.suggestions.count) { _, _ in prefetchNeighbours() }
         .onChange(of: coordinator.likedSongs.count) { _, _ in prefetchNeighbours() }
+        .onChange(of: coordinator.recommendations.count) { _, _ in prefetchNeighbours() }
+        .onChange(of: coordinator.isExploring) { _, _ in
+            presenter.select(nil)
+            prefetchNeighbours()
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(presenter.page.title)
+            Text(presenter.page.title(exploring: coordinator.isExploring))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.primary)
                 // Keyed on the page so the title crossfades with the slide
@@ -58,6 +64,19 @@ struct GalleryView: View {
                 // grid moving underneath a label that did not.
                 .id(presenter.page)
                 .transition(.opacity)
+
+            // Explore is remembered between launches, so the panel can open on
+            // nine covers you have never seen. This is what stops that being a
+            // surprise.
+            if coordinator.isExploring {
+                Text("Explore")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(CuePalette.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(CuePalette.accent.opacity(0.16)))
+                    .help("⌘E returns to your own music")
+            }
 
             Spacer()
 
@@ -156,7 +175,7 @@ struct GalleryView: View {
             .opacity(isEmpty && page != .pinned ? 0 : 1)
 
             if isEmpty && page != .pinned {
-                Text(page.emptyMessage)
+                Text(page.emptyMessage(exploring: coordinator.isExploring))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -180,7 +199,7 @@ struct GalleryView: View {
                     .frame(width: isCurrent ? 16 : 6, height: 6)
                     .contentShape(.rect.inset(by: -6))
                     .onTapGesture { presenter.setPage(page) }
-                    .accessibilityLabel(page.title)
+                    .accessibilityLabel(page.title(exploring: coordinator.isExploring))
                     .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
             }
         }
@@ -198,7 +217,7 @@ struct GalleryView: View {
         let withoutArtwork = tiles.filter { $0.thumbnailURL == nil }.count
         if withoutArtwork > 0 {
             Diagnostics.logger("gallery").notice(
-                "\(presenter.page.title, privacy: .public): \(withoutArtwork, privacy: .public) of \(tiles.count, privacy: .public) tiles have no artwork address."
+                "\(presenter.page.title(exploring: coordinator.isExploring), privacy: .public): \(withoutArtwork, privacy: .public) of \(tiles.count, privacy: .public) tiles have no artwork address."
             )
         }
 

@@ -29,6 +29,8 @@ final class SettingsStore {
         showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
+        isExploring = defaults.bool(forKey: Key.isExploring)
+
         albumCollection = {
             guard let data = defaults.data(forKey: Key.albumCollection),
                   let stored = try? JSONDecoder().decode([MusicItem].self, from: data)
@@ -127,6 +129,15 @@ final class SettingsStore {
     /// transitional one.
     var panelDesign: PanelDesign {
         didSet { defaults.set(panelDesign.rawValue, forKey: Key.panelDesign) }
+    }
+
+    /// Whether the grid is showing Explore rather than your own music.
+    ///
+    /// Remembered, including across launches. It is a mode you chose rather
+    /// than a temporary detour, and the header says which world you are in so
+    /// that opening the panel to nine unfamiliar covers is never a surprise.
+    var isExploring: Bool {
+        didSet { defaults.set(isExploring, forKey: Key.isExploring) }
     }
 
     /// The third page: albums and playlists put there by hand.
@@ -321,6 +332,7 @@ final class SettingsStore {
         static let showsMiniPlayer = "showsMiniPlayer"
         static let shufflesContainers = "shufflesContainers"
         static let albumCollection = "albumCollection"
+        static let isExploring = "isExploring"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
