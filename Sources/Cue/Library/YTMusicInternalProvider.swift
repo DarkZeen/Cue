@@ -88,16 +88,55 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     /// are not YouTube's likes, and an account can have hundreds of the first
     /// and none of the second.
     func likedSongs() async throws -> [MusicItem] {
-        let response = try await post("browse", body: ["browseId": BrowseID.likedSongsPage])
+        // The assumed page first, then the one the library itself points at.
+        //
+        // `VLLM` is what every client uses, and when it comes back empty the
+        // useful move is to stop asserting it: the library listing contains a
+        // Liked Music entry with its own identifier, so the second attempt asks
+        // the service where its liked songs are rather than telling it.
+        if let songs = try? await tracks(inPlaylistPage: BrowseID.likedSongsPage), !songs.isEmpty {
+            return songs
+        }
 
-        let songs = Self.deduplicated(
-            response.collect("musicResponsiveListItemRenderer").compactMap(Self.row(from:))
-        )
+        logger.notice("\(BrowseID.likedSongsPage, privacy: .public) held no songs; asking the library.")
+
+        guard let liked = try? await likedPlaylistFromLibrary() else { return [] }
+        return (try? await tracks(inPlaylistPage: liked)) ?? []
+    }
+
+    /// The tracks on a playlist page, given its browse id.
+    private func tracks(inPlaylistPage browseID: String) async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": browseID])
+
+        let rows = response.collect("musicResponsiveListItemRenderer")
+        let songs = Self.deduplicated(rows.compactMap(Self.row(from:)))
 
         logger.notice(
-            "Liked songs response: \(response.collect("musicResponsiveListItemRenderer").count, privacy: .public) rows, \(songs.count, privacy: .public) usable."
+            "\(browseID, privacy: .public): \(rows.count, privacy: .public) rows, \(songs.count, privacy: .public) usable."
         )
         return songs
+    }
+
+    /// Finds the liked-songs playlist in the library listing.
+    ///
+    /// Matched on its identifier rather than its title, which is translated —
+    /// this account's library would say "Liked Music" in English and something
+    /// else entirely in another locale.
+    private func likedPlaylistFromLibrary() async throws -> String? {
+        let response = try await post("browse", body: ["browseId": BrowseID.libraryPlaylists])
+
+        for card in response.collect("musicTwoRowItemRenderer") {
+            guard let item = Self.card(from: card) else { continue }
+            if item.playlistID == BrowseID.likedSongs || item.playlistID == "LM" {
+                return "VL" + BrowseID.likedSongs
+            }
+        }
+
+        // Nothing matched; the first browse endpoint that looks like a playlist
+        // page is better than giving up entirely.
+        return response.collect("browseEndpoint")
+            .compactMap { $0["browseId"]?.string }
+            .first { $0.hasPrefix("VL") }
     }
 
     /// Saved albums, as containers rather than flattened into tracks.

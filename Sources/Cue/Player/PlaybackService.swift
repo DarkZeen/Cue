@@ -31,9 +31,14 @@ final class PlaybackService {
             // and that costs a request. Started rather than awaited, so the
             // panel closes on the click instead of after the network — the
             // whole point of the app is that picking something is instant.
+            let shuffles = settings.shufflesContainers
             Task { [player, coordinator] in
                 let playable = await coordinator.playable(for: item)
-                _ = player.play(playable, shuffled: item.kind == .album)
+                // Anything without a track of its own is a container — an
+                // album, a playlist, a radio — and containers are what
+                // shuffling means. A single song has nothing to shuffle.
+                let isContainer = playable.videoID == nil && playable.playlistID != nil
+                _ = player.play(playable, shuffled: shuffles && isContainer)
             }
             return true
 

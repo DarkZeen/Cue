@@ -183,16 +183,22 @@ struct GalleryView: View {
     /// that arrives as nine grey rectangles and fills in afterwards feels
     /// slower than the keypress was.
     private func prefetchNeighbours() {
+        // The page being looked at first, and its own nine before anything
+        // else on it.
+        for tile in coordinator.tiles(for: presenter.page) {
+            thumbnails.prefetch(tile?.thumbnailURL, soon: true)
+        }
+
         for page in LibraryCoordinator.Page.allCases {
             for tile in coordinator.tiles(for: page) {
-                thumbnails.prefetch(tile?.thumbnailURL)
+                thumbnails.prefetch(tile?.thumbnailURL, soon: page == presenter.page)
             }
 
             // And the rest of the pool, because Shuffle deals from all of it.
             // Fetching only what is on screen means every redeal starts with
             // nine grey rectangles — the one interaction that should feel
             // instant, waiting on the network.
-            for item in coordinator.pool(for: page).prefix(48) {
+            for item in coordinator.pool(for: page).prefix(36) {
                 thumbnails.prefetch(item.thumbnailURL)
             }
         }

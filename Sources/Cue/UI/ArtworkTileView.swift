@@ -114,7 +114,7 @@ struct ArtworkTileView: View {
         .frame(width: side, height: side)
         .clipped()
         .animation(.easeOut(duration: 0.2), value: thumbnails.image(for: item.thumbnailURL) != nil)
-        .onAppear { thumbnails.prefetch(item.thumbnailURL) }
+        .onAppear { thumbnails.prefetch(item.thumbnailURL, soon: true) }
     }
 
     private var empty: some View {

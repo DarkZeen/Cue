@@ -87,6 +87,8 @@ private struct GeneralPane: View {
                 }
 
                 if settings.playbackDestination == .inApp {
+                    Toggle("Shuffle playlists and albums", isOn: $settings.shufflesContainers)
+
                     Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
 
                     Text("""

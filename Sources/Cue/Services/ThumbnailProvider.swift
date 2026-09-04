@@ -30,6 +30,19 @@ final class ThumbnailProvider {
     private var loading: Set<URL> = []
     private var order: [URL] = []
 
+    /// Waiting their turn.
+    ///
+    /// Warming the whole pool so that Shuffle is instant meant asking for
+    /// something like a hundred and fifty covers at once, and the nine actually
+    /// on screen queued behind all of them. A small number in flight, with the
+    /// visible ones jumping the queue, is faster in the only way anyone can
+    /// see.
+    private var queue: [URL] = []
+
+    /// Enough to keep the connection busy, few enough that nine visible covers
+    /// are never waiting behind a page nobody has turned to.
+    private static let maximumInFlight = 5
+
     private let session: URLSession
     private let logger = Diagnostics.logger("thumbnails")
 
@@ -45,24 +58,47 @@ final class ThumbnailProvider {
     }
 
     /// Asks for an image to be there next time. Safe to call on every draw.
-    func prefetch(_ url: URL?) {
+    ///
+    /// `soon` marks the covers currently on screen, which go to the front of
+    /// the queue. Everything else is warming for a page that has not been
+    /// turned to yet and can wait.
+    func prefetch(_ url: URL?, soon: Bool = false) {
         guard let url, images[url] == nil, !loading.contains(url) else { return }
 
-        loading.insert(url)
+        if let existing = queue.firstIndex(of: url) {
+            guard soon else { return }
+            queue.remove(at: existing)
+        }
 
-        Task { [weak self] in
-            guard let self else { return }
-            defer { self.loading.remove(url) }
+        soon ? queue.insert(url, at: 0) : queue.append(url)
+        pump()
+    }
 
-            do {
-                let (data, response) = try await session.data(from: url)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                guard (200..<300).contains(status), let image = NSImage(data: data) else { return }
-                self.store(image, for: url)
-            } catch {
-                // A missing thumbnail is a tile with a symbol on it, which is
-                // a fine tile. Nothing here is worth interrupting anyone over.
-                logger.debug("Thumbnail failed: \(error.localizedDescription, privacy: .public)")
+    /// Starts as many waiting requests as the limit allows.
+    private func pump() {
+        while loading.count < Self.maximumInFlight, !queue.isEmpty {
+            let url = queue.removeFirst()
+            guard images[url] == nil, !loading.contains(url) else { continue }
+
+            loading.insert(url)
+
+            Task { [weak self] in
+                guard let self else { return }
+                defer {
+                    self.loading.remove(url)
+                    self.pump()
+                }
+
+                do {
+                    let (data, response) = try await session.data(from: url)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    guard (200..<300).contains(status), let image = NSImage(data: data) else { return }
+                    self.store(image, for: url)
+                } catch {
+                    // A missing thumbnail is a tile with a symbol on it, which
+                    // is a fine tile. Nothing worth interrupting anyone over.
+                    logger.debug("Thumbnail failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }

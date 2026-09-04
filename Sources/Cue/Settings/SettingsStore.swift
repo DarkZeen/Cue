@@ -27,6 +27,7 @@ final class SettingsStore {
         hotKey = Self.loadHotKey(from: defaults)
 
         showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
+        shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
         panelWidth = {
             let stored = defaults.object(forKey: Key.panelWidth) as? Double
@@ -119,6 +120,15 @@ final class SettingsStore {
     /// transitional one.
     var panelDesign: PanelDesign {
         didSet { defaults.set(panelDesign.rawValue, forKey: Key.panelDesign) }
+    }
+
+    /// Whether a playlist or album starts shuffled.
+    ///
+    /// On, because these tiles are reached for when you want *that music*
+    /// rather than that music in that order — and an album you have played
+    /// before starts on the same track every time otherwise.
+    var shufflesContainers: Bool {
+        didSet { defaults.set(shufflesContainers, forKey: Key.shufflesContainers) }
     }
 
     /// Whether the plaque appears in the corner of the screen while playing.
@@ -275,6 +285,7 @@ final class SettingsStore {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
         static let showsMiniPlayer = "showsMiniPlayer"
+        static let shufflesContainers = "shufflesContainers"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
