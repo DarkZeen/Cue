@@ -158,10 +158,14 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         let response = try await post("browse", body: ["browseId": browseID])
 
         let rows = response.collect("musicResponsiveListItemRenderer")
-        let songs = Self.deduplicated(rows.compactMap(Self.row(from:)))
+        let parsed = rows.compactMap(Self.row(from:))
+        let songs = Self.deduplicated(parsed)
 
+        // Three numbers, because they fail in different places: rows that never
+        // arrived, rows the parser refused, and rows that collapsed into each
+        // other during de-duplication. One number cannot tell them apart.
         logger.notice(
-            "\(browseID, privacy: .public): \(rows.count, privacy: .public) rows, \(songs.count, privacy: .public) usable."
+            "\(browseID, privacy: .public): \(rows.count, privacy: .public) rows, \(parsed.count, privacy: .public) parsed, \(songs.count, privacy: .public) distinct."
         )
         return songs
     }

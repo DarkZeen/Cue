@@ -212,6 +212,10 @@ final class LibraryCoordinator {
     /// and briefly, and refetching a playlist list on every keystroke-sized
     /// visit is how an app becomes the reason someone's quota ran out.
     func refresh(force: Bool = false) {
+        // A refresh already running is left alone. Cancelling it to start
+        // another achieves nothing except losing the first one's answers, and
+        // the logs showed exactly that: "albums failed: cancelled".
+        if isRefreshing, !force { return }
         if !force, let lastRefresh, Date().timeIntervalSince(lastRefresh) < 60 { return }
         guard !activeProviders.isEmpty else {
             suggestions = []
@@ -271,8 +275,13 @@ final class LibraryCoordinator {
 
         guard !Task.isCancelled else { return }
 
-        suggestions = gathered
-        likedSongs = liked
+        // A page that already has something keeps it when a refresh comes back
+        // empty. A request that failed, was cancelled, or was answered as
+        // logged-out all return nothing, and none of them are grounds for
+        // wiping a page that was working a minute ago.
+        if !gathered.isEmpty || suggestions.isEmpty { suggestions = gathered }
+        if !liked.isEmpty || likedSongs.isEmpty { likedSongs = liked }
+
         lastRefresh = Date()
         logger.debug(
             "Refreshed: \(gathered.count, privacy: .public) suggestion(s), \(liked.count, privacy: .public) liked."
