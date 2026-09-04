@@ -24,6 +24,10 @@ final class ThumbnailProvider {
     /// tracked.
     private(set) var version = 0
 
+    /// How many fetches have failed, so a grid of placeholders can be told
+    /// apart from a grid of items that never had artwork to begin with.
+    private(set) var failures = 0
+
     private var images: [URL: NSImage] = [:]
     /// Requests in flight, so that nine tiles pointing at one playlist's
     /// artwork make one request rather than nine.
@@ -92,12 +96,20 @@ final class ThumbnailProvider {
                 do {
                     let (data, response) = try await session.data(from: url)
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    guard (200..<300).contains(status), let image = NSImage(data: data) else { return }
+                    guard (200..<300).contains(status) else {
+                        self.failures &+= 1
+                        logger.notice("Thumbnail refused: HTTP \(status, privacy: .public)")
+                        return
+                    }
+                    guard let image = NSImage(data: data) else {
+                        self.failures &+= 1
+                        logger.notice("Thumbnail undecodable: \(data.count, privacy: .public) bytes")
+                        return
+                    }
                     self.store(image, for: url)
                 } catch {
-                    // A missing thumbnail is a tile with a symbol on it, which
-                    // is a fine tile. Nothing worth interrupting anyone over.
-                    logger.debug("Thumbnail failed: \(error.localizedDescription, privacy: .public)")
+                    self.failures &+= 1
+                    logger.notice("Thumbnail failed: \(error.localizedDescription, privacy: .public)")
                 }
             }
         }

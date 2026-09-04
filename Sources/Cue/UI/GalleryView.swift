@@ -136,7 +136,14 @@ struct GalleryView: View {
                                     guard let item = tiles[index] else { return }
                                     coordinator.pinToFirstFreeSlot(item)
                                 },
-                                onUnpin: { coordinator.unpin(at: index) }
+                                onUnpin: { coordinator.unpin(at: index) },
+                                isInAlbums: tiles[index].map(coordinator.isInAlbums) ?? false,
+                                onToggleAlbum: {
+                                    guard let item = tiles[index] else { return }
+                                    coordinator.isInAlbums(item)
+                                        ? coordinator.removeFromAlbums(item)
+                                        : coordinator.addToAlbums(item)
+                                }
                             )
                         }
                     }

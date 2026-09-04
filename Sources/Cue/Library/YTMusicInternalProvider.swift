@@ -98,10 +98,59 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
             return songs
         }
 
-        logger.notice("\(BrowseID.likedSongsPage, privacy: .public) held no songs; asking the library.")
+        logger.notice("\(BrowseID.likedSongsPage, privacy: .public) held no songs; trying the queue endpoint.")
+
+        // A different mechanism, not a different guess. `next` returns the
+        // *queue* for a playlist — what would play if you pressed it — as
+        // `playlistPanelVideoRenderer` entries. It is how the site itself
+        // builds a play queue, and it answers for the auto-playlists like Liked
+        // Music that the browse endpoint is evidently not serving here.
+        if let queued = try? await queue(forPlaylist: BrowseID.likedSongs), !queued.isEmpty {
+            return queued
+        }
 
         guard let liked = try? await likedPlaylistFromLibrary() else { return [] }
         return (try? await tracks(inPlaylistPage: liked)) ?? []
+    }
+
+    /// The tracks that would play, for a playlist id.
+    private func queue(forPlaylist playlistID: String) async throws -> [MusicItem] {
+        let response = try await post("next", body: [
+            "playlistId": playlistID,
+            // Without this the queue comes back as the single first track and
+            // its radio, rather than the playlist's own contents.
+            "isAudioOnly": true,
+        ])
+
+        let entries = response.collect("playlistPanelVideoRenderer")
+        let songs = Self.deduplicated(entries.compactMap(Self.queueEntry(from:)))
+
+        logger.notice(
+            "next(\(playlistID, privacy: .public)): \(entries.count, privacy: .public) entries, \(songs.count, privacy: .public) usable."
+        )
+        return songs
+    }
+
+    /// One row of a play queue.
+    ///
+    /// A simpler shape than the list renderers: the title and the byline are
+    /// plain runs, and the video id is on the renderer itself rather than
+    /// buried in an overlay.
+    static func queueEntry(from renderer: JSONValue) -> MusicItem? {
+        guard let title = renderer["title"]?.runsText, !title.isEmpty,
+              let videoID = renderer["videoId"]?.string
+        else { return nil }
+
+        return MusicItem(
+            id: "\(ProviderID.ytMusic.rawValue):song:\(videoID)",
+            title: title,
+            subtitle: renderer["shortBylineText"]?.runsText
+                ?? renderer["longBylineText"]?.runsText,
+            kind: .song,
+            videoID: videoID,
+            thumbnailURL: thumbnailURL(in: renderer),
+            source: .ytMusic
+        )
     }
 
     /// The tracks on a playlist page, given its browse id.

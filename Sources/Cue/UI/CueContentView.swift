@@ -82,7 +82,10 @@ struct CueContentView: View {
             isSearchFocused = true
             sync()
         }
-        .onChange(of: coordinator.query) { _, _ in sync() }
+        .onChange(of: coordinator.query) { _, _ in
+            coordinator.queryChanged()
+            sync()
+        }
         .onChange(of: coordinator.results.count) { _, _ in sync() }
         .onChange(of: height) { _, height in onHeightChange(height) }
         // Belt and braces for the arrow keys.

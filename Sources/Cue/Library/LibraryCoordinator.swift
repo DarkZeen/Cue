@@ -25,13 +25,15 @@ final class LibraryCoordinator {
     private let ytMusic: YTMusicInternalProvider
     private let logger = Diagnostics.logger("library")
 
-    /// What is in the search field. Assigning it schedules a search.
-    var query: String = "" {
-        didSet {
-            guard query != oldValue else { return }
-            scheduleSearch()
-        }
-    }
+    /// What is in the search field.
+    ///
+    /// Plain, with no `didSet`. It had one, and searches stopped re-running
+    /// after the first — typing more letters switched the panel to its results
+    /// mode but never fetched anything new. Property observers and the
+    /// `@Observable` macro do not reliably coexist, and the view's own
+    /// `onChange` demonstrably fires on every keystroke, so the search is
+    /// driven from there instead of from here.
+    var query: String = ""
 
     private(set) var results: [MusicItem] = []
     private(set) var isSearching = false
@@ -117,6 +119,11 @@ final class LibraryCoordinator {
     }
 
     // MARK: - Search
+
+    /// Called by the panel whenever the field changes.
+    func queryChanged() {
+        scheduleSearch()
+    }
 
     private func scheduleSearch() {
         searchTask?.cancel()
@@ -325,7 +332,7 @@ final class LibraryCoordinator {
             switch self {
             case .pinned: "Search for something, then keep it here."
             case .liked: "Songs you like in YouTube Music will appear here."
-            case .albums: "Albums saved to your library will appear here."
+            case .albums: "Right-click anything and choose Add to Albums."
             }
         }
     }
@@ -337,7 +344,10 @@ final class LibraryCoordinator {
         switch page {
         case .pinned: []
         case .liked: likedSongs
-        case .albums: albums
+        // Curated, not fetched. What the library reports as your albums and
+        // what you would actually want on a speed dial turned out to be
+        // different lists.
+        case .albums: settings.albumCollection
         }
     }
 
@@ -428,6 +438,10 @@ final class LibraryCoordinator {
     func isPinned(at index: Int) -> Bool {
         settings.pinnedTiles.indices.contains(index) && settings.pinnedTiles[index] != nil
     }
+
+    func addToAlbums(_ item: MusicItem) { settings.addToAlbums(item) }
+    func removeFromAlbums(_ item: MusicItem) { settings.removeFromAlbums(item) }
+    func isInAlbums(_ item: MusicItem) -> Bool { settings.isInAlbums(item) }
 
     func pin(_ item: MusicItem, at index: Int) { settings.pin(item, at: index) }
     func unpin(at index: Int) { settings.unpin(at: index) }

@@ -28,7 +28,13 @@ struct ResultsListView: View {
                             isSelected: presenter.selection == index,
                             thumbnails: thumbnails,
                             onOpen: { onOpen(item) },
-                            onPin: { coordinator.pinToFirstFreeSlot(item) }
+                            onPin: { coordinator.pinToFirstFreeSlot(item) },
+                            isInAlbums: coordinator.isInAlbums(item),
+                            onToggleAlbum: {
+                                coordinator.isInAlbums(item)
+                                    ? coordinator.removeFromAlbums(item)
+                                    : coordinator.addToAlbums(item)
+                            }
                         )
                         .id(index)
                     }
@@ -76,6 +82,8 @@ private struct ResultRow: View {
     let thumbnails: ThumbnailProvider
     let onOpen: () -> Void
     let onPin: () -> Void
+    let isInAlbums: Bool
+    let onToggleAlbum: () -> Void
 
     @State private var isHovered = false
 
@@ -121,6 +129,7 @@ private struct ResultRow: View {
         .contextMenu {
             Button("Open in YouTube Music", action: onOpen)
             Button("Keep in the Grid", action: onPin)
+            Button(isInAlbums ? "Remove from Albums" : "Add to Albums", action: onToggleAlbum)
             Divider()
             Button("Copy Link") {
                 guard let url = item.playbackURL else { return }

@@ -19,6 +19,8 @@ struct ArtworkTileView: View {
     let onOpen: () -> Void
     let onPin: () -> Void
     let onUnpin: () -> Void
+    let isInAlbums: Bool
+    let onToggleAlbum: () -> Void
 
     @State private var isHovered = false
 
@@ -145,6 +147,7 @@ struct ArtworkTileView: View {
             } else {
                 Button("Keep in the Speed Dial", action: onPin)
             }
+            Button(isInAlbums ? "Remove from Albums" : "Add to Albums", action: onToggleAlbum)
             Divider()
             Button("Copy Link") {
                 guard let url = item.playbackURL else { return }

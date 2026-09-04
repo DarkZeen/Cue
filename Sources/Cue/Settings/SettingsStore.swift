@@ -29,6 +29,13 @@ final class SettingsStore {
         showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
+        albumCollection = {
+            guard let data = defaults.data(forKey: Key.albumCollection),
+                  let stored = try? JSONDecoder().decode([MusicItem].self, from: data)
+            else { return [] }
+            return stored
+        }()
+
         panelWidth = {
             let stored = defaults.object(forKey: Key.panelWidth) as? Double
             guard let stored else { return Double(CueLayout.defaultPanelWidth) }
@@ -120,6 +127,33 @@ final class SettingsStore {
     /// transitional one.
     var panelDesign: PanelDesign {
         didSet { defaults.set(panelDesign.rawValue, forKey: Key.panelDesign) }
+    }
+
+    /// The third page: albums and playlists put there by hand.
+    ///
+    /// Curated rather than fetched. The library's own album list turned out to
+    /// be both unreliable to read and not what was wanted — this is the shelf
+    /// you build, and it holds whatever you decide belongs on it.
+    private(set) var albumCollection: [MusicItem] = []
+
+    func addToAlbums(_ item: MusicItem) {
+        guard !albumCollection.contains(where: { $0.id == item.id }) else { return }
+        albumCollection.append(item)
+        saveAlbumCollection()
+    }
+
+    func removeFromAlbums(_ item: MusicItem) {
+        albumCollection.removeAll { $0.id == item.id }
+        saveAlbumCollection()
+    }
+
+    func isInAlbums(_ item: MusicItem) -> Bool {
+        albumCollection.contains { $0.id == item.id }
+    }
+
+    private func saveAlbumCollection() {
+        guard let data = try? JSONEncoder().encode(albumCollection) else { return }
+        defaults.set(data, forKey: Key.albumCollection)
     }
 
     /// Whether a playlist or album starts shuffled.
@@ -286,6 +320,7 @@ final class SettingsStore {
         static let playbackDestination = "playbackDestination"
         static let showsMiniPlayer = "showsMiniPlayer"
         static let shufflesContainers = "shufflesContainers"
+        static let albumCollection = "albumCollection"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
