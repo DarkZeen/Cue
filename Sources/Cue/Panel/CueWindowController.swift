@@ -96,7 +96,17 @@ final class CueWindowController {
 
         let screen = Self.screenUnderPointer()
         let visible = screen.visibleFrame
-        let origin = CueLayout.origin(in: visible, panelHeight: CueLayout.panelHeight)
+
+        // Applied every time rather than once at build: the size and the anchor
+        // are settings, and this is the one moment the window is off screen and
+        // free to change shape.
+        applyMetrics()
+
+        let origin = CueLayout.origin(
+            in: visible,
+            panelHeight: CueLayout.panelHeight,
+            anchor: settings.panelAnchor
+        )
 
         presentedAt = Date()
         didReassertFocus = false
@@ -157,6 +167,23 @@ final class CueWindowController {
         return Date().timeIntervalSince(presentedAt) < Self.focusSettlingWindow
     }
 
+    /// Resizes the window to whatever the current settings make it.
+    ///
+    /// The panel's frame is otherwise constant — the contents animate inside a
+    /// window that never moves — so this is the one place it changes, and it
+    /// happens between presentations rather than during one.
+    func applyMetrics() {
+        CueLayout.panelWidth = CGFloat(settings.panelWidth)
+
+        let size = NSSize(width: CueLayout.panelWidth, height: CueLayout.panelHeight)
+        guard panel.frame.size != size else { return }
+
+        panel.setContentSize(size)
+        container.frame = NSRect(origin: .zero, size: size)
+        hostingView.frame = container.bounds
+        container.contentHeight = size.height
+    }
+
     private static func screenUnderPointer() -> NSScreen {
         let location = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(location, $0.frame, false) }
@@ -203,6 +230,7 @@ final class CueWindowController {
         hostingView.autoresizingMask = [.width, .height]
         hostingView.layer?.backgroundColor = .clear
         container.addSubview(hostingView)
+        applyMetrics()
     }
 
     private func open(_ item: MusicItem) {

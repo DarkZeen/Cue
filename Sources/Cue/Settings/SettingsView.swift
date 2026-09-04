@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Bindable var launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
     let player: PlayerService
+    let onResetMiniPlayer: () -> Void
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -29,7 +30,8 @@ struct SettingsView: View {
                     settings: settings,
                     launchAtLogin: launchAtLogin,
                     hotKey: hotKey,
-                    player: player
+                    player: player,
+                    onResetMiniPlayer: onResetMiniPlayer
                 )
             } label: {
                 Label("General", systemImage: "gearshape")
@@ -59,6 +61,12 @@ private struct GeneralPane: View {
     @Bindable var launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
     let player: PlayerService
+    let onResetMiniPlayer: () -> Void
+
+    /// The slider's bounds, named because a range spelled inline across two
+    /// lines is a parse error waiting to happen.
+    private static let widthRange =
+        Double(CueLayout.panelWidthRange.lowerBound)...Double(CueLayout.panelWidthRange.upperBound)
 
     @State private var didCopyCommand = false
 
@@ -102,10 +110,17 @@ private struct GeneralPane: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    Text("Drag the plaque anywhere; it stays where you leave it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
                     HStack {
                         Button(player.isWindowVisible ? "Hide Player" : "Show Player") {
                             player.isWindowVisible ? player.hide() : player.showHome()
                         }
+
+                        Button("Reset Plaque Position") { onResetMiniPlayer() }
+                            .disabled(settings.miniPlayerOrigin == nil)
 
                         if let nowPlaying = player.nowPlaying {
                             Text(nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
@@ -118,6 +133,26 @@ private struct GeneralPane: View {
             }
 
             Section("Panel") {
+                LabeledContent("Size") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.panelWidth, in: Self.widthRange)
+                            .frame(width: 170)
+
+                        Button("Reset") { settings.resetPanelWidth() }
+                            .buttonStyle(.borderless)
+                            .disabled(Int(settings.panelWidth) == Int(CueLayout.defaultPanelWidth))
+                    }
+                }
+
+                LabeledContent("Position") {
+                    AnchorPicker(selection: $settings.panelAnchor)
+                }
+
+                Text("The covers scale with the panel. Position is per display — the panel opens on whichever screen your pointer is on.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Picker("Grid", selection: $settings.panelDesign) {
                     ForEach(PanelDesign.allCases, id: \.self) { design in
                         Text(design.title).tag(design)

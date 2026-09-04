@@ -28,11 +28,69 @@ final class SettingsStore {
 
         showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
 
+        panelWidth = {
+            let stored = defaults.object(forKey: Key.panelWidth) as? Double
+            guard let stored else { return Double(CueLayout.defaultPanelWidth) }
+            return min(max(stored, Double(CueLayout.panelWidthRange.lowerBound)),
+                       Double(CueLayout.panelWidthRange.upperBound))
+        }()
+
+        panelAnchor = defaults.string(forKey: Key.panelAnchor)
+            .flatMap(PanelAnchor.init(rawValue:)) ?? .center
+
+        miniPlayerOrigin = {
+            guard let stored = defaults.array(forKey: Key.miniPlayerOrigin) as? [Double],
+                  stored.count == 2
+            else { return nil }
+            return CGPoint(x: stored[0], y: stored[1])
+        }()
+
         let storedDesign = defaults.string(forKey: Key.panelDesign)
         panelDesign = storedDesign.flatMap(PanelDesign.init(rawValue:)) ?? .gallery
 
         let storedDestination = defaults.string(forKey: Key.playbackDestination)
         playbackDestination = storedDestination.flatMap(PlaybackDestination.init(rawValue:)) ?? .inApp
+    }
+
+    /// How wide the panel is, and so how large everything in it is.
+    var panelWidth: Double {
+        didSet {
+            defaults.set(panelWidth, forKey: Key.panelWidth)
+            onPanelMetricsChange?()
+        }
+    }
+
+    /// Where on the display the panel appears.
+    var panelAnchor: PanelAnchor {
+        didSet {
+            defaults.set(panelAnchor.rawValue, forKey: Key.panelAnchor)
+            onPanelMetricsChange?()
+        }
+    }
+
+    /// Where the plaque was last left, or `nil` for its default corner.
+    ///
+    /// Stored rather than derived because the plaque is draggable: it is a
+    /// permanent surface that has to get out of the way of whatever else lives
+    /// in that corner, and only the person looking at the screen knows where
+    /// that is.
+    var miniPlayerOrigin: CGPoint? {
+        didSet {
+            guard let miniPlayerOrigin else {
+                defaults.removeObject(forKey: Key.miniPlayerOrigin)
+                return
+            }
+            defaults.set([miniPlayerOrigin.x, miniPlayerOrigin.y], forKey: Key.miniPlayerOrigin)
+        }
+    }
+
+    /// Raised when the panel's size or position changed and the window has to
+    /// be rebuilt around it.
+    var onPanelMetricsChange: (() -> Void)?
+
+    /// Puts the panel back to the size it was designed at.
+    func resetPanelWidth() {
+        panelWidth = Double(CueLayout.defaultPanelWidth)
     }
 
     /// Which grid the panel draws.
@@ -200,6 +258,9 @@ final class SettingsStore {
         static let playbackDestination = "playbackDestination"
         static let showsMiniPlayer = "showsMiniPlayer"
         static let panelDesign = "panelDesign"
+        static let panelWidth = "panelWidth"
+        static let panelAnchor = "panelAnchor"
+        static let miniPlayerOrigin = "miniPlayerOrigin"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

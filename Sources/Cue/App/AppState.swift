@@ -82,6 +82,11 @@ final class AppState {
         // The plaque is the only thing on screen that says Cue is playing, so
         // it has to keep up with both the music and the window it stands in
         // for.
+        // Read before anything is built, so the first presentation is already
+        // the chosen size rather than briefly the designed default.
+        CueLayout.panelWidth = CGFloat(settings.panelWidth)
+        settings.onPanelMetricsChange = { [weak self] in self?.panel?.applyMetrics() }
+
         player.onStateChange = { [weak self] in self?.miniPlayer.sync() }
         settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
 
@@ -148,7 +153,8 @@ final class AppState {
             coordinator: coordinator,
             launchAtLogin: launchAtLogin,
             hotKey: hotKey,
-            player: player
+            player: player,
+            onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() }
         )
 
         let window = NSWindow(

@@ -8,13 +8,23 @@ import SwiftUI
 /// while the contents are drawn in SwiftUI. Two sets of constants that have to
 /// agree is one set of constants.
 enum CueLayout {
-    /// Narrowed from 620 when the gallery's tiles became square.
+    /// The panel's width, and through it the size of everything in it.
     ///
-    /// Three squares across a 620-point panel are 192 each, which makes the
-    /// grid alone 596 tall and the panel over 730 — most of the height of a
-    /// laptop screen, for an overlay that is supposed to be a glance. At 540
-    /// the squares are 165 and the whole panel fits in 654.
-    static let panelWidth: CGFloat = 540
+    /// A `var` because it is a setting: tiles, the grid and the panel's own
+    /// height are all derived from it, so one number scales the whole surface
+    /// and nothing has to be adjusted to match. `AppState` sets it at launch
+    /// and whenever it changes.
+    ///
+    /// The default of 540 is where the design was drawn. Three squares across a
+    /// 620-point panel are 192 each, which makes the grid alone 596 tall and
+    /// the panel over 730 — most of the height of a laptop screen, for
+    /// something meant to be a glance.
+    static var panelWidth: CGFloat = defaultPanelWidth
+
+    static let defaultPanelWidth: CGFloat = 540
+    /// Narrow enough that three covers are still worth looking at, wide enough
+    /// that the panel does not start competing with the screen.
+    static let panelWidthRange: ClosedRange<CGFloat> = 440...760
 
     static let cornerRadius: CGFloat = 20
     static let outerPadding: CGFloat = 12
@@ -133,16 +143,8 @@ enum CueLayout {
         )
     }
 
-    /// Where the panel sits on screen.
-    ///
-    /// Horizontally centred, and a third of the way down rather than halfway:
-    /// the optical centre of a screen is above its geometric one, and a panel
-    /// pinned to the true middle reads as slightly low. This is where Spotlight
-    /// and every launcher since has put it, for the same reason.
-    static func origin(in screen: NSRect, panelHeight: CGFloat) -> NSPoint {
-        NSPoint(
-            x: screen.midX - panelWidth / 2,
-            y: screen.midY + screen.height * 0.12 - panelHeight / 2
-        )
+    /// Where the panel sits on screen, for the chosen anchor.
+    static func origin(in screen: NSRect, panelHeight: CGFloat, anchor: PanelAnchor) -> NSPoint {
+        anchor.origin(for: NSSize(width: panelWidth, height: panelHeight), in: screen)
     }
 }

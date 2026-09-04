@@ -17,6 +17,7 @@ final class MiniPlayerController {
     private var panel: MiniPlayerPanel?
     private var hostingView: NSHostingView<AnyView>?
     private var screenObserver: (any NSObjectProtocol)?
+    private var moveObserver: (any NSObjectProtocol)?
 
     private let logger = Diagnostics.logger("mini-player")
 
@@ -43,6 +44,13 @@ final class MiniPlayerController {
 
     isolated deinit {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+    }
+
+    /// Puts the plaque back in its corner.
+    func resetPosition() {
+        settings.miniPlayerOrigin = nil
+        reposition()
     }
 
     /// Brings the plaque into line with what is actually happening.
@@ -70,7 +78,21 @@ final class MiniPlayerController {
     }
 
     private func reposition() {
-        guard let panel, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let panel else { return }
+
+        // Where it was left, if that is still somewhere a person can see. A
+        // saved position survives an unplugged display as a set of coordinates
+        // nothing covers any more, and a plaque you cannot find is worse than
+        // one that moved.
+        if let saved = settings.miniPlayerOrigin,
+           NSScreen.screens.contains(where: {
+               $0.visibleFrame.intersects(NSRect(origin: saved, size: Self.size))
+           }) {
+            panel.setFrameOrigin(saved)
+            return
+        }
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visible = screen.visibleFrame
 
         panel.setFrameOrigin(NSPoint(
@@ -98,6 +120,21 @@ final class MiniPlayerController {
 
         self.panel = panel
         self.hostingView = hostingView
+
+        // Saved on every move rather than on some later commit. The plaque is
+        // dragged with the mouse and there is no moment afterwards that means
+        // "done" — a position kept only until the app quits is a position the
+        // user has to set again tomorrow.
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let panel = self.panel else { return }
+                self.settings.miniPlayerOrigin = panel.frame.origin
+            }
+        }
 
         logger.notice("Mini player created.")
         return panel
@@ -142,8 +179,14 @@ final class MiniPlayerPanel: NSPanel {
 
         isFloatingPanel = true
         hidesOnDeactivate = false
-        isMovable = false
         isRestorable = false
+
+        // Draggable, unlike the search panel. The plaque is permanent rather
+        // than summoned, so it has to be able to get out of the way of whatever
+        // else lives in that corner — menu bar items, another app's furniture —
+        // and only the person looking at the screen knows what that is.
+        isMovable = true
+        isMovableByWindowBackground = true
 
         // Above ordinary windows and above the search panel, so pressing Pause
         // never means hunting for the plaque underneath something.
