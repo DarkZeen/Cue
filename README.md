@@ -55,15 +55,27 @@ copy and an installed release do not fight over the same scheme.
 
 ## Playback
 
-Cue plays in a window of its own running YouTube Music's real player, with your
-session. YouTube Premium applies exactly as it does on the web — no ads,
-background playback, higher bitrate — because it is the same player and the
-same account.
+Cue plays it. Nothing opens.
 
-Closing that window hides it; the music keeps going. `cue://player` brings it
-back, as does the button in Settings. Back, forward and a Home button are in its
-toolbar, because a search result that is not in YouTube Music's catalogue
-redirects to youtube.com and you need a way back.
+YouTube Music's real player runs inside Cue, in a window kept off to one side
+and all but invisible, so picking a song starts the music and leaves you exactly
+where you were. Premium applies as it does on the web — no ads, background
+playback, higher bitrate — because it is the same player and the same account.
+
+What you get instead of a window is a small plaque in the top-right corner of
+the screen, over every app including full-screen ones: the record, previous,
+play/pause, next and mute. Scroll the speaker for volume. Click the record and
+the full player appears, on whatever is playing.
+
+The full player is a real window when you want one — back, forward and Home in
+its toolbar, because a search result that is not in YouTube Music's catalogue
+redirects to youtube.com and you need a way back. `cue://player` opens it, so
+does the button in Settings, and signing in the first time needs it. Closing it
+hides it; the music keeps going.
+
+The panel shows the same thing in miniature: while something is playing, a
+record spins in the corner of the search bar with notes drifting off it, and
+clicking that opens the player too.
 
 What Cue will not do is pull the audio stream out and play it through
 `AVPlayer`. It would be more "native", and it means going around YouTube's
@@ -98,6 +110,7 @@ Search asks both and merges the answers, preferring whichever knows more.
 | Key | Does |
 |---|---|
 | ⌥Space | Open the panel, or close it if it is already open |
+| Scroll the plaque's speaker | Volume |
 | ⌘1 – ⌘9 | Open that position in the grid |
 | ↑ ↓ ← → | Move around the grid, or up and down the results |
 | Return | Open what is highlighted, or the first result |
