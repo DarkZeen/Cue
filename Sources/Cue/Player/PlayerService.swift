@@ -244,6 +244,15 @@ final class PlayerService: NSObject {
         webView?.goForward()
     }
 
+    /// The player's current cookies.
+    ///
+    /// Lent to the API provider, which would otherwise be replaying a snapshot
+    /// that Google has long since rotated out from under it.
+    func currentCookies() async -> [HTTPCookie] {
+        guard let webView else { return [] }
+        return await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+    }
+
     // MARK: - Transport
 
     /// Play or pause, without bringing the window forward.

@@ -88,6 +88,12 @@ final class AppState {
         CueLayout.panelWidth = CGFloat(settings.panelWidth)
         settings.onPanelMetricsChange = { [weak self] in self?.panel?.applyMetrics() }
 
+        // The API borrows the player's session. Both talk to YouTube Music as
+        // the same person; only one of them keeps its credentials current.
+        coordinator.ytSession.liveCookies = { [weak player] in
+            await player?.currentCookies() ?? []
+        }
+
         layoutEditor.onBegin = { [weak self] in
             self?.panel?.beginEditing()
             self?.miniPlayer.beginEditing()
@@ -98,7 +104,19 @@ final class AppState {
         }
         panel.onEndEditing = { [weak self] in self?.layoutEditor.end() }
 
-        player.onStateChange = { [weak self] in self?.miniPlayer.sync() }
+        player.onStateChange = { [weak self] in
+            guard let self else { return }
+            self.miniPlayer.sync()
+
+            // The page says whether it is signed in; the API provider needs to
+            // know, because signing in inside the player is now the only
+            // sign-in there is.
+            if let signedIn = self.player.isSignedIn,
+               signedIn != self.coordinator.ytSession.playerIsSignedIn {
+                self.coordinator.ytSession.playerIsSignedIn = signedIn
+                self.coordinator.refresh(force: true)
+            }
+        }
         settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
 
         let shortcut = settings.hotKey?.displayString ?? "none"

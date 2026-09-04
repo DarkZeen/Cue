@@ -25,8 +25,18 @@ import WebKit
 ///   that looks like a session and authenticates as nobody.
 @Observable
 final class YTMusicSessionService: NSObject {
+    /// Whether the player has reported itself signed in.
+    ///
+    /// Kept up to date by `AppState` from the player's own page. Signing in
+    /// there is now the only sign-in that matters, so it counts as a connection
+    /// even when nothing was ever captured into the keychain.
+    var playerIsSignedIn = false
+
+    /// Whether there is a usable session, from either source.
+    var isConnected: Bool { playerIsSignedIn || hasStoredSession }
+
     /// Whether there is a stored session. Read while drawing Settings.
-    private(set) var isConnected: Bool
+    private(set) var hasStoredSession: Bool
     private(set) var isPresentingSignIn = false
     private(set) var lastError: String?
 
@@ -50,7 +60,7 @@ final class YTMusicSessionService: NSObject {
     private static let hashCookieNames = ["SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID"]
 
     override init() {
-        isConnected = Keychain.string(for: Keychain.Account.ytMusicCookie) != nil
+        hasStoredSession = Keychain.string(for: Keychain.Account.ytMusicCookie) != nil
         super.init()
     }
 
@@ -147,7 +157,7 @@ final class YTMusicSessionService: NSObject {
         let header = byName.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "; ")
 
         Keychain.set(header, for: Keychain.Account.ytMusicCookie)
-        isConnected = true
+        hasStoredSession = true
         logger.notice("Captured a YouTube Music session (\(byName.count, privacy: .public) cookies).")
 
         dismissSignIn()
@@ -171,7 +181,7 @@ final class YTMusicSessionService: NSObject {
 
     func disconnect() {
         Keychain.remove(Keychain.Account.ytMusicCookie)
-        isConnected = false
+        hasStoredSession = false
         lastError = nil
         logger.notice("Disconnected the YouTube Music session.")
         onSessionChange?()
@@ -182,7 +192,7 @@ final class YTMusicSessionService: NSObject {
     func invalidate(reason: String) {
         guard isConnected else { return }
         Keychain.remove(Keychain.Account.ytMusicCookie)
-        isConnected = false
+        hasStoredSession = false
         lastError = reason
         logger.notice("The stored session was rejected; disconnected.")
         onSessionChange?()
@@ -197,14 +207,46 @@ final class YTMusicSessionService: NSObject {
         Keychain.string(for: Keychain.Account.ytMusicCookie)
     }
 
+    /// Reads the player's live cookies, when there is a player.
+    ///
+    /// Set by `AppState`. This is the fix for a whole class of silence: the
+    /// stored cookie is a snapshot taken once, and Google rotates
+    /// `__Secure-3PSIDTS` continuously, so within a day or so InnerTube stops
+    /// recognising it. It does not answer with an error — it answers with a
+    /// perfectly good page containing none of your music, which looks exactly
+    /// like a parser that has stopped working.
+    ///
+    /// The player's own session is kept fresh by WebKit, including the
+    /// rotation. Borrowing it means the API is signed in for as long as the
+    /// player is.
+    var liveCookies: (() async -> [HTTPCookie])?
+
+    /// The cookie header to send, preferring the live session.
+    private func currentCookieHeader() async -> String? {
+        if let liveCookies {
+            let cookies = await liveCookies().filter { cookie in
+                let domain = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
+                return domain.hasSuffix("youtube.com") || domain.hasSuffix("google.com")
+            }
+
+            if cookies.contains(where: { Self.hashCookieNames.contains($0.name) }) {
+                var byName: [String: String] = [:]
+                for cookie in cookies { byName[cookie.name] = cookie.value }
+                return byName.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "; ")
+            }
+        }
+
+        return cookieHeader
+    }
+
     /// The headers that make an InnerTube request look like the website's own.
     ///
     /// The authorization value is Google's `SAPISIDHASH` scheme: a timestamp
     /// and the SHA-1 of `timestamp SAPISID origin`. It is not a signature over
     /// the request — it proves nothing about the body — but it is what the
     /// site sends, and a request without it is answered with a 401.
-    func authorizationHeaders() -> [String: String]? {
-        guard let cookieHeader else { return nil }
+    func authorizationHeaders() async -> [String: String]? {
+        guard let cookieHeader = await currentCookieHeader() else { return nil }
 
         let jar = Self.parse(cookieHeader: cookieHeader)
         guard let name = Self.hashCookieNames.first(where: { jar[$0] != nil }),

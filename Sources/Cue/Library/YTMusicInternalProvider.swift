@@ -255,7 +255,7 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     // MARK: - Transport
 
     private func post(_ endpoint: String, body: [String: Any]) async throws -> JSONValue {
-        guard let headers = session.authorizationHeaders() else {
+        guard let headers = await session.authorizationHeaders() else {
             throw MusicLibraryError.notAuthorized
         }
 

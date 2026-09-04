@@ -190,6 +190,14 @@ struct GalleryView: View {
     /// that arrives as nine grey rectangles and fills in afterwards feels
     /// slower than the keypress was.
     private func prefetchNeighbours() {
+        let tiles = coordinator.tiles(for: presenter.page).compactMap { $0 }
+        let withoutArtwork = tiles.filter { $0.thumbnailURL == nil }.count
+        if withoutArtwork > 0 {
+            Diagnostics.logger("gallery").notice(
+                "\(presenter.page.title, privacy: .public): \(withoutArtwork, privacy: .public) of \(tiles.count, privacy: .public) tiles have no artwork address."
+            )
+        }
+
         // The page being looked at first, and its own nine before anything
         // else on it.
         for tile in coordinator.tiles(for: presenter.page) {
