@@ -15,6 +15,15 @@ final class ThumbnailProvider {
     /// hundred thumbnails the memory is real and the hit rate is not.
     private static let capacity = 240
 
+    /// Bumped whenever an image lands.
+    ///
+    /// Views read it so that a cover arriving redraws the tile. Reading through
+    /// `image(for:)` alone was not enough — covers only appeared once something
+    /// else forced a redraw, such as changing page — and an explicit signal is
+    /// more honest than hoping a lookup through a method on a shared cache gets
+    /// tracked.
+    private(set) var version = 0
+
     private var images: [URL: NSImage] = [:]
     /// Requests in flight, so that nine tiles pointing at one playlist's
     /// artwork make one request rather than nine.
@@ -61,6 +70,7 @@ final class ThumbnailProvider {
     private func store(_ image: NSImage, for url: URL) {
         images[url] = image
         order.append(url)
+        version &+= 1
 
         // Oldest-first eviction rather than least-recently-used: the access
         // pattern here is "the same nine tiles, then whatever was just

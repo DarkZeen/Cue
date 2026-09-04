@@ -251,9 +251,22 @@ final class LibraryCoordinator {
             // thumbed up — which is a different list wearing the same word, and
             // mixing the two makes the page unrecognisable as your music.
             if provider.id == .ytMusic || !hasMusicSession {
-                liked = Self.merge(liked, with: (try? await provider.likedSongs()) ?? [])
+                do {
+                    let songs = try await provider.likedSongs()
+                    liked = Self.merge(liked, with: songs)
+                    logger.notice("\(provider.id.rawValue, privacy: .public) liked songs: \(songs.count, privacy: .public)")
+                } catch {
+                    logger.error("\(provider.id.rawValue, privacy: .public) liked songs failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
-            saved = Self.merge(saved, with: (try? await provider.albums()) ?? [])
+
+            do {
+                let owned = try await provider.albums()
+                saved = Self.merge(saved, with: owned)
+                logger.notice("\(provider.id.rawValue, privacy: .public) albums: \(owned.count, privacy: .public)")
+            } catch {
+                logger.error("\(provider.id.rawValue, privacy: .public) albums failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         guard !Task.isCancelled else { return }

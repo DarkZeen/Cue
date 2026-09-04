@@ -89,11 +89,15 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     /// and none of the second.
     func likedSongs() async throws -> [MusicItem] {
         let response = try await post("browse", body: ["browseId": BrowseID.likedSongsPage])
-        // Rows only. A liked-songs page also carries shelf headers and related
-        // cards, and a card among the songs would be a tile that does not play.
-        return Self.deduplicated(
+
+        let songs = Self.deduplicated(
             response.collect("musicResponsiveListItemRenderer").compactMap(Self.row(from:))
         )
+
+        logger.notice(
+            "Liked songs response: \(response.collect("musicResponsiveListItemRenderer").count, privacy: .public) rows, \(songs.count, privacy: .public) usable."
+        )
+        return songs
     }
 
     /// Saved albums, as containers rather than flattened into tracks.

@@ -115,7 +115,11 @@ struct MusicItem: Identifiable, Hashable, Codable, Sendable {
             components.path = "/watch"
             components.queryItems = [URLQueryItem(name: "v", value: video)]
         case (nil, let list?, _):
-            components.path = "/playlist"
+            // `/watch?list=` rather than `/playlist?list=`. The second is the
+            // playlist's *page*: it opens, shows the tracks, and plays nothing
+            // — which is exactly what clicking a playlist tile appeared to do.
+            // The first starts it.
+            components.path = "/watch"
             components.queryItems = [URLQueryItem(name: "list", value: list)]
         case (nil, nil, let browse?):
             // An artist is a channel and lives at a different path. `/browse/`

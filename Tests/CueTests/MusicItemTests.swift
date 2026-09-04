@@ -27,10 +27,13 @@ struct MusicItemTests {
         #expect(item.playbackURL?.absoluteString == "https://music.youtube.com/watch?v=abc123")
     }
 
-    @Test("A playlist opens as a playlist, not as a watch page")
+    @Test("A playlist opens on a watch page, so it plays")
     func playlist() {
+        // Not `/playlist?list=`, which is the playlist's *page*: it opens,
+        // lists the tracks and plays nothing. Clicking a playlist tile
+        // appeared to do nothing at all for exactly this reason.
         let item = MusicItem(id: "x", title: "A", kind: .playlist, playlistID: "PL123", source: .dataAPI)
-        #expect(item.playbackURL?.absoluteString == "https://music.youtube.com/playlist?list=PL123")
+        #expect(item.playbackURL?.absoluteString == "https://music.youtube.com/watch?list=PL123")
     }
 
     @Test("An album goes to a browse page")

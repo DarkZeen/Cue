@@ -103,7 +103,7 @@ struct YTMusicParsingTests {
         #expect(item.playlistID == "PLabc123")
         #expect(item.browseID == nil)
         #expect(item.kind == .playlist)
-        #expect(item.playbackURL?.absoluteString == "https://music.youtube.com/playlist?list=PLabc123")
+        #expect(item.playbackURL?.absoluteString == "https://music.youtube.com/watch?list=PLabc123")
     }
 
     @Test("An album card stays a browse page")

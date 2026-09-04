@@ -92,7 +92,11 @@ struct ArtworkTileView: View {
     }
 
     private func artwork(_ item: MusicItem) -> some View {
-        ZStack {
+        // Read so this view redraws when a cover arrives. See
+        // `ThumbnailProvider.version`.
+        let _ = thumbnails.version
+
+        return ZStack {
             CuePalette.tileGround
 
             if let image = thumbnails.image(for: item.thumbnailURL) {
