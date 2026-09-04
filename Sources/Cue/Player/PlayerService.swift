@@ -100,6 +100,15 @@ final class PlayerService: NSObject {
     /// The size the window opens at the first time it is actually shown.
     private static let shownSize = NSSize(width: 1_020, height: 700)
 
+    /// Set while a freshly-loaded page is expected to start playing.
+    ///
+    /// Cleared once it does, or after a few seconds of trying. Without the
+    /// window, this is scoped deliberately tightly: a nudge that ran after
+    /// *any* navigation would restart the music every time the user paused it
+    /// and clicked something.
+    private var wantsPlayback = false
+    private var playbackNudge: Task<Void, Never>?
+
     /// Where the window goes when it is shown. Remembered so that hiding and
     /// showing does not reset a window the user has placed and sized.
     private var visibleFrame: NSRect?
@@ -119,9 +128,35 @@ final class PlayerService: NSObject {
         let webView = prepareWebView()
 
         logger.notice("Playing a \(item.kind.rawValue, privacy: .public) in the player.")
+        wantsPlayback = true
         webView.load(URLRequest(url: url))
         isLoaded = true
         return true
+    }
+
+    /// Makes sure the page actually started.
+    ///
+    /// The autoplay policy will not start a page WebKit considers hidden, and
+    /// Cue's player is as close to hidden as a window gets. Pressing the site's
+    /// own play button is a direct instruction rather than autoplay, so it is
+    /// not subject to the policy — but the button does not exist until the
+    /// player has built itself, which is why this is several attempts spread
+    /// over a few seconds rather than one.
+    private func nudgeIntoPlaying() {
+        playbackNudge?.cancel()
+        playbackNudge = Task { [weak self] in
+            for delay in [Duration.milliseconds(800), .milliseconds(1_500), .seconds(2), .seconds(3)] {
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled, let self, self.wantsPlayback else { return }
+
+                if self.nowPlaying?.isPlaying == true {
+                    self.wantsPlayback = false
+                    return
+                }
+                self.evaluate("__cue.ensurePlaying()")
+            }
+            self?.wantsPlayback = false
+        }
     }
 
     /// Opens the player on its own, with nothing queued — the front page, so
@@ -429,8 +464,20 @@ final class PlayerService: NSObject {
           const cue = {
             _media: null,
 
+            // The cheap lookup, for the once-a-second poll. A plain
+            // `querySelector` costs nothing; the deep walk below costs a
+            // traversal of every element and shadow root on the page, and
+            // doing that every second is enough to stall it.
             media() {
               if (this._media && this._media.isConnected) { return this._media; }
+              this._media = document.querySelector('video') || document.querySelector('audio');
+              return this._media;
+            },
+
+            // The thorough lookup, only ever run when a button is pressed.
+            deepMedia() {
+              const cheap = this.media();
+              if (cheap) { return cheap; }
               this._media = deep('video') || deep('audio');
               return this._media;
             },
@@ -447,13 +494,13 @@ final class PlayerService: NSObject {
               // The site's own button first: it knows about the queue, ads and
               // whatever else is between a click and the sound changing.
               if (this.press(['#play-pause-button', '.play-pause-button'])) { return; }
-              const media = this.media();
+              const media = this.deepMedia();
               if (media) { media.paused ? media.play() : media.pause(); }
             },
 
             next() {
               if (this.press(['.next-button', 'tp-yt-paper-icon-button.next-button'])) { return; }
-              const media = this.media();
+              const media = this.deepMedia();
               if (media) { media.currentTime = media.duration || 0; }
             },
 
@@ -462,13 +509,28 @@ final class PlayerService: NSObject {
             },
 
             mute() {
-              const media = this.media();
+              const media = this.deepMedia();
               if (media) { media.muted = !media.muted; return; }
               this.press(['tp-yt-paper-icon-button.volume', '#volume-slider']);
             },
 
+            // Starts playback if it has not started on its own.
+            //
+            // The autoplay policy will not start a page it considers hidden,
+            // and Cue's player is deliberately as close to hidden as a window
+            // can be. Pressing the site's own play button is a direct
+            // instruction rather than autoplay, so it is not subject to it.
+            ensurePlaying() {
+              const session = navigator.mediaSession;
+              if (session && session.playbackState === 'playing') { return true; }
+              const media = this.deepMedia();
+              if (media && !media.paused) { return true; }
+              this.toggle();
+              return false;
+            },
+
             nudgeVolume(delta) {
-              const media = this.media();
+              const media = this.deepMedia();
               if (!media) { return; }
               media.muted = false;
               media.volume = Math.min(1, Math.max(0, media.volume + delta));
@@ -479,6 +541,12 @@ final class PlayerService: NSObject {
               if (!session || !session.metadata) { return null; }
               const media = this.media();
               const artwork = session.metadata.artwork || [];
+              // `playbackState` is the site's own answer and does not depend on
+              // having found the media element. The element is only consulted
+              // when the site has not said.
+              const playing = session.playbackState
+                ? session.playbackState === 'playing'
+                : !!media && !media.paused;
               return {
                 title: session.metadata.title || '',
                 artist: session.metadata.artist || '',
@@ -487,7 +555,7 @@ final class PlayerService: NSObject {
                 // is what the site itself checks. Far steadier than looking for
                 // a sign-in button whose markup changes with every redesign.
                 signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
-                isPlaying: !!media && !media.paused,
+                isPlaying: playing,
                 muted: !!media && media.muted
               };
             }
@@ -497,12 +565,20 @@ final class PlayerService: NSObject {
 
           let last = null;
           function report() {
-            const state = cue.state();
-            if (!state) { return; }
-            const signature = JSON.stringify(state);
-            if (signature === last) { return; }
-            last = signature;
-            window.webkit.messageHandlers.cue.postMessage(state);
+            // Wrapped, because this runs on a timer against a page that is
+            // rewritten without warning: one thrown exception must not be the
+            // end of every future report, and with it the only sign on screen
+            // that Cue is playing anything.
+            try {
+              const state = cue.state();
+              if (!state) { return; }
+              const signature = JSON.stringify(state);
+              if (signature === last) { return; }
+              last = signature;
+              window.webkit.messageHandlers.cue.postMessage(state);
+            } catch (error) {
+              /* ignored on purpose */
+            }
           }
 
           // Polled rather than observed: mediaSession has no change event, and
@@ -611,7 +687,10 @@ extension PlayerService: WKNavigationDelegate {
         _ webView: WKWebView,
         didFinish navigation: WKNavigation!
     ) {
-        MainActor.assumeIsolated { self.lastError = nil }
+        MainActor.assumeIsolated {
+            self.lastError = nil
+            if self.wantsPlayback { self.nudgeIntoPlaying() }
+        }
     }
 }
 
