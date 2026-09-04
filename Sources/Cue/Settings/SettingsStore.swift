@@ -28,8 +28,21 @@ final class SettingsStore {
 
         showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
 
+        let storedDesign = defaults.string(forKey: Key.panelDesign)
+        panelDesign = storedDesign.flatMap(PanelDesign.init(rawValue:)) ?? .gallery
+
         let storedDestination = defaults.string(forKey: Key.playbackDestination)
         playbackDestination = storedDestination.flatMap(PlaybackDestination.init(rawValue:)) ?? .inApp
+    }
+
+    /// Which grid the panel draws.
+    ///
+    /// Both ship. The gallery is the default because artwork is what people
+    /// recognise, but the classic grid reads titles faster on a library of
+    /// covers that all look alike, and that is a real preference rather than a
+    /// transitional one.
+    var panelDesign: PanelDesign {
+        didSet { defaults.set(panelDesign.rawValue, forKey: Key.panelDesign) }
     }
 
     /// Whether the plaque appears in the corner of the screen while playing.
@@ -186,6 +199,7 @@ final class SettingsStore {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
         static let showsMiniPlayer = "showsMiniPlayer"
+        static let panelDesign = "panelDesign"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

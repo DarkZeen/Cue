@@ -117,11 +117,32 @@ private struct GeneralPane: View {
                 }
             }
 
+            Section("Panel") {
+                Picker("Grid", selection: $settings.panelDesign) {
+                    ForEach(PanelDesign.allCases, id: \.self) { design in
+                        Text(design.title).tag(design)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(settings.panelDesign.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if settings.panelDesign == .gallery {
+                    Text("⌘1 to ⌘9 open a tile on the page you are looking at. ⌘R deals a different nine.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section {
                 Toggle("Close the panel after opening something", isOn: $settings.closesAfterOpening)
                 Toggle("Fill empty tiles with recent and library items", isOn: $settings.autoFillsEmptyTiles)
             } footer: {
-                Text("Filled-in tiles are drawn slightly faded. Right-click one to keep it where it is.")
+                Text("Applies to the speed dial. Right-click a tile to keep it where it is.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

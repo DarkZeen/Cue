@@ -46,6 +46,9 @@ final class CuePresenter {
     /// search.
     private(set) var selectableCount: Int = 0
 
+    /// Which of the gallery's three pages is showing.
+    private(set) var page: LibraryCoordinator.Page = .pinned
+
     private var dismissTask: Task<Void, Never>?
 
     /// Raised when the panel has finished animating out and the window can be
@@ -60,6 +63,10 @@ final class CuePresenter {
         dismissTask?.cancel()
         dismissTask = nil
         selection = nil
+        // Back to the speed dial every time. The panel is opened to reach one
+        // of nine things kept in known positions, and arriving on whichever
+        // page was last browsed would cost that certainty for no gain.
+        page = .pinned
         state = .visible
     }
 
@@ -94,6 +101,27 @@ final class CuePresenter {
         // index across the change is how Return ends up opening the fourth
         // search result because the fourth tile was highlighted a moment ago.
         selection = nil
+    }
+
+    // MARK: - Pages
+
+    func setPage(_ page: LibraryCoordinator.Page) {
+        guard page != self.page else { return }
+        self.page = page
+        // The highlight belonged to nine other things. Carrying the index
+        // across is how Return opens the fourth album because the fourth liked
+        // song was highlighted a moment ago.
+        selection = nil
+    }
+
+    /// Moves by whole pages, clamped.
+    ///
+    /// Not wrapped: three pages held under an arrow key would cycle forever,
+    /// and "go to the last page" stops being something you can do by feel.
+    func movePage(by offset: Int) {
+        let pages = LibraryCoordinator.Page.allCases
+        let target = min(max(page.rawValue + offset, 0), pages.count - 1)
+        setPage(pages[target])
     }
 
     // MARK: - Selection

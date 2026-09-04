@@ -35,6 +35,14 @@ enum CueAnimation {
     /// held arrow key.
     static let selection = Animation.easeOut(duration: 0.12)
 
+    /// Moving between the gallery's pages.
+    ///
+    /// Slightly slower than the selection, because a whole page is travelling
+    /// and the eye needs to see it arrive rather than notice it has changed.
+    /// Still no overshoot: three pages held by arrow keys would bounce three
+    /// times.
+    static let page = Animation.spring(response: 0.34, dampingFraction: 1.0)
+
     static let startScale: CGFloat = 0.96
     /// Two points of downward travel on the way in. Enough to read as arriving
     /// from somewhere, not enough to notice as movement.

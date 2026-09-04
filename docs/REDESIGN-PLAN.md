@@ -28,7 +28,32 @@ and native expectations outrank expression. Brand lives in the details.
     stroke weight at the small rungs, which means drawing those sizes with
     their own proportions rather than scaling the 1024 canvas down.
 
-## Not yet built
+## Built
+
+1. **Library layer.** `likedSongs()` and `albums()` on the provider protocol,
+   defaulting to nothing so a backend that cannot answer returns an empty page
+   rather than an error. Data API reads the liked playlist's contents through
+   `playlistItems.list` (one quota unit, against `search.list`'s hundred);
+   InnerTube reads `VLLM` for tracks and `FEmusic_liked_albums` for albums. The
+   coordinator gathers the three pages independently, so one failing leaves the
+   other two full.
+2. **The paged gallery.** Three pages on a sliding strip, page dots, ← → to
+   move, ⌘R or the shuffle control to deal a different nine. ⌘1–⌘9 address the
+   *visible* page.
+3. **The mark in the corner.** The spinning record is gone; Cue's own mark now
+   dims when paused and breathes on a sine while playing.
+4. **The Settings toggle**, Gallery or Compact, defaulting to Gallery.
+
+## Still open
+
+- **Not visually verified.** macOS gated screen capture partway through, so the
+  gallery has not been looked at on a real screen with real artwork. Layout,
+  contrast over bright covers, and the slide need a human pass.
+- The dev build is prompting for the keychain again despite the repair. The
+  repair records itself done and then skips, so a failure the first time is
+  permanent; it likely needs the flag reset and the reclaim re-run.
+
+## Superseded — not built
 
 1. **Library layer.** Neither backend can currently fetch the *contents* of a
    playlist, which pages 2 and 3 need.

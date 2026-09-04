@@ -67,6 +67,40 @@ final class YouTubeDataAPIProvider: MusicLibraryProvider {
         return try await [liked].compactMap(\.self) + playlists
     }
 
+    /// The liked playlist's contents, as songs.
+    ///
+    /// `playlistItems.list` costs a single quota unit, unlike `search.list`'s
+    /// hundred, so the grid's second page is nearly free to fill.
+    func likedSongs() async throws -> [MusicItem] {
+        guard let playlistID = try await resolveLikedPlaylistID() else { return [] }
+
+        let response: PlaylistItemListResponse = try await get(
+            "playlistItems",
+            query: [
+                "part": "snippet",
+                "playlistId": playlistID,
+                "maxResults": "50",
+            ]
+        )
+
+        return response.items.compactMap { entry in
+            guard let videoID = entry.snippet.resourceId?.videoId else { return nil }
+            return MusicItem(
+                id: "\(ProviderID.dataAPI.rawValue):video:\(videoID)",
+                title: entry.snippet.title.decodingHTMLEntities(),
+                // The uploader, which for a music video is usually the artist's
+                // channel and occasionally a label. The internal provider knows
+                // the actual artist; this is the best the official one has.
+                subtitle: entry.snippet.videoOwnerChannelTitle?.decodingHTMLEntities(),
+                kind: .video,
+                videoID: videoID,
+                playlistID: playlistID,
+                thumbnailURL: entry.snippet.thumbnails?.best,
+                source: .dataAPI
+            )
+        }
+    }
+
     private func ownPlaylists() async throws -> [MusicItem] {
         let response: PlaylistListResponse = try await get(
             "playlists",
@@ -90,30 +124,34 @@ final class YouTubeDataAPIProvider: MusicLibraryProvider {
         }
     }
 
-    /// The account's liked videos, as a single pinnable playlist.
+    /// Resolves and caches the account's liked-videos playlist id.
     ///
-    /// `LL…` is a real playlist id that music.youtube.com will open, which is
-    /// why this can be one tile rather than a list of individual tracks.
-    private func likedVideosPlaylist() async throws -> MusicItem? {
-        let playlistID: String
-        if let likedPlaylistID {
-            playlistID = likedPlaylistID
-        } else {
-            let response: ChannelListResponse = try await get(
-                "channels",
-                query: ["part": "contentDetails", "mine": "true"]
-            )
-            guard let likes = response.items.first?.contentDetails.relatedPlaylists.likes,
-                  !likes.isEmpty
-            else {
-                // Some accounts genuinely have no likes playlist exposed — a
-                // brand account, mostly. Not an error; there is simply no tile.
-                logger.notice("This account exposes no liked-videos playlist.")
-                return nil
-            }
-            likedPlaylistID = likes
-            playlistID = likes
+    /// `LL…` is a real playlist id that music.youtube.com will open, so it
+    /// serves both as a tile in its own right and as the list to read songs
+    /// from. It never changes for an account, and the lookup costs a request.
+    private func resolveLikedPlaylistID() async throws -> String? {
+        if let likedPlaylistID { return likedPlaylistID }
+
+        let response: ChannelListResponse = try await get(
+            "channels",
+            query: ["part": "contentDetails", "mine": "true"]
+        )
+        guard let likes = response.items.first?.contentDetails.relatedPlaylists.likes,
+              !likes.isEmpty
+        else {
+            // Some accounts genuinely have no likes playlist exposed — a brand
+            // account, mostly. Not an error; there is simply nothing there.
+            logger.notice("This account exposes no liked-videos playlist.")
+            return nil
         }
+
+        likedPlaylistID = likes
+        return likes
+    }
+
+    /// The account's liked videos, as a single pinnable playlist.
+    private func likedVideosPlaylist() async throws -> MusicItem? {
+        guard let playlistID = try await resolveLikedPlaylistID() else { return nil }
 
         return MusicItem(
             id: "\(ProviderID.dataAPI.rawValue):playlist:\(playlistID)",
@@ -279,6 +317,21 @@ final class YouTubeDataAPIProvider: MusicLibraryProvider {
 
     private struct PlaylistListResponse: Decodable {
         let items: [Playlist]
+    }
+
+    private struct PlaylistItem: Decodable {
+        struct ItemSnippet: Decodable {
+            struct Resource: Decodable { let videoId: String? }
+            let title: String
+            let videoOwnerChannelTitle: String?
+            let thumbnails: Thumbnails?
+            let resourceId: Resource?
+        }
+        let snippet: ItemSnippet
+    }
+
+    private struct PlaylistItemListResponse: Decodable {
+        let items: [PlaylistItem]
     }
 
     private struct ChannelListResponse: Decodable {

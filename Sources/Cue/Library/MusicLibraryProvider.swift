@@ -61,10 +61,29 @@ protocol MusicLibraryProvider: AnyObject {
     /// Recently played, mixes, and anything else the provider considers
     /// timely. Allowed to return nothing; the Data API has no history at all.
     func recent() async throws -> [MusicItem]
+
+    /// The user's liked songs, as individual tracks rather than as the
+    /// playlist that holds them.
+    ///
+    /// Separate from `library()` because the two answer different questions. A
+    /// library listing is containers you open; this is songs you play, and the
+    /// grid's second page is made of songs.
+    func likedSongs() async throws -> [MusicItem]
+
+    /// Saved albums, as containers.
+    ///
+    /// Deliberately not flattened into tracks: an album is a thing you put on,
+    /// and nine albums say more in nine tiles than nine tracks from one of them.
+    func albums() async throws -> [MusicItem]
 }
 
 extension MusicLibraryProvider {
     /// Most providers have nothing timely to offer, and the ones that do
     /// override it. Saves every call site an `if provider.hasRecents`.
     func recent() async throws -> [MusicItem] { [] }
+
+    /// Nothing, unless a provider can do better. A page that comes back empty
+    /// says so; it does not become an error.
+    func likedSongs() async throws -> [MusicItem] { [] }
+    func albums() async throws -> [MusicItem] { [] }
 }

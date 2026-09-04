@@ -43,6 +43,11 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         static let home = "FEmusic_home"
         /// Liked songs. A real playlist id, so it can be opened directly.
         static let likedSongs = "LM"
+        /// The liked-songs *page*, for reading its contents. A playlist's browse
+        /// id is `VL` glued onto the playlist id.
+        static let likedSongsPage = "VLLM"
+        /// Saved albums in the library.
+        static let libraryAlbums = "FEmusic_liked_albums"
     }
 
     init(session: YTMusicSessionService, urlSession: URLSession = .shared) {
@@ -75,6 +80,28 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         )
 
         return [liked] + Self.items(in: response)
+    }
+
+    /// The tracks inside Liked Music.
+    ///
+    /// The one thing the official API cannot see at all: YouTube Music's likes
+    /// are not YouTube's likes, and an account can have hundreds of the first
+    /// and none of the second.
+    func likedSongs() async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": BrowseID.likedSongsPage])
+        // Rows only. A liked-songs page also carries shelf headers and related
+        // cards, and a card among the songs would be a tile that does not play.
+        return Self.deduplicated(
+            response.collect("musicResponsiveListItemRenderer").compactMap(Self.row(from:))
+        )
+    }
+
+    /// Saved albums, as containers rather than flattened into tracks.
+    func albums() async throws -> [MusicItem] {
+        let response = try await post("browse", body: ["browseId": BrowseID.libraryAlbums])
+        return Self.deduplicated(
+            response.collect("musicTwoRowItemRenderer").compactMap(Self.card(from:))
+        )
     }
 
     /// History first, then the home feed's mixes.

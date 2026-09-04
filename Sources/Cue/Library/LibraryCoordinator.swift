@@ -44,6 +44,12 @@ final class LibraryCoordinator {
     /// panel opens rather than on a timer — the panel is open for seconds at a
     /// time, and a background poll would spend quota on nobody.
     private(set) var suggestions: [MusicItem] = []
+
+    /// The grid's second page: liked songs, as individual tracks.
+    private(set) var likedSongs: [MusicItem] = []
+    /// The grid's third page: saved albums, as containers.
+    private(set) var albums: [MusicItem] = []
+
     private(set) var isRefreshing = false
 
     private var searchTask: Task<Void, Never>?
@@ -199,6 +205,8 @@ final class LibraryCoordinator {
         defer { isRefreshing = false }
 
         var gathered: [MusicItem] = []
+        var liked: [MusicItem] = []
+        var saved: [MusicItem] = []
 
         for provider in activeProviders {
             guard !Task.isCancelled else { return }
@@ -214,13 +222,112 @@ final class LibraryCoordinator {
             } catch {
                 logger.notice("\(provider.id.rawValue, privacy: .public) refresh failed.")
             }
+
+            // Gathered separately and forgivingly: the grid's pages are three
+            // independent surfaces, and one of them failing must leave the
+            // other two full rather than emptying the panel.
+            liked = Self.merge(liked, with: (try? await provider.likedSongs()) ?? [])
+            saved = Self.merge(saved, with: (try? await provider.albums()) ?? [])
         }
 
         guard !Task.isCancelled else { return }
 
         suggestions = gathered
+        likedSongs = liked
+        albums = saved
         lastRefresh = Date()
-        logger.debug("Refreshed: \(gathered.count, privacy: .public) suggestion(s).")
+        logger.debug(
+            "Refreshed: \(gathered.count, privacy: .public) suggestion(s), \(liked.count, privacy: .public) liked, \(saved.count, privacy: .public) album(s)."
+        )
+    }
+
+    // MARK: - Gallery pages
+
+    /// Which nine things the grid is showing.
+    ///
+    /// Three pages rather than one, because the three answer different
+    /// questions — what I keep, what I like, what I own — and flattening them
+    /// into one ranked list would make the first page stop being a speed dial.
+    enum Page: Int, CaseIterable, Hashable {
+        case pinned
+        case liked
+        case albums
+
+        var title: String {
+            switch self {
+            case .pinned: "Speed dial"
+            case .liked: "Liked songs"
+            case .albums: "Albums"
+            }
+        }
+
+        /// Whether Randomize applies.
+        ///
+        /// Never to the speed dial. Its whole value is that the fourth thing is
+        /// still fourth tomorrow; a shuffle would be the one change that
+        /// destroys the reason the page exists.
+        var canReshuffle: Bool { self != .pinned }
+
+        var emptyMessage: String {
+            switch self {
+            case .pinned: "Search for something, then keep it here."
+            case .liked: "Songs you like in YouTube Music will appear here."
+            case .albums: "Albums saved to your library will appear here."
+            }
+        }
+    }
+
+    /// Which slice of each pool is on show. Empty means "the first nine".
+    private var deal: [Page: [Int]] = [:]
+
+    func pool(for page: Page) -> [MusicItem] {
+        switch page {
+        case .pinned: []
+        case .liked: likedSongs
+        case .albums: albums
+        }
+    }
+
+    /// The nine tiles of a page, in reading order.
+    func tiles(for page: Page) -> [MusicItem?] {
+        guard page != .pinned else { return tiles }
+
+        let pool = pool(for: page)
+        guard !pool.isEmpty else {
+            return [MusicItem?](repeating: nil, count: SettingsStore.tileCount)
+        }
+
+        let indices = deal[page] ?? Array(0..<min(SettingsStore.tileCount, pool.count))
+        var slots = [MusicItem?](repeating: nil, count: SettingsStore.tileCount)
+        for (slot, index) in indices.prefix(SettingsStore.tileCount).enumerated()
+        where pool.indices.contains(index) {
+            slots[slot] = pool[index]
+        }
+        return slots
+    }
+
+    /// Deals a different nine from the same pool.
+    ///
+    /// It reshuffles what is *shown*, and plays nothing. A randomize button
+    /// that started music would be a different verb wearing the same word, and
+    /// this one is for looking.
+    func reshuffle(_ page: Page) {
+        guard page.canReshuffle else { return }
+
+        let pool = pool(for: page)
+        guard pool.count > SettingsStore.tileCount else {
+            // Everything already fits, so there is no other nine to deal. Say
+            // nothing and change nothing rather than reordering the same items
+            // and calling it a shuffle.
+            return
+        }
+
+        deal[page] = Array(pool.indices.shuffled().prefix(SettingsStore.tileCount))
+    }
+
+    /// Whether a page has more than it can show, and so has something to deal.
+    func canReshuffle(_ page: Page) -> Bool {
+        page.canReshuffle && pool(for: page).count > SettingsStore.tileCount
     }
 
     // MARK: - Tiles

@@ -74,11 +74,14 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     // thin where it is wide, taller than it, and a different colour. A bar of
     // similar weight beside a play triangle is the universal "skip forward"
     // glyph, which is what the first draft of this drew.
-    let triangleHeight = 300 * unit
-    let markerHeight = 470 * unit
-    let markerWidth = 34 * unit
-    let gap = 62 * unit
-    let triangleWidth = 250 * unit
+    // Floored in real pixels, not just scaled. At sixteen points a marker of
+    // 34/1024 is barely half a pixel and disappears into the plate; the mark
+    // has to be drawn slightly bolder at the small rungs to stay itself.
+    let triangleHeight = max(300 * unit, 6)
+    let markerHeight = max(470 * unit, 9)
+    let markerWidth = max(34 * unit, 1.5)
+    let gap = max(62 * unit, 1.5)
+    let triangleWidth = max(250 * unit, 5)
     let markWidth = markerWidth + gap + triangleWidth
 
     let originX = size / 2 - markWidth / 2

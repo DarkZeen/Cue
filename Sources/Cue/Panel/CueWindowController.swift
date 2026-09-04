@@ -277,6 +277,15 @@ final class CueWindowController {
             return true
         }
 
+        // ⌘R redeals the page, matching the shuffle control in its header.
+        if modifiers == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "r",
+           isGallery {
+            coordinator.reshuffle(presenter.page)
+            presenter.select(nil)
+            return true
+        }
+
         guard modifiers.isEmpty || modifiers == .shift else { return false }
 
         switch event.keyCode {
@@ -296,11 +305,14 @@ final class CueWindowController {
             return true
 
         case 123 where presenter.mode == .grid: // Left
-            presenter.moveSelection(by: -1)
+            // In the gallery the arrows move between pages, which is the
+            // gesture the design promises with its dots. Selection moves by row
+            // on Up and Down and by one on Tab, so nothing is lost.
+            isGallery ? presenter.movePage(by: -1) : presenter.moveSelection(by: -1)
             return true
 
         case 124 where presenter.mode == .grid: // Right
-            presenter.moveSelection(by: 1)
+            isGallery ? presenter.movePage(by: 1) : presenter.moveSelection(by: 1)
             return true
 
         case 48: // Tab
@@ -333,6 +345,7 @@ final class CueWindowController {
             openTile(at: index)
             return true
 
+
         case .results:
             // Return with nothing highlighted takes the first result, which is
             // what "type and hit Return" has meant in every search field since
@@ -344,8 +357,20 @@ final class CueWindowController {
         }
     }
 
+    /// Whether the panel is currently drawing the paged gallery.
+    private var isGallery: Bool { settings.panelDesign == .gallery }
+
+    /// The nine things ⌘1–⌘9 currently address.
+    ///
+    /// The *visible* page, always. Numbers that kept addressing the first page
+    /// while a different one was on screen would be the one way to break what
+    /// the grid is for.
+    private var visibleTiles: [MusicItem?] {
+        isGallery ? coordinator.tiles(for: presenter.page) : coordinator.tiles
+    }
+
     private func openTile(at index: Int) {
-        let tiles = coordinator.tiles
+        let tiles = visibleTiles
         guard tiles.indices.contains(index), let item = tiles[index] else { return }
         open(item)
     }

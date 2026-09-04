@@ -41,6 +41,49 @@ enum CueLayout {
         tileHeight * CGFloat(gridRows) + tileSpacing * CGFloat(gridRows - 1)
     }
 
+    // MARK: - Gallery
+
+    /// The redesigned grid: three pages of artwork, one page at a time.
+    ///
+    /// Its numbers live beside the classic grid's rather than replacing them,
+    /// because both designs ship and the window has to be built tall enough for
+    /// whichever one is switched on.
+    enum Gallery {
+        /// Slightly wider than tall, so three across read as a row of covers
+        /// rather than a block of squares.
+        static let tileHeight: CGFloat = 152
+        static let tileCornerRadius: CGFloat = 10
+        static let tileSpacing: CGFloat = 10
+
+        /// The page's name and its randomize control.
+        static let headerHeight: CGFloat = 28
+        /// The dots that say which of three pages this is.
+        static let dotsHeight: CGFloat = 16
+
+        static var tileWidth: CGFloat {
+            let available = panelWidth - outerPadding * 2 - tileSpacing * CGFloat(gridColumns - 1)
+            return available / CGFloat(gridColumns)
+        }
+
+        static var gridHeight: CGFloat {
+            tileHeight * CGFloat(gridRows) + tileSpacing * CGFloat(gridRows - 1)
+        }
+
+        /// The width one page occupies, which is also how far the strip of
+        /// pages slides when the page changes.
+        static var pageWidth: CGFloat {
+            panelWidth - outerPadding * 2
+        }
+    }
+
+    /// The height of the whole panel showing the gallery.
+    static var galleryModeHeight: CGFloat {
+        outerPadding + searchHeight + sectionGap
+            + Gallery.headerHeight + 6
+            + Gallery.gridHeight + 8
+            + Gallery.dotsHeight + outerPadding
+    }
+
     // MARK: - Results
 
     static let resultRowHeight: CGFloat = 52
@@ -79,7 +122,10 @@ enum CueLayout {
     /// below a short results list, and `CuePanelContentView` declines to hit-
     /// test that strip so it is not a dead zone over another app.
     static var panelHeight: CGFloat {
-        max(gridModeHeight, resultsModeHeight(count: maximumVisibleResults))
+        max(
+            galleryModeHeight,
+            max(gridModeHeight, resultsModeHeight(count: maximumVisibleResults))
+        )
     }
 
     /// Where the panel sits on screen.

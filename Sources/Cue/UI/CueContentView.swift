@@ -91,8 +91,10 @@ struct CueContentView: View {
 
     private var height: CGFloat {
         switch presenter.mode {
-        case .grid: CueLayout.gridModeHeight
-        case .results: CueLayout.resultsModeHeight(count: coordinator.results.count)
+        case .grid:
+            settings.panelDesign == .gallery ? CueLayout.galleryModeHeight : CueLayout.gridModeHeight
+        case .results:
+            CueLayout.resultsModeHeight(count: coordinator.results.count)
         }
     }
 
@@ -101,12 +103,22 @@ struct CueContentView: View {
         switch presenter.mode {
         case .grid:
             if coordinator.isConnectedToAnything || settings.pinnedTiles.contains(where: { $0 != nil }) {
-                SpeedDialGridView(
-                    coordinator: coordinator,
-                    presenter: presenter,
-                    thumbnails: thumbnails,
-                    onOpen: onOpen
-                )
+                switch settings.panelDesign {
+                case .gallery:
+                    GalleryView(
+                        coordinator: coordinator,
+                        presenter: presenter,
+                        thumbnails: thumbnails,
+                        onOpen: onOpen
+                    )
+                case .classic:
+                    SpeedDialGridView(
+                        coordinator: coordinator,
+                        presenter: presenter,
+                        thumbnails: thumbnails,
+                        onOpen: onOpen
+                    )
+                }
             } else {
                 DisconnectedView(onShowSettings: onShowSettings)
             }
