@@ -48,15 +48,36 @@ enum Keychain {
         switch status {
         case errSecSuccess:
             return
+
         case errSecItemNotFound:
-            var insert = query
-            insert.merge(update) { current, _ in current }
-            let addStatus = SecItemAdd(insert as CFDictionary, nil)
-            if addStatus != errSecSuccess {
-                logger.error("Could not store \(account, privacy: .public): OSStatus \(addStatus).")
-            }
+            add(query, update, for: account)
+
+        case errSecAuthFailed, errSecInteractionNotAllowed, errSecInteractionRequired:
+            // An item left behind by a build with a different code signature.
+            // Its access list names an application that no longer exists, so
+            // this one cannot update it and macOS asks for the login keychain
+            // password every single time instead.
+            //
+            // Replacing it outright is the recovery: the value being written is
+            // the newer one anyway, and the fresh item gets an access list that
+            // names *this* build. Without this, a developer who rebuilds with a
+            // changed signature is prompted forever and re-entering the value
+            // does not help, because re-entering it takes this same path.
+            logger.notice("Replacing an inaccessible \(account, privacy: .public) left by another build.")
+            SecItemDelete(query as CFDictionary)
+            add(query, update, for: account)
+
         default:
             logger.error("Could not update \(account, privacy: .public): OSStatus \(status).")
+        }
+    }
+
+    private static func add(_ query: [String: Any], _ update: [String: Any], for account: String) {
+        var insert = query
+        insert.merge(update) { current, _ in current }
+        let status = SecItemAdd(insert as CFDictionary, nil)
+        if status != errSecSuccess {
+            logger.error("Could not store \(account, privacy: .public): OSStatus \(status).")
         }
     }
 

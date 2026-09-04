@@ -14,6 +14,7 @@ final class CueWindowController {
     private let coordinator: LibraryCoordinator
     private let settings: SettingsStore
     private let thumbnails: ThumbnailProvider
+    private let playback: PlaybackService
 
     private let panel: CuePanel
     private let container: CuePanelContentView
@@ -42,11 +43,13 @@ final class CueWindowController {
     init(
         coordinator: LibraryCoordinator,
         settings: SettingsStore,
-        thumbnails: ThumbnailProvider
+        thumbnails: ThumbnailProvider,
+        playback: PlaybackService
     ) {
         self.coordinator = coordinator
         self.settings = settings
         self.thumbnails = thumbnails
+        self.playback = playback
 
         let frame = NSRect(
             x: 0,
@@ -195,7 +198,7 @@ final class CueWindowController {
     }
 
     private func open(_ item: MusicItem) {
-        guard coordinator.open(item) else { return }
+        guard playback.open(item) else { return }
         if settings.closesAfterOpening { dismiss() }
     }
 

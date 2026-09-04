@@ -24,6 +24,7 @@ Everything Cue keeps is on your Mac.
 | Your YouTube Music session cookie, if you enable that feature | macOS keychain | The only way to read a YouTube Music library |
 | Pinned tiles — titles, subtitles, artwork addresses | Application preferences (`UserDefaults`) | So the grid draws instantly and works offline |
 | Your preferences | Application preferences (`UserDefaults`) | Switches you set in Settings |
+| The player's browsing session | WebKit's website data store, private to Cue | So the player stays signed in between launches |
 
 Removing Cue and its preferences removes all of it. Settings → Accounts →
 Disconnect removes the credentials immediately and asks Google to revoke the
@@ -40,6 +41,13 @@ Cue talks to Google's own hosts and to nobody else:
 - `music.youtube.com` — only if you enable the YouTube Music library feature:
   the same searches, and requests for your library, history and home feed.
 - Google's image hosts — fetching the artwork shown on tiles and rows.
+
+When you play something, Cue's player window loads music.youtube.com in a web
+view, exactly as a browser would. From that point the page is talking to Google
+on its own account, as YouTube Music always does — Cue does not intercept,
+modify, filter or record what passes between them, and it does not inject
+anything into the page beyond a small script that reads the standard Media
+Session metadata so Cue can show what is playing.
 
 There is no other network destination in the application. There is no Cue
 server to send anything to.

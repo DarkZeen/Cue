@@ -4,11 +4,12 @@ A speed dial for YouTube Music, one keystroke away.
 
 Press a key anywhere on the Mac and a panel appears over whatever you were
 doing: a search field on top, nine tiles below it. Type to find something, or
-press ⌘3 to open the third thing without looking. Pick one and it opens in
-YouTube Music; the panel is gone before the page has loaded.
+press ⌘3 to open the third thing without looking. Pick one and it plays — in
+Cue's own player, signed in as you — and the panel is gone by the time the
+first bar starts.
 
-Cue does not play anything itself. It is the thirty seconds between *wanting*
-music and *having* music, and nothing else.
+Cue is the thirty seconds between *wanting* music and *having* music, and
+nothing else.
 
 ## What it needs
 
@@ -52,6 +53,24 @@ open cue://open
 opens Settings. A `--dev` build claims `cue-dev://` instead, so a development
 copy and an installed release do not fight over the same scheme.
 
+## Playback
+
+Cue plays in a window of its own running YouTube Music's real player, with your
+session. YouTube Premium applies exactly as it does on the web — no ads,
+background playback, higher bitrate — because it is the same player and the
+same account.
+
+Closing that window hides it; the music keeps going. `cue://player` brings it
+back, as does the button in Settings. Back, forward and a Home button are in its
+toolbar, because a search result that is not in YouTube Music's catalogue
+redirects to youtube.com and you need a way back.
+
+What Cue will not do is pull the audio stream out and play it through
+`AVPlayer`. It would be more "native", and it means going around YouTube's
+terms, its advertising and its accounting for the artists — and it breaks every
+time Google rotates the signature ciphering, which is often. Settings →
+General can switch back to handing off to your browser if you prefer that.
+
 ## Connecting an account
 
 Cue talks to YouTube two ways, and the second one is optional.
@@ -94,6 +113,7 @@ link.
 Sources/Cue/
 ├── App/       entry point, delegate, composition root, main menu, logging
 ├── Panel/     the panel, its window, layout, motion, presentation state
+├── Player/    the player window and where a chosen item is sent
 ├── UI/        search field, grid, tiles, results
 ├── Library/   the model, the provider protocol, both backends, the merge
 ├── Auth/      OAuth, the loopback listener, the Music session, the keychain
@@ -129,10 +149,10 @@ survives being clicked away from.
 
 ## What it does not do
 
-It does not play audio, hold a queue, show a mini player, control playback,
-scrobble, download anything, or touch a file on your disk. It finds a thing and
-hands it to YouTube Music. Anything past that is YouTube Music's job and it is
-already better at it.
+It does not decode or download audio, hold a queue of its own, reimplement a
+player, scrobble, or touch a file on your disk. It chooses; YouTube Music's own
+player does the rest, inside a window Cue owns. Anything past choosing is
+YouTube Music's job and it is already better at it.
 
 ## Privacy
 

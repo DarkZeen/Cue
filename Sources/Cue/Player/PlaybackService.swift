@@ -1,0 +1,56 @@
+import AppKit
+import Foundation
+
+/// Where a chosen item actually goes.
+///
+/// One place, so the panel does not have to know whether Cue plays music itself
+/// this week, and so the choice between the two is a setting rather than a
+/// rewrite.
+@MainActor
+final class PlaybackService {
+    let player: PlayerService
+
+    private let settings: SettingsStore
+    private let logger = Diagnostics.logger("playback")
+
+    init(settings: SettingsStore, player: PlayerService) {
+        self.settings = settings
+        self.player = player
+    }
+
+    /// Plays or hands off, depending on the setting. Returns false when it
+    /// could do neither, so the caller can leave the panel open rather than
+    /// dismissing it as though something happened.
+    @discardableResult
+    func open(_ item: MusicItem) -> Bool {
+        switch settings.playbackDestination {
+        case .inApp:
+            return player.play(item)
+
+        case .browser:
+            guard let url = item.playbackURL else {
+                logger.error("No playable URL for a \(item.kind.rawValue, privacy: .public).")
+                return false
+            }
+            logger.notice("Handing a \(item.kind.rawValue, privacy: .public) to the browser.")
+            return NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+/// What happens when you pick something.
+enum PlaybackDestination: String, Codable, CaseIterable, Sendable {
+    /// Cue's own player window. The default, and the point of the app.
+    case inApp
+    /// The system browser, as Cue did before it had a player of its own. Kept
+    /// because someone whose browser is already signed in, already playing, and
+    /// already where they want their music may genuinely prefer it.
+    case browser
+
+    var title: String {
+        switch self {
+        case .inApp: "Play in Cue"
+        case .browser: "Open in my browser"
+        }
+    }
+}

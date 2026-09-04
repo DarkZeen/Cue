@@ -14,6 +14,8 @@ final class AppState {
     let launchAtLogin = LaunchAtLoginService()
     let hotKey = HotKeyService()
     let coordinator: LibraryCoordinator
+    let player: PlayerService
+    let playback: PlaybackService
 
     private var panel: CueWindowController?
     private var settingsWindow: NSWindow?
@@ -21,14 +23,20 @@ final class AppState {
     private let logger = Diagnostics.logger("app-state")
 
     init() {
-        coordinator = LibraryCoordinator(settings: settings)
+        let coordinator = LibraryCoordinator(settings: settings)
+        let player = PlayerService(session: coordinator.ytSession)
+
+        self.coordinator = coordinator
+        self.player = player
+        self.playback = PlaybackService(settings: settings, player: player)
     }
 
     func start() {
         let panel = CueWindowController(
             coordinator: coordinator,
             settings: settings,
-            thumbnails: thumbnails
+            thumbnails: thumbnails,
+            playback: playback
         )
         panel.onShowSettings = { [weak self] in self?.showSettings() }
         self.panel = panel
@@ -45,6 +53,15 @@ final class AppState {
         let shortcut = settings.hotKey?.displayString ?? "none"
         logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public); shortcut \(shortcut, privacy: .public).")
 
+        if let videoID = Diagnostics.debugPlayVideoID {
+            playback.open(MusicItem(
+                id: "debug:\(videoID)",
+                title: "Debug",
+                kind: .song,
+                videoID: videoID,
+                source: .dataAPI
+            ))
+        }
         if let query = Diagnostics.debugQuery { coordinator.query = query }
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
         if Diagnostics.debugSettingsPane != nil { showSettings() }
@@ -62,6 +79,13 @@ final class AppState {
 
     func closePanel() {
         panel?.dismiss()
+    }
+
+    // MARK: - Player
+
+    /// Shows the player window, or hides it if it is already up.
+    func togglePlayer() {
+        player.isWindowVisible ? player.hide() : player.showHome()
     }
 
     // MARK: - Settings
@@ -83,7 +107,8 @@ final class AppState {
             settings: settings,
             coordinator: coordinator,
             launchAtLogin: launchAtLogin,
-            hotKey: hotKey
+            hotKey: hotKey,
+            player: player
         )
 
         let window = NSWindow(

@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     ///     cue://open       show the panel
     ///     cue://toggle     show it, or hide it if it is already up
+    ///     cue://player     show the player window, or hide it
     ///     cue://settings   show the settings window
     ///
     /// The scheme comes from the bundle — a `--dev` build claims `cue-dev` —
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 switch url.host() {
                 case "open": state.openPanel()
                 case "toggle": state.togglePanel()
+                case "player": state.togglePlayer()
                 case "settings": state.showSettings()
                 default: break
                 }

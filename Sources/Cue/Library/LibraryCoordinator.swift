@@ -260,23 +260,7 @@ final class LibraryCoordinator {
         return true
     }
 
-    // MARK: - Playback
-
-    /// Hands off to YouTube Music in the browser.
-    ///
-    /// Not playback — handing over. Cue's job ends at choosing; the queue, the
-    /// radio and the player are things music.youtube.com already does well,
-    /// and reimplementing them inside a panel that is open for four seconds
-    /// would be a worse version of all three.
-    @discardableResult
-    func open(_ item: MusicItem) -> Bool {
-        guard let url = item.playbackURL else {
-            logger.error("No playable URL for a \(item.kind.rawValue, privacy: .public).")
-            return false
-        }
-        logger.notice("Opening a \(item.kind.rawValue, privacy: .public) from \(item.source.rawValue, privacy: .public).")
-        return NSWorkspace.shared.open(url)
-    }
+    // MARK: - Search field
 
     func clearSearch() {
         query = ""

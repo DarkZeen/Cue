@@ -57,6 +57,21 @@ nonisolated enum Diagnostics {
         #endif
     }
 
+    /// `CUE_DEBUG_PLAY=<video id>` starts the player on that video at launch.
+    ///
+    /// Debug builds only. The player is the one part of Cue that cannot be
+    /// reached without a signed-in account and a search, which makes it the
+    /// hardest part to iterate on — and it is a web view, so "does it actually
+    /// make a sound" is a question only running it can answer.
+    static var debugPlayVideoID: String? {
+        #if DEBUG
+        let value = ProcessInfo.processInfo.environment["CUE_DEBUG_PLAY"]
+        return (value?.isEmpty == false) ? value : nil
+        #else
+        nil
+        #endif
+    }
+
     /// `CUE_DEBUG_SETTINGS=1`, or a pane name such as `accounts`, opens the
     /// settings window at launch on that page.
     ///

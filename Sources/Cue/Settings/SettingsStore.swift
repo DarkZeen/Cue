@@ -25,6 +25,18 @@ final class SettingsStore {
         autoFillsEmptyTiles = defaults.object(forKey: Key.autoFillsEmptyTiles) as? Bool ?? true
         pinnedTiles = Self.loadPinnedTiles(from: defaults)
         hotKey = Self.loadHotKey(from: defaults)
+
+        let storedDestination = defaults.string(forKey: Key.playbackDestination)
+        playbackDestination = storedDestination.flatMap(PlaybackDestination.init(rawValue:)) ?? .inApp
+    }
+
+    /// Whether picking something plays it in Cue or hands it to the browser.
+    ///
+    /// In Cue, because that is what the app is for: a panel that sends you to
+    /// a browser window you did not ask for has lost you your place in
+    /// whatever you were actually doing.
+    var playbackDestination: PlaybackDestination {
+        didSet { defaults.set(playbackDestination.rawValue, forKey: Key.playbackDestination) }
     }
 
     /// Raised when the shortcut changes, so it can be re-registered without
@@ -155,6 +167,7 @@ final class SettingsStore {
 
     private enum Key {
         static let hotKey = "hotKey"
+        static let playbackDestination = "playbackDestination"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

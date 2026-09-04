@@ -11,6 +11,7 @@ struct SettingsView: View {
     let coordinator: LibraryCoordinator
     @Bindable var launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
+    let player: PlayerService
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -24,7 +25,12 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $selection) {
             Tab(value: .general) {
-                GeneralPane(settings: settings, launchAtLogin: launchAtLogin, hotKey: hotKey)
+                GeneralPane(
+                    settings: settings,
+                    launchAtLogin: launchAtLogin,
+                    hotKey: hotKey,
+                    player: player
+                )
             } label: {
                 Label("General", systemImage: "gearshape")
             }
@@ -52,6 +58,7 @@ private struct GeneralPane: View {
     @Bindable var settings: SettingsStore
     @Bindable var launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
+    let player: PlayerService
 
     @State private var didCopyCommand = false
 
@@ -63,6 +70,38 @@ private struct GeneralPane: View {
                     Text("macOS is waiting for you to allow this in System Settings → General → Login Items.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Playback") {
+                Picker("When you pick something", selection: $settings.playbackDestination) {
+                    ForEach(PlaybackDestination.allCases, id: \.self) { destination in
+                        Text(destination.title).tag(destination)
+                    }
+                }
+
+                if settings.playbackDestination == .inApp {
+                    Text("""
+                        Cue plays it in its own window, signed in as you. Closing \
+                        that window hides it — the music keeps going — and \
+                        `\(CueURL.scheme)://player` brings it back.
+                        """)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack {
+                        Button(player.isWindowVisible ? "Hide Player" : "Show Player") {
+                            player.isWindowVisible ? player.hide() : player.showHome()
+                        }
+
+                        if let nowPlaying = player.nowPlaying {
+                            Text(nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
             }
 
