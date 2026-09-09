@@ -173,6 +173,7 @@ private struct MiniPlayerHost: View {
 
             MiniPlayerView(
                 nowPlaying: nowPlaying,
+                level: player.audioLevel,
                 onOpen: { player.showCurrent() },
                 onPrevious: { player.previous() },
                 onPlayPause: { player.togglePlayPause() },

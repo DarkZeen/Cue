@@ -92,6 +92,21 @@ private struct GeneralPane: View {
                 if settings.playbackDestination == .inApp {
                     Toggle("Shuffle playlists and albums", isOn: $settings.shufflesContainers)
 
+                    Toggle("Make the mark react to the music", isOn: $settings.analysesAudio)
+
+                    Text("""
+                        Off by default, and worth knowing why: this routes \
+                        YouTube Music's audio through an analyser so the \
+                        waveform follows what you are actually hearing. The \
+                        browser API it needs cannot be undone once used, so if \
+                        it goes wrong the music stops until the player reopens. \
+                        Without it the mark still moves — it just moves to a \
+                        rhythm of its own rather than to yours.
+                        """)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
 
                     Text("""

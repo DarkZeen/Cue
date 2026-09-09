@@ -143,6 +143,13 @@ final class AppState {
         // build a player, before anyone has asked for a song.
         if settings.playbackDestination == .inApp { player.warmUp() }
 
+        player.wantsAnalysis = settings.analysesAudio
+        settings.onAudioAnalysisChange = { [weak self] in
+            guard let self else { return }
+            self.player.wantsAnalysis = self.settings.analysesAudio
+            if self.settings.analysesAudio { self.player.beginAnalysis() }
+        }
+
         updates.startChecking()
 
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }

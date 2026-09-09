@@ -110,7 +110,7 @@ struct ArtworkTileView: View {
                 // Not a spinner. A tile that is briefly a quiet rectangle reads
                 // as artwork arriving; a tile with a spinner in it reads as
                 // something going wrong.
-                CueMark(height: 26, markerColor: .white.opacity(0.25), accentColor: .white.opacity(0.14))
+                CueMark(height: 22, tint: .white.opacity(0.18))
             }
         }
         .frame(width: side, height: side)

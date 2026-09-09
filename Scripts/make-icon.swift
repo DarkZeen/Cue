@@ -1,17 +1,3 @@
-#!/usr/bin/env swift
-
-// Draws Cue's app icon and writes Cue.icns.
-//
-// Generated rather than checked in as a binary, so the mark is readable,
-// reviewable and editable as code — and so a fresh clone with the Command Line
-// Tools produces exactly the same asset with no design app in the loop.
-//
-// The mark is a cue point: a marker bar, a gap, and a play triangle. In an
-// editor a cue is the marked place a track starts from, which is precisely what
-// this app does — you mark the thing you want and it starts. It beats a generic
-// note or disc because it means something specific here, and it survives being
-// sixteen points wide, which most clever marks do not.
-
 import AppKit
 import Foundation
 
@@ -26,6 +12,83 @@ let iconset = FileManager.default.temporaryDirectory
     .appendingPathComponent("Cue-\(UUID().uuidString).iconset")
 
 try? FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
+
+/// The envelope of the waveform: nine lenses, symmetric, tallest in the middle.
+///
+/// Shared with the app, which draws the same shape live and lets it move to the
+/// music. Keeping the geometry in one description means the thing in the Dock
+/// and the thing in the corner of the screen are one mark rather than two
+/// drawings that resemble each other.
+enum CueWaveform {
+    /// How many lenses to draw at a given size.
+    ///
+    /// Nine is the mark. Nine is also unreadable at sixteen points, where the
+    /// gaps fall below a pixel and the whole thing mushes into a white blob —
+    /// so the small rungs draw a simplified version of the same idea rather
+    /// than a shrunk version of the same drawing. This is what an icon family
+    /// is for.
+    static func count(for size: CGFloat) -> Int {
+        switch size {
+        case 96...: 9
+        case 40...: 5
+        default: 3
+        }
+    }
+
+    /// Relative height of each lens, 0 to 1.
+    ///
+    /// A sine, but not a pure one: raised to a power so the outermost pair stay
+    /// visible rather than tapering to nothing, and the middle reads as a
+    /// plateau rather than a single spike.
+    static func envelope(_ index: Int, count: Int) -> CGFloat {
+        guard count > 1 else { return 1 }
+        let position = CGFloat(index) / CGFloat(count - 1)
+        // Inset from the ends of the half-cycle, so index 0 is a short lens
+        // rather than a zero-height one.
+        let phase = 0.085 + 0.83 * position
+        return pow(sin(phase * .pi), 0.9)
+    }
+
+    /// How wide a lens of a given height should be.
+    ///
+    /// Proportional rather than constant: a fixed width would make the short
+    /// outer lenses read as fat pills beside slender inner ones. Bolder when
+    /// there are fewer of them, so the simplified mark carries the same weight
+    /// rather than looking like a thin remnant of the full one.
+    static func width(forHeight height: CGFloat, count: Int) -> CGFloat {
+        let ratio: CGFloat = count >= 9 ? 0.105 : (count >= 5 ? 0.15 : 0.22)
+        return max(height * ratio, 1.5)
+    }
+}
+
+/// One lens: a vesica with pointed ends, drawn as two mirrored curves.
+func lensPath(centre: NSPoint, width: CGFloat, height: CGFloat) -> NSBezierPath {
+    let path = NSBezierPath()
+    let top = NSPoint(x: centre.x, y: centre.y + height / 2)
+    let bottom = NSPoint(x: centre.x, y: centre.y - height / 2)
+    // Control points pushed out sideways and a quarter of the way along, which
+    // is what gives the shape its taper instead of an ellipse's blunt ends.
+    //
+    // A cubic with both controls at the same offset reaches only three quarters
+    // of it, so the reach is divided back out — without that the lens comes out
+    // at twice its intended width and nine of them merge into one blob.
+    let reach = (width / 2) / 0.75
+    let lift = height / 4
+
+    path.move(to: top)
+    path.curve(
+        to: bottom,
+        controlPoint1: NSPoint(x: centre.x + reach, y: centre.y + lift),
+        controlPoint2: NSPoint(x: centre.x + reach, y: centre.y - lift)
+    )
+    path.curve(
+        to: top,
+        controlPoint1: NSPoint(x: centre.x - reach, y: centre.y - lift),
+        controlPoint2: NSPoint(x: centre.x - reach, y: centre.y + lift)
+    )
+    path.close()
+    return path
+}
 
 /// Everything below is expressed against a 1024-point canvas and scaled, so the
 /// numbers can be reasoned about at the size the icon was designed at.
@@ -55,69 +118,36 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
         yRadius: plate.width * 0.225
     )
 
-    // Near-black rather than black: the same ground YouTube Music uses, and a
-    // truly black plate disappears into a dark Dock.
+    // Black, as asked, with just enough gradient to stop it reading as a hole
+    // cut in the Dock.
     NSGradient(colors: [
-        NSColor(calibratedRed: 0.10, green: 0.10, blue: 0.11, alpha: 1),
-        NSColor(calibratedRed: 0.03, green: 0.03, blue: 0.035, alpha: 1),
+        NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1),
+        NSColor(calibratedRed: 0.0, green: 0.0, blue: 0.0, alpha: 1),
     ])?.draw(in: plateShape, angle: -90)
 
     plateShape.addClip()
 
-    let accent = NSColor(calibratedRed: 1.0, green: 0.13, blue: 0.24, alpha: 1)
-
-    // The mark, centred as a group rather than individually: the triangle's
-    // optical centre sits behind its point, so centring the two shapes
-    // separately leaves the pair looking pushed to the left.
-    //
-    // The marker is deliberately unlike the triangle in every way available —
-    // thin where it is wide, taller than it, and a different colour. A bar of
-    // similar weight beside a play triangle is the universal "skip forward"
-    // glyph, which is what the first draft of this drew.
-    // Floored in real pixels, not just scaled. At sixteen points a marker of
-    // 34/1024 is barely half a pixel and disappears into the plate; the mark
-    // has to be drawn slightly bolder at the small rungs to stay itself.
-    let triangleHeight = max(300 * unit, 6)
-    let markerHeight = max(470 * unit, 9)
-    let markerWidth = max(34 * unit, 1.5)
-    let gap = max(62 * unit, 1.5)
-    let triangleWidth = max(250 * unit, 5)
-    let markWidth = markerWidth + gap + triangleWidth
-
-    let originX = size / 2 - markWidth / 2
+    let count = CueWaveform.count(for: size)
+    let span = 640 * unit
+    let spacing = span / CGFloat(count - 1)
+    // Short of the plate's edges. A mark that reaches them reads as cropped,
+    // and at small sizes the tips would touch the corner radius.
+    let tallest = 610 * unit
     let centreY = size / 2
+    let firstX = size / 2 - span / 2
 
-    // The playhead. White rather than the accent, so the eye reads a marker
-    // against a coloured triangle rather than two halves of one control.
-    NSColor(calibratedWhite: 0.97, alpha: 1).setFill()
-    NSBezierPath(
-        roundedRect: NSRect(
-            x: originX,
-            y: centreY - markerHeight / 2,
-            width: markerWidth,
-            height: markerHeight
-        ),
-        xRadius: markerWidth / 2,
-        yRadius: markerWidth / 2
-    ).fill()
+    for index in 0..<count {
+        let envelope = CueWaveform.envelope(index, count: count)
+        let height = tallest * envelope
+        let width = CueWaveform.width(forHeight: height, count: count)
+        let x = firstX + spacing * CGFloat(index)
 
-    accent.setFill()
-    accent.setStroke()
-
-    // The triangle is stroked as well as filled, which is what rounds its
-    // corners. Sharp points at sixteen pixels alias into grey mush.
-    let triangleLeft = originX + markerWidth + gap
-    let corner = 30 * unit
-
-    let triangle = NSBezierPath()
-    triangle.move(to: NSPoint(x: triangleLeft, y: centreY - triangleHeight / 2 + corner / 2))
-    triangle.line(to: NSPoint(x: triangleLeft, y: centreY + triangleHeight / 2 - corner / 2))
-    triangle.line(to: NSPoint(x: triangleLeft + triangleWidth - corner / 2, y: centreY))
-    triangle.close()
-    triangle.lineJoinStyle = .round
-    triangle.lineWidth = corner
-    triangle.fill()
-    triangle.stroke()
+        // Faintly cooler at the edges, so nine white shapes have some depth
+        // rather than reading as a flat stencil.
+        let brightness = 0.88 + 0.12 * envelope
+        NSColor(calibratedWhite: brightness, alpha: 1).setFill()
+        lensPath(centre: NSPoint(x: x, y: centreY), width: width, height: height).fill()
+    }
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

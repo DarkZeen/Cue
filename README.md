@@ -73,9 +73,15 @@ redirects to youtube.com and you need a way back. `cue://player` opens it, so
 does the button in Settings, and signing in the first time needs it. Closing it
 hides it; the music keeps going.
 
-The panel shows the same thing in miniature: while something is playing, a
-record spins in the corner of the search bar with notes drifting off it, and
-clicking that opens the player too.
+The panel shows the same thing in miniature: while something is playing, Cue's
+mark moves in the corner of the search bar, and clicking it opens the player.
+
+That mark is a waveform, and it can move to the music rather than to a rhythm of
+its own — Settings → Playback turns that on. It is off by default because it
+routes YouTube Music's audio through an analyser, and the browser API involved
+cannot be undone for the life of the page: if it goes wrong the music stops
+until the player reopens. Animating a logo is not worth risking playback on
+someone's behalf.
 
 What Cue will not do is pull the audio stream out and play it through
 `AVPlayer`. It would be more "native", and it means going around YouTube's

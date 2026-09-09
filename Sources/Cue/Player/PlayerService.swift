@@ -48,6 +48,10 @@ final class PlayerService: NSObject {
     private var window: NSWindow?
     private var webView: WKWebView?
 
+    /// Whether to route the page's audio through an analyser. Set by
+    /// `AppState` from the setting; see the script's `enableAnalysis`.
+    var wantsAnalysis = false
+
     private let logger = Diagnostics.logger("player")
 
     /// Raised whenever what is playing, or whether the window is up, changes.
@@ -63,6 +67,13 @@ final class PlayerService: NSObject {
 
     /// Where Home goes, and where the player starts.
     static let home = URL(string: "https://music.youtube.com/")!
+
+    /// How loud the music is right now, 0 to 1.
+    ///
+    /// Real when the page's audio can be analysed and the setting allows it;
+    /// otherwise a stand-in that keeps the waveform moving without claiming to
+    /// know anything about the music. See `Settings → Playback`.
+    private(set) var audioLevel: Double = 0
 
     /// Whether the page is signed in, as the page itself reports it.
     ///
@@ -183,6 +194,8 @@ final class PlayerService: NSObject {
                 if self.nowPlaying?.isPlaying == true {
                     self.wantsPlayback = false
 
+                    if self.wantsAnalysis { self.evaluate("__cue.enableAnalysis()") }
+
                     // Shuffled only once it is actually playing: the control
                     // does not exist until the player bar does, and toggling it
                     // before then does nothing and reports success.
@@ -274,6 +287,12 @@ final class PlayerService: NSObject {
 
     func previous() {
         evaluate("__cue.previous()")
+    }
+
+    /// Asks the page to start analysing its audio, if it is playing.
+    func beginAnalysis() {
+        guard wantsAnalysis else { return }
+        evaluate("__cue.enableAnalysis()")
     }
 
     func toggleMute() {
@@ -646,6 +665,67 @@ final class PlayerService: NSObject {
               return false;
             },
 
+            // Routes the audio through an analyser so Cue can see the music.
+            //
+            // Deliberately not done unless asked. `createMediaElementSource`
+            // is a one-way door: from the moment it is called, that element's
+            // sound exists only inside the graph, and if the context cannot run
+            // there is silence until the page reloads. Breaking playback to
+            // animate a logo is a bad trade to make on someone's behalf.
+            enableAnalysis() {
+              if (this._analyser) { return true; }
+              if (this._analysisFailed) { return false; }
+
+              const media = this.deepMedia();
+              if (!media) { return false; }
+
+              try {
+                const Context = window.AudioContext || window.webkitAudioContext;
+                if (!Context) { this._analysisFailed = true; return false; }
+
+                this._context = this._context || new Context();
+
+                // One source per element, ever. A second call throws, and the
+                // element is already ours from the first.
+                if (!media.__cueSource) {
+                  media.__cueSource = this._context.createMediaElementSource(media);
+                }
+
+                const analyser = this._context.createAnalyser();
+                analyser.fftSize = 256;
+                // Smoothed on the page rather than in Swift: the raw frames are
+                // jittery enough to make the mark twitch.
+                analyser.smoothingTimeConstant = 0.72;
+
+                media.__cueSource.connect(analyser);
+                // Connected onward to the speakers, which is what keeps the
+                // music audible now that it no longer goes there directly.
+                analyser.connect(this._context.destination);
+
+                this._analyser = analyser;
+                this._bins = new Uint8Array(analyser.frequencyBinCount);
+                return true;
+              } catch (error) {
+                this._analysisFailed = true;
+                return false;
+              }
+            },
+
+            level() {
+              if (!this._analyser) { return null; }
+              if (this._context.state === 'suspended') { this._context.resume(); }
+
+              this._analyser.getByteFrequencyData(this._bins);
+
+              // The lower third of the spectrum. A beat lives in the bass and
+              // the low mids; including the highs makes cymbals dominate and
+              // the mark reads as hiss.
+              const bins = Math.max(1, Math.floor(this._bins.length / 3));
+              let total = 0;
+              for (let i = 0; i < bins; i++) { total += this._bins[i]; }
+              return (total / bins) / 255;
+            },
+
             // Turns shuffle on, and only on.
             //
             // A plain click toggles, so a queue that was already shuffled would
@@ -770,6 +850,19 @@ final class PlayerService: NSObject {
           // a second is far below the rate at which a person notices a
           // now-playing label being stale.
           setInterval(report, 1000);
+
+          // The level is its own stream at its own rate. Folding it into the
+          // state report would mean either a stale waveform or a hundred
+          // needless messages a minute about a title that has not changed.
+          setInterval(function () {
+            try {
+              const value = cue.level();
+              if (value === null) { return; }
+              window.webkit.messageHandlers.cue.postMessage({ level: value });
+            } catch (error) {
+              /* ignored on purpose */
+            }
+          }, 70);
           document.addEventListener('play', report, true);
           document.addEventListener('pause', report, true);
           document.addEventListener('volumechange', report, true);
@@ -831,6 +924,13 @@ extension PlayerService: WKScriptMessageHandler {
         // inside it.
         MainActor.assumeIsolated {
             guard let body = message.body as? [String: Any] else { return }
+
+            // The level arrives on its own, many times a second, and carries
+            // nothing else.
+            if let level = body["level"] as? Double {
+                self.audioLevel = min(max(level, 0), 1)
+                return
+            }
 
             // Read first, and unconditionally. Returning early on a missing
             // title threw away the signed-in flag along with it, which is the

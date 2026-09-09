@@ -8,6 +8,7 @@ import SwiftUI
 /// corner of the screen is noise rather than information.
 struct MiniPlayerView: View {
     let nowPlaying: PlayerService.NowPlaying
+    var level: Double = 0
 
     let onOpen: () -> Void
     let onPrevious: () -> Void
@@ -18,7 +19,7 @@ struct MiniPlayerView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            NowPlayingDisc(nowPlaying: nowPlaying, onOpen: onOpen, nudge: .zero)
+            NowPlayingDisc(nowPlaying: nowPlaying, level: level, onOpen: onOpen)
                 .frame(width: 28)
 
             button("backward.end.fill", "Previous", action: onPrevious)

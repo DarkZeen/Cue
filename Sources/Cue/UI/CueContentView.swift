@@ -49,6 +49,7 @@ struct CueContentView: View {
                 onClear: { coordinator.clearSearch() },
                 onSettings: onShowSettings,
                 nowPlaying: player.nowPlaying,
+                level: player.audioLevel,
                 onOpenPlayer: onOpenPlayer
             )
 
