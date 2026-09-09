@@ -37,6 +37,11 @@ final class SettingsStore {
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
             .flatMap(PlaqueAnimation.init(rawValue:)) ?? .wave
 
+        exploreGenre = {
+            guard let data = defaults.data(forKey: Key.exploreGenre) else { return nil }
+            return try? JSONDecoder().decode(MusicGenre.self, from: data)
+        }()
+
         albumCollection = {
             guard let data = defaults.data(forKey: Key.albumCollection),
                   let stored = try? JSONDecoder().decode([MusicItem].self, from: data)
@@ -145,6 +150,29 @@ final class SettingsStore {
     var isExploring: Bool {
         didSet { defaults.set(isExploring, forKey: Key.isExploring) }
     }
+
+    /// Which mood or genre Explore is asking about, or nil for whatever the
+    /// service would have suggested anyway.
+    ///
+    /// Stored whole rather than by identifier. The title is needed to draw the
+    /// setting before any provider has been asked anything — and on a launch
+    /// with no network, or before sign-in, it is the only copy there is.
+    var exploreGenre: MusicGenre? {
+        didSet {
+            guard exploreGenre != oldValue else { return }
+            if let exploreGenre, let data = try? JSONEncoder().encode(exploreGenre) {
+                defaults.set(data, forKey: Key.exploreGenre)
+            } else {
+                defaults.removeObject(forKey: Key.exploreGenre)
+            }
+            onExploreGenreChange?()
+        }
+    }
+
+    /// Called when the genre changes, so Explore can go and ask again. A
+    /// choice that only takes effect a quarter of an hour later is a choice
+    /// that reads as broken.
+    var onExploreGenreChange: (() -> Void)?
 
     /// The third page: albums and playlists put there by hand.
     ///
@@ -362,6 +390,7 @@ final class SettingsStore {
         static let shufflesContainers = "shufflesContainers"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
+        static let exploreGenre = "exploreGenre"
         static let checksForUpdates = "checksForUpdates"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"

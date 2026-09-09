@@ -54,6 +54,10 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         /// assumed: on a real account this returned 45 items and not one of
         /// them was a song you could click and hear.
         static let charts = "FEmusic_charts"
+        /// The moods-and-genres index: every category, as a button.
+        static let moodsAndGenres = "FEmusic_moods_and_genres"
+        /// One category's page. Useless without the `params` that say which.
+        static let moodsAndGenresCategory = "FEmusic_moods_and_genres_category"
     }
 
     init(session: YTMusicSessionService, urlSession: URLSession = .shared) {
@@ -242,6 +246,41 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         return Self.items(in: response)
     }
 
+    /// Every mood and genre, as the service names them today.
+    func genres() async throws -> [MusicGenre] {
+        let response = try await post("browse", body: ["browseId": BrowseID.moodsAndGenres])
+
+        var found: [MusicGenre] = []
+        var seen: Set<String> = []
+
+        for button in response.collect("musicNavigationButtonRenderer") {
+            guard let title = button["buttonText"]?.runsText, !title.isEmpty,
+                  let params = button[
+                    "clickCommand", "browseEndpoint", "params"
+                  ]?.string,
+                  seen.insert(params).inserted
+            else { continue }
+
+            found.append(MusicGenre(id: params, title: title))
+        }
+
+        logger.notice("\(found.count, privacy: .public) moods and genres offered.")
+        return found
+    }
+
+    /// What a genre is showing today.
+    ///
+    /// Playlists, almost entirely — this page is curated shelves rather than a
+    /// track listing, so what comes back still has to be opened before there is
+    /// anything to put on a grid.
+    func genre(_ genre: MusicGenre) async throws -> [MusicItem] {
+        let response = try await post("browse", body: [
+            "browseId": BrowseID.moodsAndGenresCategory,
+            "params": genre.id
+        ])
+        return Self.items(in: response)
+    }
+
     /// The songs on an album, dressed in the album's own clothes.
     ///
     /// An album page lists its tracks as rows, and a row on that page carries
@@ -250,9 +289,21 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     /// so each track inherits the record it came from. It is also true: that
     /// *is* the artwork for that song.
     func tracks(of album: MusicItem) async throws -> [MusicItem] {
-        guard let browseID = album.browseID else { return [] }
+        // An album is addressed by its own browse id; a playlist by that id
+        // with `VL` glued on the front, which is the browse-page identifier
+        // rather than the playlist one. Both are containers full of the songs
+        // a grid of tiles wants, and under a chosen genre the playlists are
+        // nearly all of what there is.
+        let page: String
+        if let browseID = album.browseID {
+            page = browseID
+        } else if let playlistID = album.playlistID, !playlistID.hasPrefix("RD") {
+            page = playlistID.hasPrefix("VL") ? playlistID : "VL" + playlistID
+        } else {
+            return []
+        }
 
-        let response = try await post("browse", body: ["browseId": browseID])
+        let response = try await post("browse", body: ["browseId": page])
 
         // Rows only. The cards further down an album page are "more like this"
         // — other records, which is the one thing this page is not asking for.

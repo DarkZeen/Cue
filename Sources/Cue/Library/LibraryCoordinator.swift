@@ -96,6 +96,35 @@ final class LibraryCoordinator {
         }
     }
 
+    /// Every mood and genre the service offers, once anything has asked.
+    private(set) var genres: [MusicGenre] = []
+    private(set) var isLoadingGenres = false
+    private var genresTask: Task<Void, Never>?
+
+    /// Fetches the genre list, once per launch.
+    ///
+    /// Settings calls this when its pane appears. The list is long, translated,
+    /// and different in every country, so it is worth a request — but it is the
+    /// same answer all day, and asking again on every visit to a settings pane
+    /// is exactly the kind of over-frequent call these endpoints punish.
+    func loadGenres() {
+        guard genres.isEmpty, genresTask == nil, !activeProviders.isEmpty else { return }
+
+        isLoadingGenres = true
+        genresTask = Task { [weak self] in
+            guard let self else { return }
+            var found: [MusicGenre] = []
+            for provider in self.activeProviders where found.isEmpty {
+                found = (try? await provider.genres()) ?? []
+            }
+            self.genres = found
+            self.isLoadingGenres = false
+            // Left non-nil on success so it never asks twice; cleared on
+            // failure so a signed-out first attempt is not permanent.
+            if found.isEmpty { self.genresTask = nil }
+        }
+    }
+
     private var lastExploreRefresh: Date?
 
     /// Fetches the three Explore pages.
@@ -127,13 +156,25 @@ final class LibraryCoordinator {
         isRefreshingExplore = true
         defer { isRefreshingExplore = false }
 
+        let chosen = settings.exploreGenre
+
         var suggested: [MusicItem] = []
         var released: [MusicItem] = []
         var trending: [MusicItem] = []
 
         for provider in activeProviders {
             guard !Task.isCancelled else { return }
-            suggested = Self.merge(suggested, with: (try? await provider.recommendations()) ?? [])
+
+            // A genre replaces the home feed rather than filtering it. There is
+            // no filter to apply — what comes back from the home feed carries
+            // no genre on it — so the only honest way to honour a choice is to
+            // ask a different question.
+            if let chosen {
+                suggested = Self.merge(suggested, with: (try? await provider.genre(chosen)) ?? [])
+            } else {
+                suggested = Self.merge(suggested, with: (try? await provider.recommendations()) ?? [])
+            }
+
             released = Self.merge(released, with: (try? await provider.newReleases()) ?? [])
             trending = Self.merge(trending, with: (try? await provider.charts()) ?? [])
         }
@@ -164,16 +205,28 @@ final class LibraryCoordinator {
         var forYou = unfamiliar(Self.songs(in: offered))
         let fromFeed = forYou.count
 
-        // Which on this account was none. The log said so exactly: sixty-five
-        // items across the home feed and the charts, and not one of them a
-        // track you could click and hear. Both endpoints answer in records.
+        // Which is sometimes none, and the reason is worth knowing: on a cold
+        // session — the first refresh after launch, before the player has a
+        // live cookie to lend — the home feed answers in promotional shelves
+        // and the charts in records, and sixty-five items between them contain
+        // no track you can click and hear. Warm, the same feed returns fifty.
         //
-        // So open the records. An album is a dozen songs behind one more
-        // request, and declining to make that request is the whole difference
-        // between a page with plenty to show and nine dashed squares.
+        // So this is not the normal path, it is the path for a page that would
+        // otherwise be empty. An album is a dozen songs behind one more
+        // request, and declining to make that request is the difference between
+        // a grid with plenty to show and nine dashed squares.
         if forYou.count < Self.songsWorthDealing {
+            // Playlists count as somewhere to dig, not only albums. A genre's
+            // page is curated shelves almost end to end, so under a chosen
+            // genre the playlists are very nearly all there is to open — and
+            // what is on offer comes first, because that is the part the choice
+            // was about.
+            let containers = Self.merge(
+                Self.containers(in: offered),
+                with: Self.albums(in: released)
+            )
             let extracted = await songsFromAlbums(
-                exploreAlbums,
+                containers,
                 until: Self.songsWorthDealing - forYou.count
             )
             forYou = Self.merge(forYou, with: unfamiliar(extracted))
@@ -183,9 +236,16 @@ final class LibraryCoordinator {
         recommendations = forYou
         lastExploreRefresh = Date()
 
+        // While we are already here. Settings needs this list to draw its
+        // picker, and fetching it on the way past means the picker is populated
+        // the first time it is opened rather than a second after. Once per
+        // launch, and only for someone who actually uses Explore.
+        loadGenres()
+
         logger.notice(
             """
-            Explore: \(self.recommendations.count, privacy: .public) songs for you \
+            Explore, \(chosen == nil ? "home feed" : "one genre", privacy: .public): \
+            \(self.recommendations.count, privacy: .public) songs for you \
             (\(fromFeed, privacy: .public) from the feed), \
             \(released.count, privacy: .public) new, \
             \(self.exploreAlbums.count, privacy: .public) albums.
@@ -236,6 +296,12 @@ final class LibraryCoordinator {
 
     static func albums(in items: [MusicItem]) -> [MusicItem] {
         items.filter { $0.kind == .album }
+    }
+
+    /// Anything with songs inside it. A generated radio is excluded: it has no
+    /// contents until something plays it, so there is nothing there to take.
+    static func containers(in items: [MusicItem]) -> [MusicItem] {
+        items.filter { $0.kind == .album || $0.kind == .playlist }
     }
 
     private var searchTask: Task<Void, Never>?

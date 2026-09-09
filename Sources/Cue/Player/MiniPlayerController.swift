@@ -21,10 +21,14 @@ final class MiniPlayerController {
 
     private let logger = Diagnostics.logger("mini-player")
 
-    /// Sized for the plaque plus the margin its notes drift into.
-    private static let size = NSSize(width: 258, height: 72)
-    /// Clear of the menu bar and the right-hand edge without hugging either.
-    private static let margin = NSSize(width: 14, height: 8)
+    /// The plaque plus the 14 points of shadow room around it.
+    private static let size = NSSize(width: 274, height: 86)
+    /// Clear of the menu bar without hugging it.
+    ///
+    /// Nothing horizontally: the window now carries its own 14 points on that
+    /// side, and adding the old margin on top of it would move the plaque away
+    /// from the corner it has always sat in.
+    private static let margin = NSSize(width: 0, height: 8)
 
     init(player: PlayerService, settings: SettingsStore) {
         self.player = player
@@ -200,7 +204,7 @@ final class MiniPlayerPanel: NSPanel {
         backgroundColor = .clear
         // The plaque draws its own shadow, sized to its rounded rectangle. The
         // window's would be cast by the whole frame, including the transparent
-        // margin the notes drift into.
+        // margin that shadow needs.
         hasShadow = false
 
         isFloatingPanel = true

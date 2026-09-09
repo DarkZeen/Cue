@@ -156,15 +156,23 @@ those nine positions is a container you have to go *into*, and going into things
 is what the thirty seconds are being spent to avoid. Anything pinned by hand is
 exempt — that is your slot, put what you like in it.
 
-Explore's first page has to work for it. The home feed and the charts both
-answer in records — sixty-five items on a real account, not one of them a track
-you could click and hear — so Cue opens a few of those albums and takes the
-songs out. It also skips what you already know, or it would be a second copy of
-your own front page.
+Explore's first page sometimes has to work for it. On a cold session — the first
+refresh after launch, before the player has a live cookie to lend — the home
+feed answers in promotional shelves and the charts in records: sixty-five items
+on a real account and not one of them a track you could click and hear. Warm,
+the same feed returns fifty. So when the page comes up short, Cue opens a few of
+the albums it was offered and takes the songs out of them. It also skips what
+you already know, or it would be a second copy of your own front page.
 
 That costs requests, so the whole of Explore is re-fetched at most every fifteen
 minutes. ⌘R deals a different nine from what is already there and costs
 nothing.
+
+Settings → Grid can point Explore at one mood or genre instead. It asks a
+different question rather than filtering the answer to this one — what the home
+feed returns carries no genre on it, so there is nothing there to filter. The
+list is fetched from YouTube Music rather than written down here: it is a
+different list in every country and it is translated.
 
 ⌘R deals a different nine from the same pool. On the speed dial it only touches
 the slots Cue filled in — what you pinned stays where you put it, because the

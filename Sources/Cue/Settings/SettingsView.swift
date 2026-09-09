@@ -53,7 +53,7 @@ struct SettingsView: View {
             }
 
             Tab(value: .tiles) {
-                TilesPane(settings: settings)
+                TilesPane(settings: settings, coordinator: coordinator)
             } label: {
                 Label("Grid", systemImage: "square.grid.3x3")
             }
@@ -456,6 +456,18 @@ private struct AccountsPane: View {
 
 private struct TilesPane: View {
     @Bindable var settings: SettingsStore
+    let coordinator: LibraryCoordinator
+
+    /// The picker's own selection, because "no genre" has to be a real choice
+    /// in the list rather than an absent one.
+    private var genreSelection: Binding<String> {
+        Binding(
+            get: { settings.exploreGenre?.id ?? "" },
+            set: { id in
+                settings.exploreGenre = coordinator.genres.first { $0.id == id }
+            }
+        )
+    }
 
     var body: some View {
         Form {
@@ -503,8 +515,52 @@ private struct TilesPane: View {
                     }
                 }
             }
+
+            Section("Explore") {
+                Picker("Genre", selection: genreSelection) {
+                    Text("Whatever YouTube Music suggests").tag("")
+
+                    if let chosen = settings.exploreGenre,
+                       !coordinator.genres.contains(where: { $0.id == chosen.id }) {
+                        // The saved choice, listed even before the fetch has
+                        // answered. Without this the picker opens showing the
+                        // default and quietly discards a genre that is in fact
+                        // in force.
+                        Text(chosen.title).tag(chosen.id)
+                    }
+
+                    ForEach(coordinator.genres) { genre in
+                        Text(genre.title).tag(genre.id)
+                    }
+                }
+                .disabled(coordinator.genres.isEmpty && settings.exploreGenre == nil)
+
+                if coordinator.isLoadingGenres {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                        Text("Asking YouTube Music what it has…")
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                } else if coordinator.genres.isEmpty {
+                    Text("The list arrives once you are signed in to YouTube Music.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("""
+                    Explore's first page — ⌘E in the panel — asks for this \
+                    genre instead of for whatever the service would have \
+                    suggested. There is nothing to filter here: what the home \
+                    feed returns carries no genre on it, so honouring a choice \
+                    means asking a different question. The third page follows \
+                    it where it can. New releases stay new releases.
+                    """)
+                    .hint(settings.showsHints)
+            }
         }
         .formStyle(.grouped)
+        .task { coordinator.loadGenres() }
     }
 }
 

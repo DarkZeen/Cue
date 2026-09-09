@@ -265,3 +265,69 @@ struct PlaylistPageTests {
         #expect(item.playlistID == "LM")
     }
 }
+
+/// The moods-and-genres index, which is buttons rather than rows or cards.
+@Suite("Moods and genres")
+struct GenreParsingTests {
+    private let index = """
+        {"contents": {"sections": [
+          {"gridRenderer": {"items": [
+            {"musicNavigationButtonRenderer": {
+              "buttonText": {"runs": [{"text": "Ambient"}]},
+              "clickCommand": {"browseEndpoint": {
+                "browseId": "FEmusic_moods_and_genres_category",
+                "params": "ggMPOg1uX2FtYmllbnQ="
+              }}
+            }},
+            {"musicNavigationButtonRenderer": {
+              "buttonText": {"runs": [{"text": "Focus"}]},
+              "clickCommand": {"browseEndpoint": {
+                "browseId": "FEmusic_moods_and_genres_category",
+                "params": "ggMPOg1uX2ZvY3Vz"
+              }}
+            }},
+            {"musicNavigationButtonRenderer": {
+              "buttonText": {"runs": [{"text": "Broken"}]}
+            }}
+          ]}}
+        ]}}
+        """
+
+    /// The parse the provider does, without the request around it.
+    private func genres(in json: JSONValue) -> [MusicGenre] {
+        var found: [MusicGenre] = []
+        var seen: Set<String> = []
+        for button in json.collect("musicNavigationButtonRenderer") {
+            guard let title = button["buttonText"]?.runsText, !title.isEmpty,
+                  let params = button["clickCommand", "browseEndpoint", "params"]?.string,
+                  seen.insert(params).inserted
+            else { continue }
+            found.append(MusicGenre(id: params, title: title))
+        }
+        return found
+    }
+
+    @Test("Genre buttons become genres, and a button with no address does not")
+    func buttonsParse() throws {
+        let parsed = try JSONValue(data: Data(index.utf8))
+
+        let found = genres(in: parsed)
+
+        // "Broken" carries no browse endpoint. A button with a name and nowhere
+        // to go would sit in the picker looking selectable and do nothing.
+        #expect(found.map(\.title) == ["Ambient", "Focus"])
+        #expect(found.first?.id == "ggMPOg1uX2FtYmllbnQ=")
+    }
+
+    @Test("A genre is identified by its params, not its title")
+    func identityIsTheParams() {
+        // The title is translated: the same genre is "Ambient" on one account
+        // and something else on another, so a stored choice keyed on it would
+        // stop matching the moment the account's language changed.
+        let genre = MusicGenre(id: "ggMPOg1uX2FtYmllbnQ=", title: "Ambient")
+        let translated = MusicGenre(id: "ggMPOg1uX2FtYmllbnQ=", title: "Ambiente")
+
+        #expect(genre.id == translated.id)
+        #expect(genre != translated)
+    }
+}

@@ -79,6 +79,13 @@ protocol MusicLibraryProvider: AnyObject {
     /// for the other two, which on a real account is almost entirely albums.
     func charts() async throws -> [MusicItem]
 
+    /// Every mood and genre the service offers.
+    func genres() async throws -> [MusicGenre]
+
+    /// What a genre is showing today — a page of playlists and records, from
+    /// which the songs still have to be dug out.
+    func genre(_ genre: MusicGenre) async throws -> [MusicItem]
+
     /// The songs on an album.
     ///
     /// Explore's first page wants tracks, and what these endpoints mostly
@@ -116,6 +123,8 @@ extension MusicLibraryProvider {
     func newReleases() async throws -> [MusicItem] { [] }
     func charts() async throws -> [MusicItem] { [] }
     func tracks(of album: MusicItem) async throws -> [MusicItem] { [] }
+    func genres() async throws -> [MusicGenre] { [] }
+    func genre(_ genre: MusicGenre) async throws -> [MusicItem] { [] }
 
     /// Most items already play. Only the internal provider can resolve an
     /// album page, and only it overrides this.

@@ -53,10 +53,10 @@ struct MiniPlayerView: View {
                 )
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 3)
         }
-        // Room above and to the left for the notes to drift out of the plaque
-        // without being clipped by it.
-        .padding(.top, 14)
-        .padding(.leading, 12)
+        // Room for the shadow. It used to be room for notes to drift out of —
+        // top and leading only, since that was the way they went — which left
+        // the shadow clipped flat against the window's right and bottom edges.
+        .padding(14)
         .help((nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
             + "  ·  scroll the speaker for volume")
     }
