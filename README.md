@@ -229,6 +229,16 @@ Four environment variables help, all compiled out of release builds entirely:
 `HOLD` is how you look at the panel for longer than the two seconds it normally
 survives being clicked away from.
 
+```sh
+./Scripts/preview-marks.sh          # build/marks.png
+```
+
+That renders every plaque animation, at eight moments and stopped, onto one
+sheet. An animation is the one kind of drawing you cannot check by running the
+app — it is 26 pixels wide, it only appears while music is playing, and it has
+moved again by the time you have looked at it. It compiles the real views, not a
+copy, which is why the style structs are internal rather than file-private.
+
 ## What it does not do
 
 It does not decode or download audio, hold a queue of its own, reimplement a
