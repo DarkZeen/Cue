@@ -25,7 +25,7 @@ struct NowPlayingDisc: View {
 
     var body: some View {
         CueWaveformView(
-            height: 17,
+            height: 15,
             level: level,
             isPlaying: nowPlaying.isPlaying,
             tint: .white
@@ -35,7 +35,7 @@ struct NowPlayingDisc: View {
         .opacity(nowPlaying.isPlaying ? 1 : 0.42)
         .scaleEffect(isHovered ? 1.08 : 1)
         .offset(x: nudge.width, y: nudge.height)
-        .frame(width: 32, height: 24)
+        .frame(width: 34, height: 22)
         .contentShape(.rect)
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onOpen)

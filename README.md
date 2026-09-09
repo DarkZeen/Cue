@@ -76,7 +76,10 @@ hides it; the music keeps going.
 The panel shows the same thing in miniature: while something is playing, Cue's
 mark moves in the corner of the search bar, and clicking it opens the player.
 
-That mark is a waveform, and it can move to the music rather than to a rhythm of
+That mark is the logo itself — the shapes from `Resources/CueLogo.svg`, which
+`Scripts/generate-logo.py` turns into geometry the app and the icon both draw
+from, so the two can never drift apart. Edit the artwork and run the script; do
+not edit the generated files. It can move to the music rather than to a rhythm of
 its own — Settings → Playback turns that on. It is off by default because it
 routes YouTube Music's audio through an analyser, and the browser API involved
 cannot be undone for the life of the page: if it goes wrong the music stops

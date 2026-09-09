@@ -19,75 +19,53 @@ try? FileManager.default.createDirectory(at: iconset, withIntermediateDirectorie
 /// music. Keeping the geometry in one description means the thing in the Dock
 /// and the thing in the corner of the screen are one mark rather than two
 /// drawings that resemble each other.
-enum CueWaveform {
-    /// How many lenses to draw at a given size.
-    ///
-    /// Nine is the mark. Nine is also unreadable at sixteen points, where the
-    /// gaps fall below a pixel and the whole thing mushes into a white blob —
-    /// so the small rungs draw a simplified version of the same idea rather
-    /// than a shrunk version of the same drawing. This is what an icon family
-    /// is for.
-    static func count(for size: CGFloat) -> Int {
-        switch size {
-        case 96...: 9
-        case 40...: 5
-        default: 3
+/// The mark, read from the geometry the generator produced.
+///
+/// JSON rather than the Swift the app uses, because this is a standalone
+/// `swift` file with no module to import. Both come from
+/// `Resources/CueLogo.svg` by way of `Scripts/generate-logo.py`, so the icon
+/// and the app cannot drift apart.
+enum CueLogo {
+    private static let document: [String: Any] = {
+        let url = URL(fileURLWithPath: "Resources/CueLogo.json")
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            FileHandle.standardError.write(Data("error: Resources/CueLogo.json is missing. Run ./Scripts/generate-logo.py\n".utf8))
+            exit(1)
+        }
+        return object
+    }()
+
+    static let shapes: [[CGFloat]] = (document["shapes"] as? [[Double]] ?? []).map { $0.map { CGFloat($0) } }
+    static let aspect: CGFloat = CGFloat(document["aspect"] as? Double ?? 1)
+
+    /// Fitted into a rectangle, y flipped: the artwork is described with y
+    /// increasing downward and AppKit draws with it increasing upward.
+    static func draw(in rect: NSRect) {
+        let scale = min(rect.width / aspect, rect.height)
+        let size = NSSize(width: scale * aspect, height: scale)
+        let origin = NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2)
+
+        for shape in shapes where shape.count >= 8 {
+            func point(_ index: Int) -> NSPoint {
+                NSPoint(
+                    x: origin.x + shape[index] * size.width,
+                    y: origin.y + (1 - shape[index + 1]) * size.height
+                )
+            }
+
+            let path = NSBezierPath()
+            path.move(to: point(0))
+            var index = 2
+            while index + 5 < shape.count {
+                path.curve(to: point(index + 4), controlPoint1: point(index), controlPoint2: point(index + 2))
+                index += 6
+            }
+            path.close()
+            path.fill()
         }
     }
-
-    /// Relative height of each lens, 0 to 1.
-    ///
-    /// A sine, but not a pure one: raised to a power so the outermost pair stay
-    /// visible rather than tapering to nothing, and the middle reads as a
-    /// plateau rather than a single spike.
-    static func envelope(_ index: Int, count: Int) -> CGFloat {
-        guard count > 1 else { return 1 }
-        let position = CGFloat(index) / CGFloat(count - 1)
-        // Inset from the ends of the half-cycle, so index 0 is a short lens
-        // rather than a zero-height one.
-        let phase = 0.085 + 0.83 * position
-        return pow(sin(phase * .pi), 0.9)
-    }
-
-    /// How wide a lens of a given height should be.
-    ///
-    /// Proportional rather than constant: a fixed width would make the short
-    /// outer lenses read as fat pills beside slender inner ones. Bolder when
-    /// there are fewer of them, so the simplified mark carries the same weight
-    /// rather than looking like a thin remnant of the full one.
-    static func width(forHeight height: CGFloat, count: Int) -> CGFloat {
-        let ratio: CGFloat = count >= 9 ? 0.105 : (count >= 5 ? 0.15 : 0.22)
-        return max(height * ratio, 1.5)
-    }
-}
-
-/// One lens: a vesica with pointed ends, drawn as two mirrored curves.
-func lensPath(centre: NSPoint, width: CGFloat, height: CGFloat) -> NSBezierPath {
-    let path = NSBezierPath()
-    let top = NSPoint(x: centre.x, y: centre.y + height / 2)
-    let bottom = NSPoint(x: centre.x, y: centre.y - height / 2)
-    // Control points pushed out sideways and a quarter of the way along, which
-    // is what gives the shape its taper instead of an ellipse's blunt ends.
-    //
-    // A cubic with both controls at the same offset reaches only three quarters
-    // of it, so the reach is divided back out — without that the lens comes out
-    // at twice its intended width and nine of them merge into one blob.
-    let reach = (width / 2) / 0.75
-    let lift = height / 4
-
-    path.move(to: top)
-    path.curve(
-        to: bottom,
-        controlPoint1: NSPoint(x: centre.x + reach, y: centre.y + lift),
-        controlPoint2: NSPoint(x: centre.x + reach, y: centre.y - lift)
-    )
-    path.curve(
-        to: top,
-        controlPoint1: NSPoint(x: centre.x - reach, y: centre.y - lift),
-        controlPoint2: NSPoint(x: centre.x - reach, y: centre.y + lift)
-    )
-    path.close()
-    return path
 }
 
 /// Everything below is expressed against a 1024-point canvas and scaled, so the
@@ -127,27 +105,9 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
 
     plateShape.addClip()
 
-    let count = CueWaveform.count(for: size)
-    let span = 640 * unit
-    let spacing = span / CGFloat(count - 1)
-    // Short of the plate's edges. A mark that reaches them reads as cropped,
-    // and at small sizes the tips would touch the corner radius.
-    let tallest = 610 * unit
-    let centreY = size / 2
-    let firstX = size / 2 - span / 2
-
-    for index in 0..<count {
-        let envelope = CueWaveform.envelope(index, count: count)
-        let height = tallest * envelope
-        let width = CueWaveform.width(forHeight: height, count: count)
-        let x = firstX + spacing * CGFloat(index)
-
-        // Faintly cooler at the edges, so nine white shapes have some depth
-        // rather than reading as a flat stencil.
-        let brightness = 0.88 + 0.12 * envelope
-        NSColor(calibratedWhite: brightness, alpha: 1).setFill()
-        lensPath(centre: NSPoint(x: x, y: centreY), width: width, height: height).fill()
-    }
+    // White on black, as the artwork is.
+    NSColor.white.setFill()
+    CueLogo.draw(in: plate.insetBy(dx: plate.width * 0.11, dy: plate.height * 0.11))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

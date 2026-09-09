@@ -1,66 +1,25 @@
 import SwiftUI
 
-/// The waveform Cue is drawn from: lenses in a symmetric envelope, tallest in
-/// the middle.
+/// One shape of the mark, drawn where it belongs within the whole.
 ///
-/// The same description `Scripts/make-icon.swift` draws the app icon from, so
-/// the thing in the Dock and the thing moving in the corner of the screen are
-/// one mark rather than two drawings that resemble each other.
-enum CueWaveform {
-    /// How many lenses to draw at a given height.
-    ///
-    /// Nine is the mark, and nine is unreadable small — the gaps fall below a
-    /// pixel and it mushes into a blob. The small sizes draw a simplified
-    /// version of the same idea rather than a shrunk version of the same
-    /// drawing.
-    static func count(for height: CGFloat) -> Int {
-        switch height {
-        case 40...: 9
-        case 18...: 7
-        default: 5
-        }
-    }
+/// Each is given the mark's full rectangle rather than a slice of it, so the
+/// thirteen shapes land in the right places relative to each other and can then
+/// be moved individually.
+nonisolated struct CueLogoShape: Shape {
+    let index: Int
 
-    /// Relative height of each lens, 0 to 1.
-    static func envelope(_ index: Int, count: Int) -> CGFloat {
-        guard count > 1 else { return 1 }
-        let position = CGFloat(index) / CGFloat(count - 1)
-        let phase = 0.085 + 0.83 * position
-        return pow(sin(phase * .pi), 0.9)
-    }
-
-    /// How wide a lens of a given height should be. Bolder when there are fewer
-    /// of them, so a simplified mark carries the same weight.
-    static func width(forHeight height: CGFloat, count: Int) -> CGFloat {
-        let ratio: CGFloat = count >= 9 ? 0.115 : (count >= 7 ? 0.15 : 0.2)
-        return max(height * ratio, 1.2)
-    }
-}
-
-/// One lens: a vesica with pointed ends.
-struct LensShape: Shape {
     func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let top = CGPoint(x: rect.midX, y: rect.minY)
-        let bottom = CGPoint(x: rect.midX, y: rect.maxY)
-        // A cubic with both controls at the same offset reaches three quarters
-        // of it, so the reach is divided back out to land on the intended width.
-        let reach = (rect.width / 2) / 0.75
-        let lift = rect.height / 4
-
-        path.move(to: top)
-        path.addCurve(
-            to: bottom,
-            control1: CGPoint(x: rect.midX + reach, y: rect.minY + lift),
-            control2: CGPoint(x: rect.midX + reach, y: rect.maxY - lift)
+        // Fitted to the artwork's aspect so the mark is never stretched, and
+        // every shape is fitted to the *same* box or they would drift apart.
+        let scale = min(rect.width / CueLogoPath.aspect, rect.height)
+        let size = CGSize(width: scale * CueLogoPath.aspect, height: scale)
+        let box = CGRect(
+            x: rect.midX - size.width / 2,
+            y: rect.midY - size.height / 2,
+            width: size.width,
+            height: size.height
         )
-        path.addCurve(
-            to: top,
-            control1: CGPoint(x: rect.midX - reach, y: rect.maxY - lift),
-            control2: CGPoint(x: rect.midX - reach, y: rect.minY + lift)
-        )
-        path.closeSubpath()
-        return path
+        return CueLogoPath.path(forShape: index, in: box)
     }
 }
 
@@ -70,70 +29,80 @@ struct CueMark: View {
     var tint: Color = .white
 
     var body: some View {
-        CueWaveformView(height: height, level: 0, isPlaying: false, tint: tint)
-            .accessibilityHidden(true)
+        CueLogoPath.path(in: CGRect(
+            origin: .zero,
+            size: CGSize(width: height * CueLogoPath.aspect, height: height)
+        ))
+        .fill(tint)
+        .frame(width: height * CueLogoPath.aspect, height: height)
+        .accessibilityHidden(true)
     }
 }
 
 /// The mark, alive.
 ///
-/// Every lens is driven by two things: where it sits in the envelope, and how
-/// loud the music is right now. The envelope keeps it recognisable as Cue's
-/// mark at rest; the level is what makes it the *music's* mark while something
-/// is playing.
+/// The artwork's own shapes, each stretched about the centre line. Nothing is
+/// redrawn or approximated — the thing that moves is the logo, which is the
+/// only way the corner of the screen and the Dock stay recognisably the same
+/// mark.
 ///
-/// A travelling phase runs through it so the lenses do not all rise together —
-/// nine shapes pulsing in unison reads as one shape breathing, which is the
-/// thing this replaced.
+/// Two rules give it its character. A travelling phase runs along the mark so
+/// the shapes do not all rise together — thirteen shapes pulsing in unison
+/// reads as one shape breathing, which is what this replaced. And the outer
+/// shapes travel further than the inner ones: a waveform whose middle moves
+/// most looks like it is inflating, where one whose edges move most looks like
+/// sound arriving.
 struct CueWaveformView: View {
     var height: CGFloat = 18
-    /// 0 to 1. Real, when the page will give it up; otherwise a stand-in.
+    /// 0 to 1. The page's own analysis when it will give it up, and a stand-in
+    /// otherwise — see `PlayerService.audioLevel`.
     var level: Double = 0
     var isPlaying: Bool = false
     var tint: Color = .white
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var count: Int { CueWaveform.count(for: height) }
-    private var spacing: CGFloat { max(height * 0.055, 1) }
+    private var count: Int { CueLogoPath.shapes.count }
+    private var width: CGFloat { height * CueLogoPath.aspect }
 
     var body: some View {
         TimelineView(.animation(paused: !isPlaying || reduceMotion)) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
 
-            HStack(spacing: spacing) {
+            ZStack {
                 ForEach(0..<count, id: \.self) { index in
-                    let envelope = CueWaveform.envelope(index, count: count)
-                    let lensHeight = height * envelope * displacement(index, at: elapsed)
-                    let width = CueWaveform.width(forHeight: height * envelope, count: count)
-
-                    LensShape()
-                        .fill(tint.opacity(0.72 + 0.28 * envelope))
-                        .frame(width: width, height: max(lensHeight, width))
+                    CueLogoShape(index: index)
+                        .fill(tint)
+                        // About the centre, so a shape grows in both directions
+                        // like a waveform rather than sprouting upward.
+                        .scaleEffect(y: displacement(index, at: elapsed), anchor: .center)
                 }
             }
-            .frame(height: height)
+            .frame(width: width, height: height)
         }
+        .frame(width: width, height: height)
     }
 
-    /// How far this lens is pushed from its resting height, at this instant.
+    /// How far this shape is stretched from its resting height, this instant.
     private func displacement(_ index: Int, at elapsed: TimeInterval) -> CGFloat {
         guard isPlaying, !reduceMotion else { return 1 }
 
-        // Outer lenses travel further than inner ones. A waveform whose middle
-        // moves most looks like it is inflating; one whose edges move most
-        // looks like sound arriving.
-        let envelope = CueWaveform.envelope(index, count: count)
-        let reach = 0.55 + 0.45 * (1 - envelope)
+        // Distance from the middle, 0 at the centre and 1 at either end.
+        let middle = Double(count - 1) / 2
+        let distance = abs(Double(index) - middle) / max(middle, 1)
 
-        // The phase walks along the mark rather than hitting every lens at once,
-        // which is the difference between a waveform and a heartbeat.
-        let phase = elapsed * 3.2 - Double(index) * 0.42
-        let wave = (sin(phase) + sin(phase * 1.7 + 0.9)) / 2
+        // The edges move most. The centre shape is the mark's anchor and a
+        // logo whose middle pumps reads as a novelty.
+        let reach = 0.35 + 0.65 * distance
 
-        // The level sets how much of that motion is expressed. Silence is
+        // The phase walks outward from the middle rather than left to right, so
+        // the movement reads as symmetric — which the mark itself is.
+        let phase = elapsed * 3.4 - distance * 1.6
+        let wave = (sin(phase) + sin(phase * 1.63 + 0.7)) / 2
+
+        // The level decides how much of that motion is expressed. Silence is
         // stillness; loud is the full swing.
-        let amplitude = 0.10 + 0.42 * min(max(level, 0), 1)
+        let amplitude = 0.06 + 0.34 * min(max(level, 0), 1)
 
         return 1 + CGFloat(wave * amplitude) * reach
     }
