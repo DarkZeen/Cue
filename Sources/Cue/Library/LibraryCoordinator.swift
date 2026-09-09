@@ -20,6 +20,10 @@ final class LibraryCoordinator {
     let google: GoogleOAuthService
     let ytSession: YTMusicSessionService
 
+    /// Set by `AppState`. Read by Settings, which needs to report whether the
+    /// player — the only session that matters — is signed in.
+    weak var player: PlayerService?
+
     private let settings: SettingsStore
     private let dataAPI: YouTubeDataAPIProvider
     private let ytMusic: YTMusicInternalProvider

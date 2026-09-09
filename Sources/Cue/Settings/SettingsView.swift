@@ -15,6 +15,7 @@ struct SettingsView: View {
     let onResetMiniPlayer: () -> Void
     let onEditLayout: () -> Void
     let updates: UpdateService
+    let onShowPlayer: () -> Void
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -42,7 +43,11 @@ struct SettingsView: View {
             }
 
             Tab(value: .accounts) {
-                AccountsPane(settings: settings, coordinator: coordinator)
+                AccountsPane(
+                    settings: settings,
+                    coordinator: coordinator,
+                    onShowPlayer: onShowPlayer
+                )
             } label: {
                 Label("Accounts", systemImage: "person.crop.circle")
             }
@@ -321,6 +326,7 @@ private struct AccountsPane: View {
 
     @Bindable var settings: SettingsStore
     let coordinator: LibraryCoordinator
+    let onShowPlayer: () -> Void
 
     @State private var clientID: String = ""
     @State private var clientSecret: String = ""
@@ -416,16 +422,40 @@ private struct AccountsPane: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if settings.unofficialProviderEnabled {
-                    if session.isConnected {
-                        LabeledContent("Status") {
+                    let signedIn = coordinator.player?.isSignedIn == true
+
+                    LabeledContent("Status") {
+                        if signedIn {
                             Label("Signed in", systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
+                        } else {
+                            Label("Signed out", systemImage: "person.crop.circle.badge.xmark")
+                                .foregroundStyle(.secondary)
                         }
-                        Button("Sign out", role: .destructive) { session.disconnect() }
-                    } else {
-                        Button("Sign in to YouTube Music…") { session.presentSignIn() }
-                            .disabled(session.isPresentingSignIn)
                     }
+
+                    // Sign-in happens *in the player*, and nowhere else.
+                    //
+                    // There used to be a button here that signed in to a
+                    // separate throwaway web view and kept a copy of the
+                    // cookies. That copy goes stale within a day — Google
+                    // rotates it — and once the API started borrowing the
+                    // player's live session instead, this button was signing
+                    // you into a window that no longer mattered. It looked like
+                    // it had worked, and nothing played.
+                    Button(signedIn ? "Open the Player" : "Sign in to YouTube Music…") {
+                        onShowPlayer()
+                    }
+
+                    Text("""
+                        Opens the player. Sign in to YouTube Music there and \
+                        close the window — that one session is what plays your \
+                        music and what reads your library, so there is only \
+                        ever one place to sign in.
+                        """)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if let error = session.lastError {
                         Text(error)

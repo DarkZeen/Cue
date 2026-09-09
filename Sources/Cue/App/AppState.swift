@@ -92,6 +92,7 @@ final class AppState {
 
         // The API borrows the player's session. Both talk to YouTube Music as
         // the same person; only one of them keeps its credentials current.
+        coordinator.player = player
         coordinator.ytSession.liveCookies = { [weak player] in
             await player?.currentCookies() ?? []
         }
@@ -200,7 +201,8 @@ final class AppState {
             player: player,
             onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() },
             onEditLayout: { [weak self] in self?.layoutEditor.begin() },
-            updates: updates
+            updates: updates,
+            onShowPlayer: { [weak self] in self?.player.showHome() }
         )
 
         let window = NSWindow(

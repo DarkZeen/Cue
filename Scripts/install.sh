@@ -27,7 +27,21 @@ fi
 echo "▸ Quitting any running copy"
 osascript -e 'quit app "Cue"' 2>/dev/null || true
 pkill -x Cue 2>/dev/null || true
-sleep 1
+
+# Waited for, not assumed. Replacing the bundle while a copy is still running
+# leaves that process executing code that no longer exists on disk, and `open`
+# then re-activates the old one instead of launching the new build — so the
+# install appears to work and changes nothing.
+for _ in $(seq 1 20); do
+    pgrep -x Cue >/dev/null || break
+    sleep 0.5
+done
+
+if pgrep -x Cue >/dev/null; then
+    echo "error: a copy of Cue is still running and will not quit." >&2
+    echo "       Quit it by hand, then run this again." >&2
+    exit 1
+fi
 
 echo "▸ Installing to /Applications"
 rm -rf "/Applications/Cue.app"
