@@ -99,6 +99,32 @@ private struct GeneralPane: View {
                 if settings.playbackDestination == .inApp {
                     Toggle("Shuffle playlists and albums", isOn: $settings.shufflesContainers)
 
+                    Toggle("Make the mark move with the music", isOn: $settings.analysesAudio)
+
+                    Text("""
+                        Reads what Cue is playing through macOS's own audio \
+                        tap, so the mark follows the actual sound instead of a \
+                        rhythm of its own. macOS will ask permission the first \
+                        time. Only Cue's own audio is read — not the system's, \
+                        not another app's — and nothing is recorded or sent \
+                        anywhere. Off means the mark invents its motion, which \
+                        is what it has always done.
+                        """)
+                        .hint(settings.showsHints)
+
+                    if settings.analysesAudio, player.audioTap.isReading {
+                        Label("Listening.", systemImage: "waveform")
+                            .font(.callout)
+                            .foregroundStyle(.green)
+                    } else if settings.analysesAudio {
+                        Label(
+                            "Nothing to listen to yet — this starts when music does.",
+                            systemImage: "waveform.slash"
+                        )
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    }
+
                     Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
 
                     Picker("Animation", selection: $settings.plaqueAnimation) {

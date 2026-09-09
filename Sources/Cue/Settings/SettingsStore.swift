@@ -32,6 +32,7 @@ final class SettingsStore {
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
         isExploring = defaults.bool(forKey: Key.isExploring)
+        analysesAudio = defaults.bool(forKey: Key.analysesAudio)
         checksForUpdates = defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true
         showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
@@ -150,6 +151,22 @@ final class SettingsStore {
     var isExploring: Bool {
         didSet { defaults.set(isExploring, forKey: Key.isExploring) }
     }
+
+    /// Whether the mark follows the actual audio.
+    ///
+    /// Off by default, and this is the one setting where that is not caution
+    /// about the feature but about the prompt: turning it on asks macOS for
+    /// permission to record audio, and an app that springs a privacy dialog on
+    /// someone for an animation has misjudged what the animation is worth.
+    var analysesAudio: Bool {
+        didSet {
+            guard analysesAudio != oldValue else { return }
+            defaults.set(analysesAudio, forKey: Key.analysesAudio)
+            onAudioAnalysisChange?()
+        }
+    }
+
+    var onAudioAnalysisChange: (() -> Void)?
 
     /// Which mood or genre Explore is asking about, or nil for whatever the
     /// service would have suggested anyway.
@@ -391,6 +408,7 @@ final class SettingsStore {
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"
+        static let analysesAudio = "analysesAudio"
         static let checksForUpdates = "checksForUpdates"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"

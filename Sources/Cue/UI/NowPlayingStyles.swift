@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Motion
 
-/// The dynamics every style borrows, since none of them can hear anything.
+/// The dynamics every style borrows when nothing is listening.
 ///
 /// A visualiser with a constant amplitude is the giveaway. Real music arrives in
 /// swells — a chorus lifts, a verse settles — and a meter that holds one height
@@ -13,6 +13,17 @@ import SwiftUI
 /// factor. The eye is very good at finding a period; the defence is not to have
 /// one it can find inside the time anybody looks.
 enum ProceduralMotion {
+    /// What drives a style: the real level when there is one, invention when
+    /// there is not.
+    ///
+    /// One path rather than two. The tap is off by default and can be refused,
+    /// so every style has to look right without it — and a style written
+    /// against real audio with a fallback bolted on afterwards is a style whose
+    /// fallback nobody ever looks at.
+    static func energy(_ level: Double, at elapsed: TimeInterval) -> Double {
+        level > 0.001 ? min(level, 1) : swell(at: elapsed)
+    }
+
     /// A slow swell, 0 to 1, that never sits still and never repeats visibly.
     static func swell(at elapsed: TimeInterval) -> Double {
         let slow = sin(elapsed / 7.3 * 2 * .pi)
@@ -34,6 +45,7 @@ enum ProceduralMotion {
 ///   it is inflating; one whose edges move most looks like sound arriving.
 struct WaveIndicator: View {
     let elapsed: TimeInterval
+    var level: Double = 0
     let isAnimating: Bool
 
     private var count: Int { CueWavePath.shapes.count }
@@ -69,7 +81,7 @@ struct WaveIndicator: View {
         // A sine rather than a repeating ease: a breath has no beginning and no
         // end, and any keyframed loop shows its seam eventually.
         let breath = sin(elapsed / 2.6 * 2 * .pi)
-        let swell = ProceduralMotion.swell(at: elapsed)
+        let swell = ProceduralMotion.energy(level, at: elapsed)
         // Larger than it was, because the mark is smaller than it was: the
         // same proportion on a smaller object is less motion, not equal motion.
         return 1 + CGFloat(breath * 0.05) + CGFloat(swell * 0.08)
@@ -91,7 +103,7 @@ struct WaveIndicator: View {
         // values were tuned looking straight at it, which is the one way this
         // is never actually seen — and at that amplitude the mark only
         // shimmered.
-        let amplitude = 0.18 + 0.44 * ProceduralMotion.swell(at: elapsed)
+        let amplitude = 0.18 + 0.44 * ProceduralMotion.energy(level, at: elapsed)
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
@@ -131,6 +143,7 @@ struct CueWaveShape: Shape {
 /// thing to read as spinning.
 struct DiscIndicator: View {
     let elapsed: TimeInterval
+    var level: Double = 0
     let isAnimating: Bool
 
     /// One turn every three and a half seconds. A record at 33⅓ rpm is 1.8
@@ -153,7 +166,7 @@ struct DiscIndicator: View {
     /// is a decal sitting on top of the moving half.
     private var sway: Double {
         guard isAnimating else { return 0 }
-        return sin(elapsed / 3.1 * 2 * .pi) * 0.5 + ProceduralMotion.swell(at: elapsed) * 0.6
+        return sin(elapsed / 3.1 * 2 * .pi) * 0.5 + ProceduralMotion.energy(level, at: elapsed) * 0.6
     }
 
     private var record: some View {
@@ -278,6 +291,10 @@ struct ArmShape: Shape {
 /// which lives in the low end, moves the part of the mark the eye is already on.
 struct BarsIndicator: View {
     let elapsed: TimeInterval
+    var level: Double = 0
+    /// The spectrum, low to high. Empty when nothing is listening, in which
+    /// case the bars move to a rhythm of their own.
+    var bands: [Double] = []
     let isAnimating: Bool
 
     /// Bands either side of the centre. Nine gives seventeen bars, which is
@@ -335,6 +352,8 @@ struct BarsIndicator: View {
     /// eye finds a period in seconds otherwise, which is what makes a fake
     /// meter look fake.
     private func reading(_ band: Int) -> Double {
+        if bands.indices.contains(band) { return bands[band] }
+
         let position = Double(band) / Double(Self.bandCount - 1)
 
         // Roughly 100bpm. Sharpened so it reads as a hit rather than a swell.
@@ -350,7 +369,7 @@ struct BarsIndicator: View {
 
         // The whole meter rises and falls underneath the individual bars, which
         // is what a chorus does and what a loop cannot fake.
-        return (0.24 + 0.4 * ProceduralMotion.swell(at: elapsed)) * min(shape, 1)
+        return (0.24 + 0.4 * ProceduralMotion.energy(level, at: elapsed)) * min(shape, 1)
     }
 
     /// The tall middle is the brightest, the tips fade out. It is the depth
@@ -378,6 +397,7 @@ struct BarsIndicator: View {
 /// ring is never twice in the same arrangement.
 struct OrbitIndicator: View {
     let elapsed: TimeInterval
+    var level: Double = 0
     let isAnimating: Bool
 
     /// Radius from centre, size, angular speed, where it starts.
@@ -405,6 +425,10 @@ struct OrbitIndicator: View {
                 layer.addFilter(.blur(radius: 2.4))
 
                 let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                // Loud makes them bigger, which makes them meet more often —
+                // so the merging itself is the thing that responds, rather
+                // than the blobs simply inflating.
+                let swell = 0.86 + 0.28 * ProceduralMotion.energy(level, at: elapsed)
 
                 for blob in Self.blobs {
                     let angle = blob.phase + elapsed * blob.speed
@@ -415,11 +439,12 @@ struct OrbitIndicator: View {
                         x: centre.x + cos(angle) * radius,
                         y: centre.y + sin(angle) * radius
                     )
+                    let size = blob.size * swell
                     let rect = CGRect(
-                        x: point.x - blob.size / 2,
-                        y: point.y - blob.size / 2,
-                        width: blob.size,
-                        height: blob.size
+                        x: point.x - size / 2,
+                        y: point.y - size / 2,
+                        width: size,
+                        height: size
                     )
                     layer.fill(Path(ellipseIn: rect), with: .color(.white))
                 }

@@ -120,28 +120,30 @@ out, albums to open. The compact grid is the original. Which one is a
 setting, because artwork is what people recognise and titles are what they read
 when the covers all look alike.
 
-**Beat reactivity is closed, and this is why.** The mark's motion is invented,
-not measured, and three attempts have now ended there. The last one settled it
-with numbers rather than theory:
+**The mark can follow the real audio, and the route there is worth recording.**
+Three attempts inside the web view failed. The last one settled the reasons with
+numbers rather than theory:
 
-* WebKit *will* run an `AudioContext` in the concealed player. The user-gesture
-  requirement is real, but a synthesised `NSEvent` sent into the web view is a
-  real gesture — with a transparent shield over the page so the click lands on
-  nothing. Measured: `context running`. The earlier claim that this was the wall
-  was wrong.
-* The wall is one step further in. `createMediaElementSource` on YouTube Music's
-  MSE-backed element returns silence in WebKit — a long-standing limitation, and
-  measured here as `peak 0` while `media playing at 15s; same element: true`.
-  Because that node also takes over the element's output, the cost of trying is
-  the music going quiet.
-* `captureStream()`, which would have read the audio without touching the
-  element's output, is not implemented in WebKit.
-* The known workaround — a prior `getUserMedia()` call — wants microphone
-  permission, which Cue will not ask for to animate a logo.
+* WebKit *will* run an `AudioContext` in the concealed player — a synthesised
+  `NSEvent` is a real user gesture, with a transparent shield over the page so
+  the click lands on nothing. Measured: `context running`.
+* But `createMediaElementSource` on YouTube Music's MSE-backed element returns
+  silence in WebKit, measured as `peak 0` while `media playing at 15s; same
+  element: true`. That node also takes over the element's output, so the price
+  of trying is the music going quiet.
 
-What remains possible is a Core Audio process tap (macOS 14.4+), which works and
-needs the audio-recording permission, and tempo from a metadata lookup, which
-needs nothing and covers about half a library. Neither has been chosen.
+So the audio is read from outside, with a Core Audio process tap. A tap is a
+copy and cannot affect playback. It is scoped to Cue's own audio by way of the
+*responsible* process, because `WKWebView` plays in a WebKit GPU process that is
+a child of launchd rather than of Cue. It costs one permission prompt, which is
+why it is a setting and off by default — an app that springs a privacy dialog on
+someone for an animation has misjudged what the animation is worth.
+
+**The default has to be good on its own.** The invented motion is not a
+fallback. Most people will never turn the tap on, so a style written against
+real audio with invention bolted on afterwards is a style whose invention nobody
+looks at. Both go through one path, and the swell is what fills it when no
+reading arrives.
 
 **Explicitly undecided.** Media keys and Now Playing in Control Centre were
 scoped and agreed but not built. Badging results that are not in YouTube Music's

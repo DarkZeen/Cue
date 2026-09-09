@@ -48,6 +48,29 @@ final class PlayerService: NSObject {
     private var window: NSWindow?
     private var webView: WKWebView?
 
+    /// Reads what is actually coming out of the speakers, when asked to.
+    ///
+    /// Owned here because this is the object that knows when music starts,
+    /// which is the only moment the tap can find anything to attach to.
+    let audioTap = AudioTap()
+
+    /// Whether the mark should follow the audio. Set from the setting.
+    var wantsAudioAnalysis = false {
+        didSet {
+            guard wantsAudioAnalysis != oldValue else { return }
+            if wantsAudioAnalysis {
+                audioTap.ensureRunning()
+            } else {
+                audioTap.stop()
+            }
+        }
+    }
+
+    /// How loud the music is right now, 0 to 1. Zero when nothing is listening.
+    var audioLevel: Double { audioTap.level }
+    /// The spectrum, low to high. Empty when nothing is listening.
+    var audioBands: [Double] { audioTap.bands }
+
     private let logger = Diagnostics.logger("player")
 
     /// Raised whenever what is playing, or whether the window is up, changes.
@@ -833,8 +856,6 @@ extension PlayerService: WKScriptMessageHandler {
         MainActor.assumeIsolated {
             guard let body = message.body as? [String: Any] else { return }
 
-            // The level arrives on its own, many times a second, and carries
-            // nothing else.
             let title = body["title"] as? String ?? ""
             guard !title.isEmpty else { return }
 
@@ -848,6 +869,14 @@ extension PlayerService: WKScriptMessageHandler {
                 isPlaying: body["isPlaying"] as? Bool ?? false,
                 isMuted: body["muted"] as? Bool ?? false
             )
+
+            // The tap can only find the process once that process is making a
+            // sound: WebKit's GPU process appears in Core Audio's list when it
+            // starts playing and not before, so this is the moment to look
+            // rather than launch, and it is cheap to ask again.
+            if self.wantsAudioAnalysis, self.nowPlaying?.isPlaying == true {
+                self.audioTap.ensureRunning()
+            }
         }
     }
 }

@@ -13,6 +13,11 @@ import SwiftUI
 /// pretending to follow any. See `ProceduralMotion` for what that costs.
 struct NowPlayingIndicator: View {
     let nowPlaying: PlayerService.NowPlaying
+    /// 0 to 1, from the tap. Zero when nothing is listening, which is when the
+    /// styles fall back to motion of their own.
+    var level: Double = 0
+    /// The spectrum, low to high. Empty unless the tap is running.
+    var bands: [Double] = []
     var style: PlaqueAnimation = .wave
     let onOpen: () -> Void
 
@@ -27,10 +32,14 @@ struct NowPlayingIndicator: View {
 
             Group {
                 switch style {
-                case .wave: WaveIndicator(elapsed: elapsed, isAnimating: isAnimating)
-                case .disc: DiscIndicator(elapsed: elapsed, isAnimating: isAnimating)
-                case .bars: BarsIndicator(elapsed: elapsed, isAnimating: isAnimating)
-                case .orbit: OrbitIndicator(elapsed: elapsed, isAnimating: isAnimating)
+                case .wave:
+                    WaveIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                case .disc:
+                    DiscIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                case .bars:
+                    BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                case .orbit:
+                    OrbitIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so

@@ -83,13 +83,28 @@ normalises them into geometry the app and the icon both draw from, so the two
 can never drift apart. Edit the artwork and re-run the script; do not edit the
 generated files. Settings → Playback picks between three forms of it.
 
-The motion is invented, not measured. Cue cannot see the audio: WebKit will not
-start an `AudioContext` without a gesture inside the page, and the player is
-deliberately never touched — that is what lets it stay hidden. So the mark is
-built to be *shaped* like music instead of following any: a swell underneath the
-individual motion, rates that share no common factor so the pattern has no
-period the eye can find. It was worth being honest about rather than shipping a
-switch that could only ever route your audio through a graph that never runs.
+By default the motion is invented rather than measured — a swell underneath the
+individual movement, rates that share no common factor so the pattern has no
+period the eye can find. It has to look right that way, because it is what
+everyone sees first.
+
+Settings → Playback → **Make the mark move with the music** reads the real
+thing. Not from inside the web view: `createMediaElementSource` returns silence
+for YouTube Music's media in WebKit *and* takes over the element's output on the
+way, so the price of asking there is the music stopping. It uses a Core Audio
+process tap instead — macOS 14.4's own mechanism for handing an app a copy of
+audio that is already playing. A copy: nothing is intercepted, and there is no
+way for this to make the music quieter.
+
+It taps Cue's audio and nothing else. That is more work than it sounds, because
+`WKWebView` plays its media in a WebKit GPU process — an XPC service whose
+parent is launchd, so it cannot be found by looking at Cue's children. What
+identifies it is the *responsible* process, which is how macOS attributes an XPC
+service back to the app that caused it. Without that the only option is a global
+tap, and a mark that twitches at a notification sound is reading the wrong thing.
+
+macOS asks permission the first time. That is the whole cost, and it is why this
+is a setting rather than the default.
 
 What Cue will not do is pull the audio stream out and play it through
 `AVPlayer`. It would be more "native", and it means going around YouTube's

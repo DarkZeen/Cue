@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Cue reads the music it is playing so the mark in the corner can move with it. Only Cue's own audio is read, it is never recorded or sent anywhere, and it is off until you turn it on.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Cue is available under the MIT License.</string>
 	<key>NSSupportsAutomaticTermination</key>

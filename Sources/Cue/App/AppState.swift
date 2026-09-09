@@ -145,6 +145,12 @@ final class AppState {
         // build a player, before anyone has asked for a song.
         if settings.playbackDestination == .inApp { player.warmUp() }
 
+        player.wantsAudioAnalysis = settings.analysesAudio
+        settings.onAudioAnalysisChange = { [weak self] in
+            guard let self else { return }
+            self.player.wantsAudioAnalysis = self.settings.analysesAudio
+        }
+
         // A genre chosen in Settings has to take effect now, not at the next
         // quarter hour. The throttle exists to stop the panel asking on every
         // open; it was never meant to sit between somebody and a choice they
