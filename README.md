@@ -50,7 +50,8 @@ open cue://open
 ```
 
 `cue://toggle` closes the panel again if it is already open; `cue://settings`
-opens Settings. A `--dev` build claims `cue-dev://` instead, so a development
+opens Settings; `cue://play?v=<id>` starts one track and opens nothing at all,
+which is the whole app in a single command. A `--dev` build claims `cue-dev://` instead, so a development
 copy and an installed release do not fight over the same scheme.
 
 ## Playback

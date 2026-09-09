@@ -175,6 +175,24 @@ final class AppState {
 
     // MARK: - Player
 
+    /// Plays one track by its YouTube identifier, without opening anything.
+    ///
+    /// `cue://play?v=…`, which is what the other routes were always missing:
+    /// they can put the panel in front of you, but the one thing Cue is for —
+    /// start this — needed a hand on the keyboard. Now a Shortcut, a Stream
+    /// Deck or a line in a script can do it.
+    func play(videoID: String?) {
+        guard let videoID, !videoID.isEmpty else { return }
+
+        _ = player.play(MusicItem(
+            id: "url:\(videoID)",
+            title: "",
+            kind: .song,
+            videoID: videoID,
+            source: .ytMusic
+        ))
+    }
+
     /// Shows the player window, or hides it if it is already up.
     func togglePlayer() {
         player.isWindowVisible ? player.hide() : player.showHome()

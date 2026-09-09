@@ -120,6 +120,29 @@ out, albums to open. The compact grid is the original. Which one is a
 setting, because artwork is what people recognise and titles are what they read
 when the covers all look alike.
 
+**Beat reactivity is closed, and this is why.** The mark's motion is invented,
+not measured, and three attempts have now ended there. The last one settled it
+with numbers rather than theory:
+
+* WebKit *will* run an `AudioContext` in the concealed player. The user-gesture
+  requirement is real, but a synthesised `NSEvent` sent into the web view is a
+  real gesture — with a transparent shield over the page so the click lands on
+  nothing. Measured: `context running`. The earlier claim that this was the wall
+  was wrong.
+* The wall is one step further in. `createMediaElementSource` on YouTube Music's
+  MSE-backed element returns silence in WebKit — a long-standing limitation, and
+  measured here as `peak 0` while `media playing at 15s; same element: true`.
+  Because that node also takes over the element's output, the cost of trying is
+  the music going quiet.
+* `captureStream()`, which would have read the audio without touching the
+  element's output, is not implemented in WebKit.
+* The known workaround — a prior `getUserMedia()` call — wants microphone
+  permission, which Cue will not ask for to animate a logo.
+
+What remains possible is a Core Audio process tap (macOS 14.4+), which works and
+needs the audio-recording permission, and tempo from a metadata lookup, which
+needs nothing and covers about half a library. Neither has been chosen.
+
 **Explicitly undecided.** Media keys and Now Playing in Control Centre were
 scoped and agreed but not built. Badging results that are not in YouTube Music's
 catalogue — which redirect the player to youtube.com — was chosen but not built.

@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///     cue://toggle     show it, or hide it if it is already up
     ///     cue://player     show the player window, or hide it
     ///     cue://settings   show the settings window
+    ///     cue://play?v=ID  play that track, opening nothing
     ///
     /// The scheme comes from the bundle — a `--dev` build claims `cue-dev` —
     /// so it is `CueURL.scheme` rather than a literal.
@@ -48,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "toggle": state.togglePanel()
                 case "player": state.togglePlayer()
                 case "settings": state.showSettings()
+                case "play": state.play(videoID: URLComponents(
+                    url: url, resolvingAgainstBaseURL: false
+                )?.queryItems?.first { $0.name == "v" }?.value)
                 default: break
                 }
             }
