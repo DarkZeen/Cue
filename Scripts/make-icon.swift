@@ -98,16 +98,20 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
 
     // Black, as asked, with just enough gradient to stop it reading as a hole
     // cut in the Dock.
-    NSGradient(colors: [
-        NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1),
-        NSColor(calibratedRed: 0.0, green: 0.0, blue: 0.0, alpha: 1),
-    ])?.draw(in: plateShape, angle: -90)
+    // Black, as asked, but not flat black: three stops on a diagonal so the
+    // plate catches light like the other icons in a Dock rather than reading as
+    // a hole punched in it.
+    NSGradient(colorsAndLocations:
+        (NSColor(calibratedRed: 0.13, green: 0.13, blue: 0.145, alpha: 1), 0.0),
+        (NSColor(calibratedRed: 0.05, green: 0.05, blue: 0.06, alpha: 1), 0.55),
+        (NSColor(calibratedRed: 0.0, green: 0.0, blue: 0.0, alpha: 1), 1.0)
+    )?.draw(in: plateShape, angle: -65)
 
     plateShape.addClip()
 
     // White on black, as the artwork is.
     NSColor.white.setFill()
-    CueLogo.draw(in: plate.insetBy(dx: plate.width * 0.11, dy: plate.height * 0.11))
+    CueLogo.draw(in: plate.insetBy(dx: plate.width * 0.15, dy: plate.height * 0.15))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

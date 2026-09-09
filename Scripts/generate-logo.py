@@ -5,10 +5,9 @@ Run by hand when the artwork changes:
 
     ./Scripts/generate-logo.py
 
-The SVG holds one wing of the waveform — the tall shape first, then five
-progressively shorter ones. The finished mark is that wing mirrored around the
-tall shape, which is done here rather than in the file so the drawing the
-designer actually made stays the single source.
+The artwork is used exactly as drawn — nothing is mirrored, reordered or
+rebuilt. All this does is flatten the group transforms and normalise the result
+into a unit box, so the same curves can be drawn at any size.
 
 Two outputs, because they are read at different moments: Swift for the app,
 which must not depend on a file at runtime, and JSON for the icon script, which
@@ -108,19 +107,8 @@ def main():
     collect(tree.getroot(), (1, 0, 0, 1, 0, 0), raw)
     wing = flatten(raw)
 
-    tall = wing[0]
-    centre = (
-        min(p[0] for _, ps in tall for p in ps) + max(p[0] for _, ps in tall for p in ps)
-    ) / 2
 
-    def mirrored(segments):
-        return [(c, [[2 * centre - p[0], p[1]] for p in ps]) for c, ps in segments]
-
-    full = (
-        [mirrored(s) for s in reversed(wing[1:])]
-        + [tall]
-        + [[(c, [list(p) for p in ps]) for c, ps in s] for s in wing[1:]]
-    )
+    full = wing
 
     xs = [p[0] for s in full for _, ps in s for p in ps]
     ys = [p[1] for s in full for _, ps in s for p in ps]
@@ -162,10 +150,9 @@ import SwiftUI
 
 /// Cue's mark, as drawn.
 ///
-/// The artwork itself rather than an approximation of it. The source file holds
-/// one wing of the waveform; the finished mark is that wing mirrored around its
-/// tall shape, which is done in the generator so the drawing the designer made
-/// stays the single source.
+/// The artwork itself, exactly as drawn. Nothing here is mirrored, reordered or
+/// rebuilt: the generator flattens the group transforms and normalises the
+/// result, and that is all.
 ///
 /// Coordinates are normalised into a unit box with y increasing downward, so
 /// the mark can be drawn at any size in either coordinate system.

@@ -47,11 +47,11 @@ struct CueMark: View {
 /// mark.
 ///
 /// Two rules give it its character. A travelling phase runs along the mark so
-/// the shapes do not all rise together — thirteen shapes pulsing in unison
-/// reads as one shape breathing, which is what this replaced. And the outer
-/// shapes travel further than the inner ones: a waveform whose middle moves
-/// most looks like it is inflating, where one whose edges move most looks like
-/// sound arriving.
+/// the shapes do not all rise together — shapes pulsing in unison read as one
+/// shape breathing, which is what this replaced. And the small shapes travel
+/// further than the tall one: the mark decays from left to right, the tall
+/// shape is what makes it recognisable, and a logo whose anchor pumps reads as
+/// a novelty.
 struct CueWaveformView: View {
     var height: CGFloat = 18
     /// 0 to 1. The page's own analysis when it will give it up, and a stand-in
@@ -87,17 +87,17 @@ struct CueWaveformView: View {
     private func displacement(_ index: Int, at elapsed: TimeInterval) -> CGFloat {
         guard isPlaying, !reduceMotion else { return 1 }
 
-        // Distance from the middle, 0 at the centre and 1 at either end.
-        let middle = Double(count - 1) / 2
-        let distance = abs(Double(index) - middle) / max(middle, 1)
+        // How far along the decay this shape sits: 0 is the tall one, 1 is the
+        // smallest.
+        let along = Double(index) / Double(max(count - 1, 1))
 
-        // The edges move most. The centre shape is the mark's anchor and a
-        // logo whose middle pumps reads as a novelty.
-        let reach = 0.35 + 0.65 * distance
+        // The small shapes move most. The tall one anchors the mark, and a logo
+        // whose largest element pumps reads as a novelty.
+        let reach = 0.25 + 0.75 * along
 
-        // The phase walks outward from the middle rather than left to right, so
-        // the movement reads as symmetric — which the mark itself is.
-        let phase = elapsed * 3.4 - distance * 1.6
+        // The phase travels along the decay, which is the direction the mark
+        // already reads in.
+        let phase = elapsed * 3.4 - along * 2.2
         let wave = (sin(phase) + sin(phase * 1.63 + 0.7)) / 2
 
         // The level decides how much of that motion is expressed. Silence is
