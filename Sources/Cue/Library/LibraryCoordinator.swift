@@ -96,14 +96,37 @@ final class LibraryCoordinator {
         }
     }
 
+    private var lastExploreRefresh: Date?
+
     /// Fetches the three Explore pages.
-    func refreshExplore() {
+    ///
+    /// Throttled like the library, and for a sharper reason: the gallery calls
+    /// this every time the panel opens in Explore, and a refresh now costs
+    /// three requests plus one per record it opens. Nine requests every time
+    /// somebody presses ⌥Space is how an account stops being answered — and
+    /// the punishment is an empty page, which looks exactly like a bug in this
+    /// code rather than a rate limit. ⌘R deals a different nine from what is
+    /// already here and costs nothing.
+    func refreshExplore(force: Bool = false) {
         guard !activeProviders.isEmpty else { return }
+        if isRefreshingExplore, !force { return }
+        if !force,
+           let lastExploreRefresh,
+           Date().timeIntervalSince(lastExploreRefresh) < Self.refreshInterval,
+           !recommendations.isEmpty {
+            return
+        }
+
         exploreTask?.cancel()
         exploreTask = Task { [weak self] in await self?.performExploreRefresh() }
     }
 
+    private var isRefreshingExplore = false
+
     private func performExploreRefresh() async {
+        isRefreshingExplore = true
+        defer { isRefreshingExplore = false }
+
         var suggested: [MusicItem] = []
         var released: [MusicItem] = []
         var trending: [MusicItem] = []
@@ -117,32 +140,90 @@ final class LibraryCoordinator {
 
         guard !Task.isCancelled else { return }
 
-        // Songs, and only songs. The home feed is mostly shelves of playlists
-        // and mixes, and a tile you have to go *into* is the opposite of what
-        // this grid is for — the same rule the speed dial has always had.
-        //
-        // The charts are folded in here rather than shown as a page of their
-        // own, which is what makes songs-only affordable: the home feed alone,
-        // once its containers are dropped, is too thin to fill nine tiles.
-        recommendations = unfamiliar(Self.songs(in: Self.merge(suggested, with: trending)))
+        // Nothing at all is an answer these endpoints give freely — to a caller
+        // who asked too often, to a signed-out session, to a region they have
+        // no shelves for. It is never a reason to throw away three pages that
+        // were working a minute ago.
+        guard !(suggested.isEmpty && released.isEmpty && trending.isEmpty) else {
+            logger.notice("Explore came back empty; keeping what was already there.")
+            return
+        }
+
+        let offered = Self.merge(suggested, with: trending)
 
         // Not filtered against what you know. New releases are new by
         // definition, so there is nothing to filter out.
         newReleases = released
 
         // New records first, then anything else on offer that is an album.
-        exploreAlbums = Self.merge(
-            Self.albums(in: released),
-            with: Self.albums(in: Self.merge(suggested, with: trending))
-        )
+        exploreAlbums = Self.merge(Self.albums(in: released), with: Self.albums(in: offered))
+
+        // Songs, and only songs. A tile you have to go *into* is the opposite
+        // of what this grid is for — the same rule the speed dial has always
+        // had.
+        var forYou = unfamiliar(Self.songs(in: offered))
+        let fromFeed = forYou.count
+
+        // Which on this account was none. The log said so exactly: sixty-five
+        // items across the home feed and the charts, and not one of them a
+        // track you could click and hear. Both endpoints answer in records.
+        //
+        // So open the records. An album is a dozen songs behind one more
+        // request, and declining to make that request is the whole difference
+        // between a page with plenty to show and nine dashed squares.
+        if forYou.count < Self.songsWorthDealing {
+            let extracted = await songsFromAlbums(
+                exploreAlbums,
+                until: Self.songsWorthDealing - forYou.count
+            )
+            forYou = Self.merge(forYou, with: unfamiliar(extracted))
+        }
+
+        guard !Task.isCancelled else { return }
+        recommendations = forYou
+        lastExploreRefresh = Date()
 
         logger.notice(
             """
-            Explore: \(self.recommendations.count, privacy: .public) songs for you, \
+            Explore: \(self.recommendations.count, privacy: .public) songs for you \
+            (\(fromFeed, privacy: .public) from the feed), \
             \(released.count, privacy: .public) new, \
             \(self.exploreAlbums.count, privacy: .public) albums.
             """
         )
+    }
+
+    /// Enough songs to deal a page and still have something else to deal.
+    ///
+    /// Three pages' worth. Exactly nine would mean ⌘R does nothing, which reads
+    /// as a broken button rather than as a short list.
+    private static let songsWorthDealing = SettingsStore.tileCount * 3
+
+    /// How many records to open. Each one is a request, and these endpoints
+    /// answer a caller who asks too often with an empty page rather than an
+    /// error — so the ceiling is low, and reached only when the feed came back
+    /// thin. A typical album covers most of the shortfall on its own.
+    private static let albumsOpenedForSongs = 6
+
+    /// Opens albums, one at a time, until there are enough songs.
+    ///
+    /// Sequential on purpose. Firing six requests at once is the fastest way to
+    /// be told, politely and with a 200, that this account has no music.
+    private func songsFromAlbums(_ albums: [MusicItem], until wanted: Int) async -> [MusicItem] {
+        var found: [MusicItem] = []
+
+        for album in albums.prefix(Self.albumsOpenedForSongs) {
+            guard !Task.isCancelled else { break }
+
+            for provider in activeProviders {
+                let tracks = (try? await provider.tracks(of: album)) ?? []
+                found = Self.merge(found, with: Self.songs(in: tracks))
+            }
+
+            if found.count >= wanted { break }
+        }
+
+        return found
     }
 
     /// The things on this list that play when you click them.

@@ -75,10 +75,16 @@ protocol MusicLibraryProvider: AnyObject {
     func recommendations() async throws -> [MusicItem]
     /// Recently released albums and singles.
     func newReleases() async throws -> [MusicItem]
-    /// What is rising. Not a page of its own: the charts are where Explore's
-    /// songs come from once the home feed's containers are dropped, which is
-    /// what stops a songs-only first page being an empty one.
+    /// What is rising. Not a page of its own any more — it is more material
+    /// for the other two, which on a real account is almost entirely albums.
     func charts() async throws -> [MusicItem]
+
+    /// The songs on an album.
+    ///
+    /// Explore's first page wants tracks, and what these endpoints mostly
+    /// return is records. The songs exist — one page down, behind a browse id.
+    /// This is the trip to go and get them.
+    func tracks(of album: MusicItem) async throws -> [MusicItem]
 
     /// Turns something that merely navigates into something that plays.
     ///
@@ -109,6 +115,7 @@ extension MusicLibraryProvider {
     func recommendations() async throws -> [MusicItem] { [] }
     func newReleases() async throws -> [MusicItem] { [] }
     func charts() async throws -> [MusicItem] { [] }
+    func tracks(of album: MusicItem) async throws -> [MusicItem] { [] }
 
     /// Most items already play. Only the internal provider can resolve an
     /// album page, and only it overrides this.

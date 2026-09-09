@@ -50,8 +50,9 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         static let libraryAlbums = "FEmusic_liked_albums"
         /// Recently released albums and singles.
         static let newReleases = "FEmusic_new_releases"
-        /// Trending. Individual tracks, mostly, which is why Explore's
-        /// songs-only first page can afford to be songs only.
+        /// Trending. Shelves of records rather than tracks — measured, not
+        /// assumed: on a real account this returned 45 items and not one of
+        /// them was a song you could click and hear.
         static let charts = "FEmusic_charts"
     }
 
@@ -239,6 +240,34 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     func charts() async throws -> [MusicItem] {
         let response = try await post("browse", body: ["browseId": BrowseID.charts])
         return Self.items(in: response)
+    }
+
+    /// The songs on an album, dressed in the album's own clothes.
+    ///
+    /// An album page lists its tracks as rows, and a row on that page carries
+    /// no artwork of its own — the cover is in the page header, printed once.
+    /// Handing those rows to a grid made of album art gives nine grey squares,
+    /// so each track inherits the record it came from. It is also true: that
+    /// *is* the artwork for that song.
+    func tracks(of album: MusicItem) async throws -> [MusicItem] {
+        guard let browseID = album.browseID else { return [] }
+
+        let response = try await post("browse", body: ["browseId": browseID])
+
+        // Rows only. The cards further down an album page are "more like this"
+        // — other records, which is the one thing this page is not asking for.
+        let rows = response.collect("musicResponsiveListItemRenderer")
+            .compactMap(Self.row(from:))
+
+        return rows.filter { $0.videoID != nil }.map { row in
+            var track = row
+            if track.thumbnailURL == nil { track.thumbnailURL = album.thumbnailURL }
+            // The album's subtitle is its artist and year. Better under a track
+            // than nothing, and better than the track's own subtitle when that
+            // is only a duration.
+            if track.subtitle == nil { track.subtitle = album.subtitle ?? album.title }
+            return track
+        }
     }
 
     /// Resolves an album page to the playlist behind it.
