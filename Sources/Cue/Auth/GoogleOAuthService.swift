@@ -362,6 +362,14 @@ final class GoogleOAuthService {
                 "Google did not return an authorization code."
             case .noRefreshToken:
                 "Google did not issue a refresh token. Remove Cue from your Google account's third-party access list and try again."
+            case .rejected(let code, let detail) where code == "invalid_client":
+                """
+                Google refused this client ID and secret as a pair. Usually one \
+                of them is from a different client, or the secret was copied \
+                with something extra attached. Check both against Clients in \
+                the Google Auth Platform console — or clear the secret and try \
+                again, since a Desktop client can sign in without one.
+                """
             case .rejected(let code, let detail):
                 detail.map { "\(code): \($0)" } ?? "Google rejected the request (\(code))."
             }

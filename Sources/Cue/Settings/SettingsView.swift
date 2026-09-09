@@ -311,6 +311,14 @@ private struct GeneralPane: View {
 // MARK: - Accounts
 
 private struct AccountsPane: View {
+    /// Strips what a copy-and-paste tends to bring with it.
+    static func cleaned(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     @Bindable var settings: SettingsStore
     let coordinator: LibraryCoordinator
 
@@ -353,8 +361,14 @@ private struct AccountsPane: View {
 
                     HStack {
                         Button("Sign in with Google") {
-                            google.clientID = clientID.trimmingCharacters(in: .whitespaces)
-                            google.clientSecret = clientSecret.trimmingCharacters(in: .whitespaces)
+                            // Newlines as well as spaces, and any quotes the
+                            // copy came wrapped in. A secret pasted out of the
+                            // Cloud console routinely carries a trailing
+                            // newline, and Google rejects the pair as
+                            // `invalid_client` without ever saying that a
+                            // stray character is the reason.
+                            google.clientID = Self.cleaned(clientID)
+                            google.clientSecret = Self.cleaned(clientSecret)
                             signInError = nil
                             Task {
                                 do {
@@ -364,7 +378,7 @@ private struct AccountsPane: View {
                                 }
                             }
                         }
-                        .disabled(clientID.trimmingCharacters(in: .whitespaces).isEmpty || google.isSigningIn)
+                        .disabled(Self.cleaned(clientID).isEmpty || google.isSigningIn)
 
                         if google.isSigningIn {
                             ProgressView().controlSize(.small)
