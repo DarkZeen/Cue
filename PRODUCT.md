@@ -115,7 +115,8 @@ rebuild as a different application.
 
 **The panel has two designs and they both ship.** The gallery is three pages of
 artwork — a speed dial, liked songs, and a shelf curated by hand — with ⌘E
-swapping all three for Explore. The compact grid is the original. Which one is a
+swapping all three for Explore, which mirrors them: songs to hear, records just
+out, albums to open. The compact grid is the original. Which one is a
 setting, because artwork is what people recognise and titles are what they read
 when the covers all look alike.
 

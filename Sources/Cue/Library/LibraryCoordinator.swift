@@ -65,10 +65,10 @@ final class LibraryCoordinator {
 
     private(set) var isRefreshing = false
 
-    /// Explore's three pages.
+    /// Explore's three pages: songs to hear, records just out, albums to open.
     private(set) var recommendations: [MusicItem] = []
     private(set) var newReleases: [MusicItem] = []
-    private(set) var charts: [MusicItem] = []
+    private(set) var exploreAlbums: [MusicItem] = []
     private var exploreTask: Task<Void, Never>?
 
     /// Everything the account already knows about, for filtering Explore.
@@ -117,16 +117,44 @@ final class LibraryCoordinator {
 
         guard !Task.isCancelled else { return }
 
-        // Only the first page is filtered. New releases are new by definition,
-        // and a chart with your own music removed would be a chart that lies
-        // about what is popular.
-        recommendations = unfamiliar(suggested)
+        // Songs, and only songs. The home feed is mostly shelves of playlists
+        // and mixes, and a tile you have to go *into* is the opposite of what
+        // this grid is for — the same rule the speed dial has always had.
+        //
+        // The charts are folded in here rather than shown as a page of their
+        // own, which is what makes songs-only affordable: the home feed alone,
+        // once its containers are dropped, is too thin to fill nine tiles.
+        recommendations = unfamiliar(Self.songs(in: Self.merge(suggested, with: trending)))
+
+        // Not filtered against what you know. New releases are new by
+        // definition, so there is nothing to filter out.
         newReleases = released
-        charts = trending
+
+        // New records first, then anything else on offer that is an album.
+        exploreAlbums = Self.merge(
+            Self.albums(in: released),
+            with: Self.albums(in: Self.merge(suggested, with: trending))
+        )
 
         logger.notice(
-            "Explore: \(self.recommendations.count, privacy: .public) for you, \(released.count, privacy: .public) new, \(trending.count, privacy: .public) charting."
+            """
+            Explore: \(self.recommendations.count, privacy: .public) songs for you, \
+            \(released.count, privacy: .public) new, \
+            \(self.exploreAlbums.count, privacy: .public) albums.
+            """
         )
+    }
+
+    /// The things on this list that play when you click them.
+    ///
+    /// A video counts. YouTube Music serves plenty of tracks that are formally
+    /// videos, and refusing them would drop real songs on a technicality.
+    static func songs(in items: [MusicItem]) -> [MusicItem] {
+        items.filter { $0.videoID != nil && ($0.kind == .song || $0.kind == .video) }
+    }
+
+    static func albums(in items: [MusicItem]) -> [MusicItem] {
+        items.filter { $0.kind == .album }
     }
 
     private var searchTask: Task<Void, Never>?
@@ -477,7 +505,7 @@ final class LibraryCoordinator {
             switch self {
             case .pinned: return "For you"
             case .liked: return "New releases"
-            case .albums: return "Charts"
+            case .albums: return "Albums"
             }
         }
 
@@ -516,7 +544,14 @@ final class LibraryCoordinator {
             switch page {
             case .pinned: return recommendations
             case .liked: return newReleases
-            case .albums: return charts
+            case .albums:
+                // New releases are mostly albums, so without this the last two
+                // pages show the same records and one of them is a wasted
+                // swipe. Excluding what is *on screen* rather than the whole
+                // pool keeps this page full: reshuffle page two and this one
+                // re-fills from what page two just let go of.
+                let showing = Set(tiles(for: .liked).compactMap { $0?.id })
+                return exploreAlbums.filter { !showing.contains($0.id) }
             }
         }
 

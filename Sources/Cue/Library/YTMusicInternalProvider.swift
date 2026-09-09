@@ -50,7 +50,8 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         static let libraryAlbums = "FEmusic_liked_albums"
         /// Recently released albums and singles.
         static let newReleases = "FEmusic_new_releases"
-        /// Trending.
+        /// Trending. Individual tracks, mostly, which is why Explore's
+        /// songs-only first page can afford to be songs only.
         static let charts = "FEmusic_charts"
     }
 
@@ -222,9 +223,9 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
     // MARK: - Explore
 
     /// What the home feed suggests, which is the closest thing the service has
-    /// to "music for you". Filtered against what you already know by the
-    /// coordinator, which is the half that makes it discovery rather than a
-    /// second copy of the front page.
+    /// to "music for you". Returned whole; the coordinator does the two things
+    /// that make it useful — splits the songs from the albums, and filters what
+    /// you already know, without which this is a second copy of the front page.
     func recommendations() async throws -> [MusicItem] {
         let response = try await post("browse", body: ["browseId": BrowseID.home])
         return Self.items(in: response)

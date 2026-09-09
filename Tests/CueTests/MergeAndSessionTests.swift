@@ -114,3 +114,62 @@ struct LayoutTests {
         #expect(abs(used - CueLayout.panelWidth) < 0.001)
     }
 }
+
+@Suite("Explore pages")
+struct ExploreFilterTests {
+    private func item(
+        _ id: String,
+        kind: MusicItemKind,
+        videoID: String? = nil,
+        browseID: String? = nil
+    ) -> MusicItem {
+        MusicItem(
+            id: id,
+            title: id,
+            kind: kind,
+            videoID: videoID,
+            browseID: browseID,
+            source: .ytMusic
+        )
+    }
+
+    @Test("The first page keeps only what plays when clicked")
+    func songsOnly() {
+        // The home feed's actual shape: a couple of tracks buried in shelves of
+        // playlists, mixes and artist pages. All of those are containers you go
+        // into, which is the one thing a speed dial must never be.
+        let feed = [
+            item("mix", kind: .mix),
+            item("song", kind: .song, videoID: "v1"),
+            item("playlist", kind: .playlist),
+            item("artist", kind: .artist, browseID: "UC1"),
+            item("album", kind: .album, browseID: "MPREb_1"),
+            item("video", kind: .video, videoID: "v2")
+        ]
+
+        let songs = LibraryCoordinator.songs(in: feed)
+
+        #expect(songs.map(\.id) == ["song", "video"])
+    }
+
+    @Test("A song with no video id is not a song")
+    func songsMustBePlayable() {
+        // Kind alone is not enough. A row parsed from a shelf can claim to be a
+        // song and carry only a playlist context, and putting that on the grid
+        // is a tile that opens a page instead of playing.
+        let claimed = [item("claims", kind: .song)]
+
+        #expect(LibraryCoordinator.songs(in: claimed).isEmpty)
+    }
+
+    @Test("The third page keeps only albums")
+    func albumsOnly() {
+        let feed = [
+            item("song", kind: .song, videoID: "v1"),
+            item("album", kind: .album, browseID: "MPREb_1"),
+            item("playlist", kind: .playlist)
+        ]
+
+        #expect(LibraryCoordinator.albums(in: feed).map(\.id) == ["album"])
+    }
+}

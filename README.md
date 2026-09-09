@@ -141,6 +141,31 @@ off — everything official keeps running.
 
 Search asks both and merges the answers, preferring whichever knows more.
 
+## The grid
+
+Three pages, arrow keys or two fingers between them.
+
+| | Your music | Explore (⌘E) |
+|---|---|---|
+| 1 | Speed dial — what you kept, gaps filled from your history and likes | For you |
+| 2 | Liked songs | New releases |
+| 3 | Albums you added by hand | Albums |
+
+Both first pages are songs and nothing else. A playlist or an album in one of
+those nine positions is a container you have to go *into*, and going into things
+is what the thirty seconds are being spent to avoid. Anything pinned by hand is
+exempt — that is your slot, put what you like in it.
+
+Explore's first page is drawn from the home feed and the charts together. On its
+own the home feed is shelves of playlists and mixes, and dropping those leaves
+too little to fill nine tiles; the charts are individual tracks, which is what
+makes songs-only affordable. It also skips what you already know, or it would be
+a second copy of your own front page.
+
+⌘R deals a different nine from the same pool. On the speed dial it only touches
+the slots Cue filled in — what you pinned stays where you put it, because the
+fourth thing still being fourth tomorrow is the entire reason the page works.
+
 ## Keyboard
 
 | Key | Does |

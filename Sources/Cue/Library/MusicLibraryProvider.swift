@@ -70,11 +70,14 @@ protocol MusicLibraryProvider: AnyObject {
     /// grid's second page is made of songs.
     func likedSongs() async throws -> [MusicItem]
 
-    /// What the service is recommending, for the Explore grid's first page.
+    /// What the service is recommending. Mixed — the coordinator keeps the
+    /// songs for Explore's first page and the albums for its third.
     func recommendations() async throws -> [MusicItem]
     /// Recently released albums and singles.
     func newReleases() async throws -> [MusicItem]
-    /// What is rising.
+    /// What is rising. Not a page of its own: the charts are where Explore's
+    /// songs come from once the home feed's containers are dropped, which is
+    /// what stops a songs-only first page being an empty one.
     func charts() async throws -> [MusicItem]
 
     /// Turns something that merely navigates into something that plays.
