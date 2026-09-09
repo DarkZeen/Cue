@@ -279,12 +279,29 @@ private struct BarsIndicator: View {
     private func reading(_ band: Int) -> Double {
         if bands.indices.contains(band) { return bands[band] }
 
-        // No analyser: each band runs at its own rate so they never march in
-        // step, which is the difference between a meter and a row of lights.
-        let rate = 2.3 + Double(band) * 0.61
-        let wave = (sin(elapsed * rate + Double(band) * 1.7) + 1) / 2
-        let decay = 1 - 0.45 * (Double(band) / Double(Self.bandCount - 1))
-        return (0.18 + 0.5 * level) * wave * decay
+        // No analyser. This is invention, and it should at least be invention
+        // shaped like music rather than a sine wave wearing a costume.
+        //
+        // Three things separate the two. A pulse at a plausible tempo, so the
+        // whole meter lifts together the way it does on a beat. Bands that
+        // decay at different speeds, because bass rings on and hi-hats do not.
+        // And rates that share no common factor, so the pattern never visibly
+        // repeats — the eye finds a period in seconds otherwise, which is what
+        // makes a fake meter look fake.
+        let position = Double(band) / Double(Self.bandCount - 1)
+
+        // Roughly 100bpm. Sharpened so it reads as a hit rather than a swell.
+        let beat = pow((sin(elapsed * 1.7 * .pi) + 1) / 2, 3)
+
+        let rate = 2.3 + Double(band) * 0.61 + position * 1.4
+        let wobble = (sin(elapsed * rate + Double(band) * 1.7)
+            + sin(elapsed * rate * 0.41 + Double(band) * 3.1)) / 4 + 0.5
+
+        // The low bands follow the beat; the high ones chatter over it.
+        let follow = 1 - position
+        let shape = wobble * (0.45 + 0.55 * position) + beat * follow * 0.8
+
+        return (0.16 + 0.5 * level) * min(shape, 1)
     }
 
     /// The tall middle is the brightest, the tips fade out. It is the depth

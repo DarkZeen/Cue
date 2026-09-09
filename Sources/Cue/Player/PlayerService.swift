@@ -754,7 +754,19 @@ final class PlayerService: NSObject {
             // first few and leave the rest flat.
             analyse(count) {
               if (!this._analyser) { return null; }
-              if (this._context.state === 'suspended') { this._context.resume(); }
+
+              // A suspended context reads as silence, so this is not optional —
+              // and whether it can be resumed at all is the whole question.
+              // WebKit will not start an AudioContext without a user gesture
+              // inside the page, and Cue's player is deliberately never
+              // touched. The outcome is recorded rather than assumed.
+              if (this._context.state === 'suspended' && !this._resuming) {
+                this._resuming = true;
+                this._context.resume().then(
+                  () => { this._resumeResult = 'resumed'; this._resuming = false; },
+                  (error) => { this._resumeResult = 'refused: ' + error.name; this._resuming = false; }
+                );
+              }
 
               this._analyser.getByteFrequencyData(this._bins);
 
@@ -932,6 +944,7 @@ final class PlayerService: NSObject {
 
               reading.analysing = true;
               reading.contextState = cue._context ? cue._context.state : 'none';
+              reading.resumeResult = cue._resumeResult || 'not attempted';
               window.webkit.messageHandlers.cue.postMessage(reading);
             } catch (error) {
               /* ignored on purpose */
@@ -1008,7 +1021,7 @@ extension PlayerService: WKScriptMessageHandler {
                 if analysing != self.isAnalysing {
                     self.isAnalysing = analysing
                     self.logger.notice(
-                        "Audio analysis \(analysing ? "running" : "stopped", privacy: .public); context \(body["contextState"] as? String ?? "none", privacy: .public)"
+                        "Audio analysis \(analysing ? "running" : "stopped", privacy: .public); context \(body["contextState"] as? String ?? "none", privacy: .public); resume \(body["resumeResult"] as? String ?? "-", privacy: .public)"
                     )
                 }
                 if !analysing {
