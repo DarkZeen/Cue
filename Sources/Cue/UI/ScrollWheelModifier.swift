@@ -96,9 +96,15 @@ private struct SwipeCatcher: NSViewRepresentable {
         ///
         /// Low enough that a deliberate flick works, high enough that scrolling
         /// past the panel on the way somewhere else does not turn a page.
-        private static let threshold: CGFloat = 28
+        private static let threshold: CGFloat = 42
 
         override func scrollWheel(with event: NSEvent) {
+            // Momentum is not intent. After the fingers lift, macOS keeps
+            // sending events for the coast — and since the gesture had already
+            // "ended" by then, the accumulator had reset and each burst of
+            // momentum counted as a fresh swipe. One flick paged to the end.
+            guard event.momentumPhase == [] else { return }
+
             switch event.phase {
             case .began:
                 travelled = 0

@@ -635,8 +635,16 @@ final class LibraryCoordinator {
     /// Ninety-nine liked songs are a better answer than nine dashed rectangles.
     private var autoFillCandidates: [MusicItem] {
         let recent = suggestions.filter { $0.videoID != nil }
-        let liked = likedSongs.filter { $0.videoID != nil }
-        return Self.merge(recent, with: liked)
+
+        // Liked songs are page two's whole reason for existing, so anything
+        // showing there is off limits here. Filling the speed dial from the
+        // same nine made the two pages identical, which is worse than a short
+        // first page: two pages that say the same thing are one page and a
+        // wasted swipe.
+        let showing = Set(tiles(for: .liked).compactMap { $0?.id })
+        let rest = likedSongs.filter { $0.videoID != nil && !showing.contains($0.id) }
+
+        return Self.merge(recent, with: rest)
     }
 
     /// Whether the tile at this position is a real pin or a guess. Guesses are

@@ -33,7 +33,7 @@ struct NowPlayingIndicator: View {
             // it still reads as Cue, it simply stops being lit.
             .opacity(nowPlaying.isPlaying ? 1 : 0.42)
         }
-        .frame(width: 30, height: 22)
+        .frame(width: 34, height: 28)
         .scaleEffect(isHovered ? 1.09 : 1)
         .contentShape(.rect)
         .onHover { isHovered = $0 }
@@ -79,7 +79,7 @@ private struct WaveIndicator: View {
                     .scaleEffect(y: displacement(index), anchor: .center)
             }
         }
-        .frame(width: 22 * CueWavePath.aspect, height: 22)
+        .frame(width: 28 * CueWavePath.aspect, height: 28)
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -88,14 +88,21 @@ private struct WaveIndicator: View {
         let middle = Double(count - 1) / 2
         let distance = abs(Double(index) - middle) / max(middle, 1)
 
-        let reach = 0.3 + 0.7 * distance
+        let reach = 0.28 + 0.72 * distance
         let phase = elapsed * 3.6 - distance * 1.5
         // Two sines rather than one, at an irrational-ish ratio, so the loop
         // never lands on an obvious repeat.
         let wave = (sin(phase) + sin(phase * 1.63 + 0.7)) / 2
-        let amplitude = 0.05 + 0.38 * min(max(level, 0), 1)
 
-        return 1 + CGFloat(wave * amplitude) * reach
+        // Enough travel to be read from the corner of an eye. The earlier
+        // values were tuned looking straight at it, which is the one way this
+        // is never actually seen — and at that amplitude the mark only
+        // shimmered.
+        let amplitude = 0.10 + 0.62 * min(max(level, 0), 1)
+
+        // Never collapses to nothing: a shape that reaches zero height leaves a
+        // gap in the mark and reads as a rendering fault rather than as quiet.
+        return max(1 + CGFloat(wave * amplitude) * reach, 0.22)
     }
 }
 
@@ -156,7 +163,7 @@ private struct DiscIndicator: View {
             Circle().fill(.black.opacity(0.55)).frame(width: 1.6, height: 1.6).offset(x: 2.8)
         }
         .rotationEffect(angle)
-        .frame(width: 18, height: 18)
+        .frame(width: 22, height: 22)
         // The one place the level shows on this style: the record leans into
         // a loud passage rather than turning at a constant, indifferent rate.
         .scaleEffect(1 + CGFloat(level) * 0.07)
@@ -196,14 +203,14 @@ private struct BarsIndicator: View {
             ForEach(0..<Self.count, id: \.self) { index in
                 Capsule()
                     .fill(.white)
-                    .frame(width: 2.5, height: height(index))
+                    .frame(width: 3, height: height(index))
             }
         }
-        .frame(height: 20)
+        .frame(height: 26)
     }
 
     private func height(_ index: Int) -> CGFloat {
-        let resting: CGFloat = 5
+        let resting: CGFloat = 6
         guard isAnimating else { return resting }
 
         // Each bar runs at its own rate, so they never march in step — which is
@@ -216,7 +223,7 @@ private struct BarsIndicator: View {
         let middle = Double(Self.count - 1) / 2
         let bias = 1 - abs(Double(index) - middle) / (middle + 1)
 
-        let reach = 4 + 13 * min(max(level, 0), 1)
+        let reach = 5 + 17 * min(max(level, 0), 1)
         return resting + CGFloat(bias * (0.35 + 0.65 * wave) * reach)
     }
 }

@@ -51,15 +51,16 @@ final class AppState {
     /// the repair has run is true of the build that ran it and useless to every
     /// other one.
     private static func repairKeychainIfNeeded() {
-        guard Keychain.needsRepair else { return }
-
-        let outcome = Keychain.reclaim(Keychain.allAccounts)
-        // Marked only when nothing failed. A declined prompt is exactly the
-        // case that needs trying again, and marking it done regardless is how
-        // the repair silently never happens.
-        if outcome.failed == 0 {
-            Keychain.markRepaired()
-        }
+        // Every launch, not once.
+        //
+        // A keychain item's access list is built when the item is written and
+        // names the application that wrote it — and every rebuild, and every
+        // automatic update, replaces that application. Recording the repair as
+        // done meant it never ran again, so the prompts returned after the next
+        // update and stayed. Rewriting the items each launch costs four silent
+        // reads when nothing has changed, and makes the one prompt after an
+        // update the last one.
+        Keychain.reclaim(Keychain.allAccounts)
     }
 
     func start() {

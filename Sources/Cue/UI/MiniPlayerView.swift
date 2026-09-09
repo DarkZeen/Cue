@@ -21,7 +21,7 @@ struct MiniPlayerView: View {
     var body: some View {
         HStack(spacing: 14) {
             NowPlayingIndicator(nowPlaying: nowPlaying, level: level, style: style, onOpen: onOpen)
-                .frame(width: 28)
+                .frame(width: 34)
 
             button("backward.end.fill", "Previous", action: onPrevious)
             button(
