@@ -10,6 +10,8 @@ struct NowPlayingIndicator: View {
     let nowPlaying: PlayerService.NowPlaying
     /// 0 to 1, already shaped by the envelope in `PlayerService`.
     var level: Double = 0
+    /// The spectrum, low to high. Only the bars use it.
+    var bands: [Double] = []
     var style: PlaqueAnimation = .wave
     let onOpen: () -> Void
 
@@ -26,14 +28,14 @@ struct NowPlayingIndicator: View {
                 switch style {
                 case .wave: WaveIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
                 case .disc: DiscIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
-                case .bars: BarsIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                case .bars: BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so
             // it still reads as Cue, it simply stops being lit.
             .opacity(nowPlaying.isPlaying ? 1 : 0.42)
         }
-        .frame(width: 34, height: 28)
+        .frame(width: style == .bars ? 46 : 34, height: 28)
         .scaleEffect(isHovered ? 1.09 : 1)
         .contentShape(.rect)
         .onHover { isHovered = $0 }
@@ -190,40 +192,84 @@ private struct DiscIndicator: View {
 
 // MARK: - Bars
 
-/// Level bars, the way a meter has always looked.
+/// A mirrored spectrum: bass in the middle, treble at the edges, every bar
+/// growing from a centre line in both directions.
+///
+/// The shape comes from the mirroring. A meter that stands on a floor reads as
+/// a chart; one that grows symmetrically about a line reads as a *waveform*,
+/// which is the thing being looked at. Bass in the centre is what gives it the
+/// tall middle and the tapering dashes at either end — and it means the beat,
+/// which lives in the low end, moves the part of the mark the eye is already on.
 private struct BarsIndicator: View {
     let elapsed: TimeInterval
     let level: Double
+    /// The spectrum, low to high. Empty when nothing is being analysed, in
+    /// which case the bars fall back to a rhythm of their own.
+    let bands: [Double]
     let isAnimating: Bool
 
-    private static let count = 5
+    /// Bands either side of the centre. Nine gives seventeen bars, which is
+    /// enough to read as a spectrum and few enough that each stays visible at
+    /// this size.
+    private static let bandCount = 9
+    private static let barWidth: CGFloat = 1.6
+    private static let spacing: CGFloat = 1.1
+    private static let height: CGFloat = 26
+
+    private var barCount: Int { Self.bandCount * 2 - 1 }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(0..<Self.count, id: \.self) { index in
+        HStack(alignment: .center, spacing: Self.spacing) {
+            ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    .fill(.white)
-                    .frame(width: 3, height: height(index))
+                    .fill(.white.opacity(opacity(index)))
+                    .frame(width: Self.barWidth, height: barHeight(index))
             }
         }
-        .frame(height: 26)
+        .frame(height: Self.height)
     }
 
-    private func height(_ index: Int) -> CGFloat {
-        let resting: CGFloat = 6
+    /// Which band a bar shows: 0 at the centre, rising outward on both sides.
+    private func band(_ index: Int) -> Int {
+        abs(index - (Self.bandCount - 1))
+    }
+
+    private func barHeight(_ index: Int) -> CGFloat {
+        // A dot rather than nothing at rest, so the mark keeps its full width
+        // in silence instead of shrinking to a stub.
+        let resting: CGFloat = Self.barWidth
         guard isAnimating else { return resting }
 
-        // Each bar runs at its own rate, so they never march in step — which is
-        // what separates a meter from a row of blinking lights.
-        let rate = 2.6 + Double(index) * 0.47
-        let wave = (sin(elapsed * rate + Double(index) * 1.3) + 1) / 2
+        let band = band(index)
+        let value = reading(band)
 
-        // The centre bars sit taller at rest, which gives the group a shape
-        // even in near-silence.
-        let middle = Double(Self.count - 1) / 2
-        let bias = 1 - abs(Double(index) - middle) / (middle + 1)
+        // The outer bands are quieter in almost all music, so without this the
+        // mark is a hump in the middle and two flat wings. Lifting the highs
+        // trades accuracy for a shape worth looking at, which is the right
+        // trade for something a centimetre wide.
+        let lift = 1 + 1.5 * (Double(band) / Double(Self.bandCount - 1))
 
-        let reach = 5 + 17 * min(max(level, 0), 1)
-        return resting + CGFloat(bias * (0.35 + 0.65 * wave) * reach)
+        let reach = Self.height - resting
+        return resting + CGFloat(min(value * lift, 1)) * reach
+    }
+
+    /// The level for a band, from the spectrum when there is one.
+    private func reading(_ band: Int) -> Double {
+        if bands.indices.contains(band) { return bands[band] }
+
+        // No analyser: each band runs at its own rate so they never march in
+        // step, which is the difference between a meter and a row of lights.
+        let rate = 2.3 + Double(band) * 0.61
+        let wave = (sin(elapsed * rate + Double(band) * 1.7) + 1) / 2
+        let decay = 1 - 0.45 * (Double(band) / Double(Self.bandCount - 1))
+        return (0.18 + 0.5 * level) * wave * decay
+    }
+
+    /// The tall middle is the brightest, the tips fade out. It is the depth
+    /// cue the reference has, and it stops seventeen identical strokes reading
+    /// as a comb.
+    private func opacity(_ index: Int) -> Double {
+        let distance = Double(abs(index - (Self.bandCount - 1))) / Double(Self.bandCount - 1)
+        return 1 - 0.45 * distance
     }
 }

@@ -75,6 +75,14 @@ final class PlayerService: NSObject {
     /// know anything about the music. See `Settings → Playback`.
     private(set) var audioLevel: Double = 0
 
+    /// The spectrum, low to high. Empty when nothing is being analysed.
+    ///
+    /// Nine bands rather than one number, because a meter whose bars all share
+    /// a value is a row of blinking lights. Each carries its own envelope, so
+    /// the bass can be decaying while a cymbal is still rising — which is what
+    /// makes a spectrum look like it is listening.
+    private(set) var audioBands: [Double] = []
+
     /// Whether the page is signed in, as the page itself reports it.
     ///
     /// `nil` until something has loaded and said either way. Playing signed
@@ -711,19 +719,38 @@ final class PlayerService: NSObject {
               }
             },
 
-            level() {
+            // The spectrum, as a handful of bands plus their mean.
+            //
+            // One averaged number cannot drive a spectrum: every bar would be
+            // the same height and rise together, which is a row of blinking
+            // lights rather than a meter. Bands are spaced logarithmically
+            // because hearing is — linear bins put almost everything in the
+            // first few and leave the rest flat.
+            analyse(count) {
               if (!this._analyser) { return null; }
               if (this._context.state === 'suspended') { this._context.resume(); }
 
               this._analyser.getByteFrequencyData(this._bins);
 
-              // The lower third of the spectrum. A beat lives in the bass and
-              // the low mids; including the highs makes cymbals dominate and
-              // the mark reads as hiss.
-              const bins = Math.max(1, Math.floor(this._bins.length / 3));
-              let total = 0;
-              for (let i = 0; i < bins; i++) { total += this._bins[i]; }
-              return (total / bins) / 255;
+              const total = this._bins.length;
+              const bands = [];
+              for (let i = 0; i < count; i++) {
+                const low = Math.floor(Math.pow(total, i / count));
+                const high = Math.max(low + 1, Math.floor(Math.pow(total, (i + 1) / count)));
+                let sum = 0;
+                let n = 0;
+                for (let j = low; j < high && j < total; j++) { sum += this._bins[j]; n++; }
+                bands.push(n ? (sum / n) / 255 : 0);
+              }
+
+              // The mean is weighted to the low end, where a beat lives.
+              // Including the highs makes cymbals dominate and the mark reads
+              // as hiss rather than as rhythm.
+              const low = Math.max(1, Math.floor(total / 3));
+              let sum = 0;
+              for (let i = 0; i < low; i++) { sum += this._bins[i]; }
+
+              return { level: (sum / low) / 255, bands: bands };
             },
 
             // Turns shuffle on, and only on.
@@ -856,9 +883,9 @@ final class PlayerService: NSObject {
           // needless messages a minute about a title that has not changed.
           setInterval(function () {
             try {
-              const value = cue.level();
-              if (value === null) { return; }
-              window.webkit.messageHandlers.cue.postMessage({ level: value });
+              const reading = cue.analyse(9);
+              if (reading === null) { return; }
+              window.webkit.messageHandlers.cue.postMessage(reading);
             } catch (error) {
               /* ignored on purpose */
             }
@@ -939,6 +966,20 @@ extension PlayerService: WKScriptMessageHandler {
                 // needles.
                 let coefficient = target > self.audioLevel ? 0.6 : 0.14
                 self.audioLevel += (target - self.audioLevel) * coefficient
+
+                if let bands = body["bands"] as? [Double] {
+                    if self.audioBands.count != bands.count {
+                        self.audioBands = bands
+                    } else {
+                        self.audioBands = zip(self.audioBands, bands).map { held, incoming in
+                            let clamped = min(max(incoming, 0), 1)
+                            // Same shaping per band. The high bands especially
+                            // need it: they are the spikiest, and following
+                            // them raw makes the outer bars flicker.
+                            return held + (clamped - held) * (clamped > held ? 0.6 : 0.16)
+                        }
+                    }
+                }
                 return
             }
 

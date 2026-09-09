@@ -11,6 +11,7 @@ struct SearchBarView: View {
     /// What is playing, if anything, and the way back to it.
     let nowPlaying: PlayerService.NowPlaying?
     var level: Double = 0
+    var bands: [Double] = []
     var style: PlaqueAnimation = .wave
     let onOpenPlayer: () -> Void
 
@@ -51,7 +52,7 @@ struct SearchBarView: View {
             .frame(width: 16)
 
             if let nowPlaying {
-                NowPlayingIndicator(nowPlaying: nowPlaying, level: level, style: style, onOpen: onOpenPlayer)
+                NowPlayingIndicator(nowPlaying: nowPlaying, level: level, bands: bands, style: style, onOpen: onOpenPlayer)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 

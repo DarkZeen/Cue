@@ -175,6 +175,7 @@ private struct MiniPlayerHost: View {
             MiniPlayerView(
                 nowPlaying: nowPlaying,
                 level: player.audioLevel,
+                bands: player.audioBands,
                 style: settings.plaqueAnimation,
                 onOpen: { player.showCurrent() },
                 onPrevious: { player.previous() },

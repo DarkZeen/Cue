@@ -9,6 +9,7 @@ import SwiftUI
 struct MiniPlayerView: View {
     let nowPlaying: PlayerService.NowPlaying
     var level: Double = 0
+    var bands: [Double] = []
     var style: PlaqueAnimation = .wave
 
     let onOpen: () -> Void
@@ -20,8 +21,8 @@ struct MiniPlayerView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            NowPlayingIndicator(nowPlaying: nowPlaying, level: level, style: style, onOpen: onOpen)
-                .frame(width: 34)
+            NowPlayingIndicator(nowPlaying: nowPlaying, level: level, bands: bands, style: style, onOpen: onOpen)
+                .frame(width: style == .bars ? 46 : 34)
 
             button("backward.end.fill", "Previous", action: onPrevious)
             button(

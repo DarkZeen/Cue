@@ -50,6 +50,7 @@ struct CueContentView: View {
                 onSettings: onShowSettings,
                 nowPlaying: player.nowPlaying,
                 level: player.audioLevel,
+                bands: player.audioBands,
                 style: settings.plaqueAnimation,
                 onOpenPlayer: onOpenPlayer
             )
