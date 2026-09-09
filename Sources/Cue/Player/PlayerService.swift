@@ -297,6 +297,20 @@ final class PlayerService: NSObject {
         evaluate("__cue.previous()")
     }
 
+    /// Reloads the page, discarding the audio graph with it.
+    ///
+    /// The only way to undo `createMediaElementSource`: the routing belongs to
+    /// the media element, and the element does not survive a reload. Costs the
+    /// current track its position, which is the right price for a way out of
+    /// silence.
+    func reloadForAnalysisChange() {
+        guard let webView, isLoaded else { return }
+        logger.notice("Reloading the player to release the audio graph.")
+        audioLevel = 0
+        audioBands = []
+        webView.reload()
+    }
+
     /// Asks the page to start analysing its audio, if it is playing.
     func beginAnalysis() {
         guard wantsAnalysis else { return }

@@ -35,7 +35,7 @@ struct NowPlayingIndicator: View {
             // it still reads as Cue, it simply stops being lit.
             .opacity(nowPlaying.isPlaying ? 1 : 0.42)
         }
-        .frame(width: style == .bars ? 46 : 34, height: 28)
+        .frame(width: style == .bars ? 46 : 26, height: 26)
         .scaleEffect(isHovered ? 1.09 : 1)
         .contentShape(.rect)
         .onHover { isHovered = $0 }
@@ -73,6 +73,11 @@ private struct WaveIndicator: View {
 
     private var count: Int { CueWavePath.shapes.count }
 
+    /// Small. The mark is a status light beside a search field, not a
+    /// centrepiece, and at this size the shapes read as one object that moves
+    /// rather than nine that wobble.
+    private static let height: CGFloat = 18
+
     var body: some View {
         ZStack {
             ForEach(0..<count, id: \.self) { index in
@@ -81,7 +86,24 @@ private struct WaveIndicator: View {
                     .scaleEffect(y: displacement(index), anchor: .center)
             }
         }
-        .frame(width: 28 * CueWavePath.aspect, height: 28)
+        .frame(width: Self.height * CueWavePath.aspect, height: Self.height)
+        // The whole mark breathes underneath the individual shapes.
+        //
+        // Two motions at different rates, which is what stops it reading as a
+        // mechanism: the shapes flicker with the music while the object itself
+        // swells slowly. One rate alone looks like a loop however well tuned,
+        // because the eye finds the period.
+        .scaleEffect(pulse)
+    }
+
+    /// A slow swell, lifted by whatever is playing.
+    private var pulse: CGFloat {
+        guard isAnimating else { return 1 }
+
+        // A sine rather than a repeating ease: a breath has no beginning and no
+        // end, and any keyframed loop shows its seam eventually.
+        let breath = sin(elapsed / 2.6 * 2 * .pi)
+        return 1 + CGFloat(breath * 0.035) + CGFloat(min(max(level, 0), 1) * 0.09)
     }
 
     private func displacement(_ index: Int) -> CGFloat {
