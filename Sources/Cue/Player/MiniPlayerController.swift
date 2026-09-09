@@ -132,7 +132,7 @@ final class MiniPlayerController {
         panel.isEditing = isEditing
 
         let view = AnyView(
-            MiniPlayerHost(player: player)
+            MiniPlayerHost(player: player, settings: settings)
                 .frame(width: Self.size.width, height: Self.size.height, alignment: .topTrailing)
         )
 
@@ -167,6 +167,7 @@ final class MiniPlayerController {
 /// Reads the player so the plaque redraws as the track and its state change.
 private struct MiniPlayerHost: View {
     let player: PlayerService
+    let settings: SettingsStore
 
     var body: some View {
         if let nowPlaying = player.nowPlaying {
@@ -174,6 +175,7 @@ private struct MiniPlayerHost: View {
             MiniPlayerView(
                 nowPlaying: nowPlaying,
                 level: player.audioLevel,
+                style: settings.plaqueAnimation,
                 onOpen: { player.showCurrent() },
                 onPrevious: { player.previous() },
                 onPlayPause: { player.togglePlayPause() },

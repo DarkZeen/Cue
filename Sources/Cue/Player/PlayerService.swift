@@ -928,7 +928,17 @@ extension PlayerService: WKScriptMessageHandler {
             // The level arrives on its own, many times a second, and carries
             // nothing else.
             if let level = body["level"] as? Double {
-                self.audioLevel = min(max(level, 0), 1)
+                let target = min(max(level, 0), 1)
+
+                // Fast attack, slow release — the detail that makes a meter
+                // read as *hearing* something rather than wobbling. A beat
+                // arrives instantly and decays; following the raw level in both
+                // directions produces a jitter that looks like noise, and
+                // smoothing both equally produces a soft pulse that looks like
+                // breathing. Real meters have behaved this way since they were
+                // needles.
+                let coefficient = target > self.audioLevel ? 0.6 : 0.14
+                self.audioLevel += (target - self.audioLevel) * coefficient
                 return
             }
 

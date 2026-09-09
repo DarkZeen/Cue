@@ -80,6 +80,8 @@ private struct GeneralPane: View {
         Form {
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin.isEnabled)
+
+                Toggle("Explain each setting", isOn: $settings.showsHints)
                 if launchAtLogin.requiresApproval {
                     Text("macOS is waiting for you to allow this in System Settings → General → Login Items.")
                         .font(.callout)
@@ -108,11 +110,19 @@ private struct GeneralPane: View {
                         Without it the mark still moves — it just moves to a \
                         rhythm of its own rather than to yours.
                         """)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
 
                     Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
+
+                    Picker("Animation", selection: $settings.plaqueAnimation) {
+                        ForEach(PlaqueAnimation.allCases, id: \.self) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(settings.plaqueAnimation.summary)
+                        .hint(settings.showsHints)
 
                     Text("""
                         A small plaque in the top-right corner of the screen, \
@@ -120,18 +130,14 @@ private struct GeneralPane: View {
                         opening anything. Click the record to see the full \
                         player.
                         """)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
 
                     Text("""
                         Cue plays it in its own window, signed in as you. Closing \
                         that window hides it — the music keeps going — and \
                         `\(CueURL.scheme)://player` brings it back.
                         """)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
 
                     Text("Hold ⌘ and drag the plaque to move it. It stays where you leave it.")
                         .font(.callout)
@@ -175,9 +181,7 @@ private struct GeneralPane: View {
                     panel. Position is kept as a proportion of the screen, so \
                     it means the same thing on any display.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
 
                 Picker("Grid", selection: $settings.panelDesign) {
                     ForEach(PanelDesign.allCases, id: \.self) { design in
@@ -187,15 +191,11 @@ private struct GeneralPane: View {
                 .pickerStyle(.segmented)
 
                 Text(settings.panelDesign.summary)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
 
                 if settings.panelDesign == .gallery {
                     Text("⌘1 to ⌘9 open a tile on the page you are looking at. ⌘R deals a different nine. ⌘E swaps between your own music and Explore.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
                 }
             }
 
@@ -224,9 +224,7 @@ private struct GeneralPane: View {
                     registered shortcut is never shown any keystroke but its \
                     own.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
 
                 if let error = hotKey.lastError {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -244,9 +242,7 @@ private struct GeneralPane: View {
                     combination — macOS gives it to whoever asked first, and \
                     says nothing about it. Pick a different one.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
             }
 
             Section("From a script") {
@@ -254,9 +250,7 @@ private struct GeneralPane: View {
                     Cue also answers a URL, for Shortcuts.app, a launcher you \
                     already use, or anything else that can run a command.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
 
                 HStack {
                     // Taken from the bundle, so a development build shows the
@@ -358,9 +352,7 @@ private struct AccountsPane: View {
                         API v3, then create an OAuth client of type Desktop app \
                         and paste it here. It stays in your keychain.
                         """)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
 
                     TextField("Client ID", text: $clientID, prompt: Text("…apps.googleusercontent.com"))
                     SecureField("Client secret", text: $clientSecret, prompt: Text("Desktop clients have one; leave empty otherwise"))
@@ -417,9 +409,7 @@ private struct AccountsPane: View {
                     without notice. If it stops working, turn it off; \
                     everything official keeps running.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
 
                 if settings.unofficialProviderEnabled {
                     let signedIn = coordinator.player?.isSignedIn == true
@@ -453,9 +443,7 @@ private struct AccountsPane: View {
                         music and what reads your library, so there is only \
                         ever one place to sign in.
                         """)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .hint(settings.showsHints)
 
                     if let error = session.lastError {
                         Text(error)
@@ -491,9 +479,7 @@ private struct TilesPane: View {
                     as that does. Press ⌘1 to ⌘9 in the panel to open a \
                     position without looking at it.
                     """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .hint(settings.showsHints)
             }
 
             Section("Kept") {
@@ -604,5 +590,36 @@ private struct UpdatesRow: View {
             "An update is downloaded and verified. Relaunching will install it."
         case .failed(let reason): reason
         }
+    }
+}
+
+
+// MARK: - Hints
+
+/// The small grey explanation under a setting.
+///
+/// Hideable, because the two audiences are different people: someone meeting a
+/// switch for the first time needs to know what it does, and someone who has
+/// used it for a month needs the window to be short enough to scan. Written as
+/// a modifier rather than a wrapper view so the call sites read as the styling
+/// they replaced.
+private struct HintModifier: ViewModifier {
+    let shows: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if shows {
+            content
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+extension View {
+    /// Styles a line as an explanation, and hides it when explanations are off.
+    func hint(_ shows: Bool) -> some View {
+        modifier(HintModifier(shows: shows))
     }
 }

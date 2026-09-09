@@ -34,6 +34,9 @@ final class SettingsStore {
         isExploring = defaults.bool(forKey: Key.isExploring)
         checksForUpdates = defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
+        showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
+        plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
+            .flatMap(PlaqueAnimation.init(rawValue:)) ?? .wave
 
         albumCollection = {
             guard let data = defaults.data(forKey: Key.albumCollection),
@@ -169,6 +172,20 @@ final class SettingsStore {
     private func saveAlbumCollection() {
         guard let data = try? JSONEncoder().encode(albumCollection) else { return }
         defaults.set(data, forKey: Key.albumCollection)
+    }
+
+    /// Which animation the mark in the corner uses.
+    var plaqueAnimation: PlaqueAnimation {
+        didSet { defaults.set(plaqueAnimation.rawValue, forKey: Key.plaqueAnimation) }
+    }
+
+    /// Whether Settings explains itself.
+    ///
+    /// On, because a switch whose consequences are invisible is a switch people
+    /// leave alone. Off once you know what everything does, and then the window
+    /// is a third of the height.
+    var showsHints: Bool {
+        didSet { defaults.set(showsHints, forKey: Key.showsHints) }
     }
 
     /// Whether the mark reacts to the actual audio.
@@ -364,6 +381,8 @@ final class SettingsStore {
         static let isExploring = "isExploring"
         static let checksForUpdates = "checksForUpdates"
         static let analysesAudio = "analysesAudio"
+        static let showsHints = "showsHints"
+        static let plaqueAnimation = "plaqueAnimation"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"

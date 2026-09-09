@@ -34,6 +34,9 @@ struct GalleryView: View {
             dots
                 .frame(height: CueLayout.Gallery.dotsHeight)
         }
+        // Two fingers, the way pages are turned everywhere else on this
+        // machine. The arrow keys still work; this is the same journey by hand.
+        .onHorizontalSwipe { presenter.movePage(by: $0) }
         .onAppear {
             presenter.setSelectableCount(SettingsStore.tileCount)
             coordinator.refresh()

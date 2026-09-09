@@ -143,7 +143,9 @@ Search asks both and merges the answers, preferring whichever knows more.
 | Key | Does |
 |---|---|
 | ⌥Space | Open the panel, or close it if it is already open |
+| ← → , or two fingers | Move between the grid's pages |
 | Scroll the plaque's speaker | Volume |
+| ⌘, | Settings |
 | ⌘1 – ⌘9 | Open that position in the grid |
 | ⌘E | Swap between your own music and Explore |
 | ⌘R | Deal a different nine on this page |

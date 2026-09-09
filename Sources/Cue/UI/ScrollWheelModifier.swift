@@ -49,3 +49,79 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
         }
     }
 }
+
+
+/// Two-finger horizontal swipes, reported once per gesture.
+///
+/// SwiftUI has no gesture for this: `DragGesture` never sees a trackpad scroll,
+/// and a raw scroll-wheel handler fires dozens of times across one flick. So
+/// the movement is accumulated within a gesture and reported once, after which
+/// the direction is locked until the fingers lift — otherwise a single
+/// enthusiastic swipe pages three times.
+struct HorizontalSwipeModifier: ViewModifier {
+    let onSwipe: (Int) -> Void
+
+    func body(content: Content) -> some View {
+        content.background(SwipeCatcher(onSwipe: onSwipe))
+    }
+}
+
+extension View {
+    /// `-1` for a swipe left, `+1` for a swipe right.
+    func onHorizontalSwipe(_ onSwipe: @escaping (Int) -> Void) -> some View {
+        modifier(HorizontalSwipeModifier(onSwipe: onSwipe))
+    }
+}
+
+private struct SwipeCatcher: NSViewRepresentable {
+    let onSwipe: (Int) -> Void
+
+    func makeNSView(context: Context) -> CatcherView {
+        let view = CatcherView()
+        view.onSwipe = onSwipe
+        return view
+    }
+
+    func updateNSView(_ view: CatcherView, context: Context) {
+        view.onSwipe = onSwipe
+    }
+
+    final class CatcherView: NSView {
+        var onSwipe: ((Int) -> Void)?
+
+        private var travelled: CGFloat = 0
+        private var handled = false
+
+        /// How far two fingers must travel before it counts.
+        ///
+        /// Low enough that a deliberate flick works, high enough that scrolling
+        /// past the panel on the way somewhere else does not turn a page.
+        private static let threshold: CGFloat = 28
+
+        override func scrollWheel(with event: NSEvent) {
+            switch event.phase {
+            case .began:
+                travelled = 0
+                handled = false
+            case .ended, .cancelled:
+                travelled = 0
+                handled = false
+                return
+            default:
+                break
+            }
+
+            // Vertical intent is not horizontal intent. Without this a diagonal
+            // scroll pages sideways while the user is trying to scroll a list.
+            guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { return }
+
+            travelled += event.scrollingDeltaX
+            guard !handled, abs(travelled) >= Self.threshold else { return }
+
+            handled = true
+            // Natural scrolling: fingers moving left carry the content left,
+            // which reveals the page to the *right*.
+            onSwipe?(travelled < 0 ? 1 : -1)
+        }
+    }
+}
