@@ -80,12 +80,15 @@ That mark is the logo itself — the shapes from `Resources/CueLogo.svg`, used
 exactly as drawn. `Scripts/generate-logo.py` flattens the group transforms and
 normalises them into geometry the app and the icon both draw from, so the two
 can never drift apart. Edit the artwork and re-run the script; do not edit the
-generated files. It can move to the music rather than to a rhythm of
-its own — Settings → Playback turns that on. It is off by default because it
-routes YouTube Music's audio through an analyser, and the browser API involved
-cannot be undone for the life of the page: if it goes wrong the music stops
-until the player reopens. Animating a logo is not worth risking playback on
-someone's behalf.
+generated files. Settings → Playback picks between three forms of it.
+
+The motion is invented, not measured. Cue cannot see the audio: WebKit will not
+start an `AudioContext` without a gesture inside the page, and the player is
+deliberately never touched — that is what lets it stay hidden. So the mark is
+built to be *shaped* like music instead of following any: a swell underneath the
+individual motion, rates that share no common factor so the pattern has no
+period the eye can find. It was worth being honest about rather than shipping a
+switch that could only ever route your audio through a graph that never runs.
 
 What Cue will not do is pull the audio stream out and play it through
 `AVPlayer`. It would be more "native", and it means going around YouTube's

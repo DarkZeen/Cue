@@ -33,7 +33,6 @@ final class SettingsStore {
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         checksForUpdates = defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true
-        analysesAudio = defaults.bool(forKey: Key.analysesAudio)
         showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
             .flatMap(PlaqueAnimation.init(rawValue:)) ?? .wave
@@ -187,22 +186,6 @@ final class SettingsStore {
     var showsHints: Bool {
         didSet { defaults.set(showsHints, forKey: Key.showsHints) }
     }
-
-    /// Whether the mark reacts to the actual audio.
-    ///
-    /// Off. Turning it on routes YouTube Music's audio through an analyser, and
-    /// that is a one-way door — the browser API involved cannot be undone for
-    /// the life of the page, so if it goes wrong the music stops until Cue
-    /// reopens the player. A moving logo is not worth risking playback on
-    /// someone's behalf, so this is theirs to choose.
-    var analysesAudio: Bool {
-        didSet {
-            defaults.set(analysesAudio, forKey: Key.analysesAudio)
-            onAudioAnalysisChange?()
-        }
-    }
-
-    var onAudioAnalysisChange: (() -> Void)?
 
     /// Whether Cue looks for new versions on its own.
     ///
@@ -380,7 +363,6 @@ final class SettingsStore {
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let checksForUpdates = "checksForUpdates"
-        static let analysesAudio = "analysesAudio"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"
         static let panelDesign = "panelDesign"

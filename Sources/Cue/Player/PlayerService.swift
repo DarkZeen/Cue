@@ -48,10 +48,6 @@ final class PlayerService: NSObject {
     private var window: NSWindow?
     private var webView: WKWebView?
 
-    /// Whether to route the page's audio through an analyser. Set by
-    /// `AppState` from the setting; see the script's `enableAnalysis`.
-    var wantsAnalysis = false
-
     private let logger = Diagnostics.logger("player")
 
     /// Raised whenever what is playing, or whether the window is up, changes.
@@ -67,24 +63,6 @@ final class PlayerService: NSObject {
 
     /// Where Home goes, and where the player starts.
     static let home = URL(string: "https://music.youtube.com/")!
-
-    /// How loud the music is right now, 0 to 1.
-    ///
-    /// Real when the page's audio can be analysed and the setting allows it;
-    /// otherwise a stand-in that keeps the waveform moving without claiming to
-    /// know anything about the music. See `Settings → Playback`.
-    private(set) var audioLevel: Double = 0
-
-    /// Whether the page is currently analysing its audio.
-    private(set) var isAnalysing = false
-
-    /// The spectrum, low to high. Empty when nothing is being analysed.
-    ///
-    /// Nine bands rather than one number, because a meter whose bars all share
-    /// a value is a row of blinking lights. Each carries its own envelope, so
-    /// the bass can be decaying while a cymbal is still rising — which is what
-    /// makes a spectrum look like it is listening.
-    private(set) var audioBands: [Double] = []
 
     /// Whether the page is signed in, as the page itself reports it.
     ///
@@ -205,8 +183,6 @@ final class PlayerService: NSObject {
                 if self.nowPlaying?.isPlaying == true {
                     self.wantsPlayback = false
 
-                    self.beginAnalysis()
-
                     // Shuffled only once it is actually playing: the control
                     // does not exist until the player bar does, and toggling it
                     // before then does nothing and reports success.
@@ -298,35 +274,6 @@ final class PlayerService: NSObject {
 
     func previous() {
         evaluate("__cue.previous()")
-    }
-
-    /// Reloads the page, discarding the audio graph with it.
-    ///
-    /// The only way to undo `createMediaElementSource`: the routing belongs to
-    /// the media element, and the element does not survive a reload. Costs the
-    /// current track its position, which is the right price for a way out of
-    /// silence.
-    func reloadForAnalysisChange() {
-        guard let webView, isLoaded else { return }
-        logger.notice("Reloading the player to release the audio graph.")
-
-        audioLevel = 0
-        audioBands = []
-        isAnalysing = false
-
-        // Reloading stops the music, and a setting that silently stops the
-        // music is worse than the problem it solves. The page is told to pick
-        // up where the nudge would have left it.
-        wantsPlayback = true
-        webView.reload()
-    }
-
-    /// Asks the page to start analysing its audio, if it is playing.
-    func beginAnalysis() {
-        // A flag the page reads on its own schedule, rather than a one-shot
-        // call. The page outlives no navigation; the flag survives every one,
-        // because the script re-reads it on the next tick.
-        evaluate("__cue.wantsAnalysis = \(wantsAnalysis); if (!\(wantsAnalysis)) { __cue._analysisFailed = false; }")
     }
 
     func toggleMute() {
@@ -699,98 +646,6 @@ final class PlayerService: NSObject {
               return false;
             },
 
-            // Routes the audio through an analyser so Cue can see the music.
-            //
-            // Deliberately not done unless asked. `createMediaElementSource`
-            // is a one-way door: from the moment it is called, that element's
-            // sound exists only inside the graph, and if the context cannot run
-            // there is silence until the page reloads. Breaking playback to
-            // animate a logo is a bad trade to make on someone's behalf.
-            enableAnalysis() {
-              if (this._analyser) { return true; }
-              if (this._analysisFailed) { return false; }
-
-              const media = this.deepMedia();
-              if (!media) { return false; }
-
-              try {
-                const Context = window.AudioContext || window.webkitAudioContext;
-                if (!Context) { this._analysisFailed = true; return false; }
-
-                this._context = this._context || new Context();
-
-                // One source per element, ever. A second call throws, and the
-                // element is already ours from the first.
-                if (!media.__cueSource) {
-                  media.__cueSource = this._context.createMediaElementSource(media);
-                }
-
-                const analyser = this._context.createAnalyser();
-                analyser.fftSize = 256;
-                // Smoothed on the page rather than in Swift: the raw frames are
-                // jittery enough to make the mark twitch.
-                analyser.smoothingTimeConstant = 0.72;
-
-                media.__cueSource.connect(analyser);
-                // Connected onward to the speakers, which is what keeps the
-                // music audible now that it no longer goes there directly.
-                analyser.connect(this._context.destination);
-
-                this._analyser = analyser;
-                this._bins = new Uint8Array(analyser.frequencyBinCount);
-                return true;
-              } catch (error) {
-                this._analysisFailed = true;
-                return false;
-              }
-            },
-
-            // The spectrum, as a handful of bands plus their mean.
-            //
-            // One averaged number cannot drive a spectrum: every bar would be
-            // the same height and rise together, which is a row of blinking
-            // lights rather than a meter. Bands are spaced logarithmically
-            // because hearing is — linear bins put almost everything in the
-            // first few and leave the rest flat.
-            analyse(count) {
-              if (!this._analyser) { return null; }
-
-              // A suspended context reads as silence, so this is not optional —
-              // and whether it can be resumed at all is the whole question.
-              // WebKit will not start an AudioContext without a user gesture
-              // inside the page, and Cue's player is deliberately never
-              // touched. The outcome is recorded rather than assumed.
-              if (this._context.state === 'suspended' && !this._resuming) {
-                this._resuming = true;
-                this._context.resume().then(
-                  () => { this._resumeResult = 'resumed'; this._resuming = false; },
-                  (error) => { this._resumeResult = 'refused: ' + error.name; this._resuming = false; }
-                );
-              }
-
-              this._analyser.getByteFrequencyData(this._bins);
-
-              const total = this._bins.length;
-              const bands = [];
-              for (let i = 0; i < count; i++) {
-                const low = Math.floor(Math.pow(total, i / count));
-                const high = Math.max(low + 1, Math.floor(Math.pow(total, (i + 1) / count)));
-                let sum = 0;
-                let n = 0;
-                for (let j = low; j < high && j < total; j++) { sum += this._bins[j]; n++; }
-                bands.push(n ? (sum / n) / 255 : 0);
-              }
-
-              // The mean is weighted to the low end, where a beat lives.
-              // Including the highs makes cymbals dominate and the mark reads
-              // as hiss rather than as rhythm.
-              const low = Math.max(1, Math.floor(total / 3));
-              let sum = 0;
-              for (let i = 0; i < low; i++) { sum += this._bins[i]; }
-
-              return { level: (sum / low) / 255, bands: bands };
-            },
-
             // Turns shuffle on, and only on.
             //
             // A plain click toggles, so a queue that was already shuffled would
@@ -891,7 +746,6 @@ final class PlayerService: NSObject {
             }
           };
 
-          cue.wantsAnalysis = false;
           window.__cue = cue;
 
           let last = null;
@@ -917,39 +771,6 @@ final class PlayerService: NSObject {
           // now-playing label being stale.
           setInterval(report, 1000);
 
-          // The level is its own stream at its own rate. Folding it into the
-          // state report would mean either a stale waveform or a hundred
-          // needless messages a minute about a title that has not changed.
-          setInterval(function () {
-            try {
-              if (!cue.wantsAnalysis) { return; }
-
-              // Set up here rather than only when Swift asks. A page navigation
-              // replaces the media element and re-runs this script, so an
-              // analyser attached once at the start of a session is attached to
-              // an element that no longer exists by the second track — and the
-              // meter goes flat without anything reporting a failure.
-              if (!cue._analyser && !cue._analysisFailed) {
-                cue.enableAnalysis();
-              }
-
-              const reading = cue.analyse(9);
-              if (reading === null) {
-                window.webkit.messageHandlers.cue.postMessage({
-                  analysing: false,
-                  failed: !!cue._analysisFailed
-                });
-                return;
-              }
-
-              reading.analysing = true;
-              reading.contextState = cue._context ? cue._context.state : 'none';
-              reading.resumeResult = cue._resumeResult || 'not attempted';
-              window.webkit.messageHandlers.cue.postMessage(reading);
-            } catch (error) {
-              /* ignored on purpose */
-            }
-          }, 70);
           document.addEventListener('play', report, true);
           document.addEventListener('pause', report, true);
           document.addEventListener('volumechange', report, true);
@@ -1014,62 +835,6 @@ extension PlayerService: WKScriptMessageHandler {
 
             // The level arrives on its own, many times a second, and carries
             // nothing else.
-            // Whether the page is analysing at all, reported separately from
-            // any numbers. A meter reading zero and a meter reading nothing
-            // look identical on screen and need opposite fixes.
-            if let analysing = body["analysing"] as? Bool {
-                if analysing != self.isAnalysing {
-                    self.isAnalysing = analysing
-                    self.logger.notice(
-                        "Audio analysis \(analysing ? "running" : "stopped", privacy: .public); context \(body["contextState"] as? String ?? "none", privacy: .public); resume \(body["resumeResult"] as? String ?? "-", privacy: .public)"
-                    )
-                }
-                if !analysing {
-                    // Stale numbers are worse than none: nine zeroes hold the
-                    // meter flat for ever and look exactly like silence.
-                    self.audioBands = []
-                    self.audioLevel = 0
-                    return
-                }
-            }
-
-            if let level = body["level"] as? Double {
-                let target = min(max(level, 0), 1)
-
-                // Fast attack, slow release — the detail that makes a meter
-                // read as *hearing* something rather than wobbling. A beat
-                // arrives instantly and decays; following the raw level in both
-                // directions produces a jitter that looks like noise, and
-                // smoothing both equally produces a soft pulse that looks like
-                // breathing. Real meters have behaved this way since they were
-                // needles.
-                let coefficient = target > self.audioLevel ? 0.6 : 0.14
-                self.audioLevel += (target - self.audioLevel) * coefficient
-
-                if let bands = body["bands"] as? [Double] {
-                    if self.audioBands.count != bands.count {
-                        self.audioBands = bands
-                    } else {
-                        self.audioBands = zip(self.audioBands, bands).map { held, incoming in
-                            let clamped = min(max(incoming, 0), 1)
-                            // Same shaping per band. The high bands especially
-                            // need it: they are the spikiest, and following
-                            // them raw makes the outer bars flicker.
-                            return held + (clamped - held) * (clamped > held ? 0.6 : 0.16)
-                        }
-                    }
-                }
-                return
-            }
-
-            // Read first, and unconditionally. Returning early on a missing
-            // title threw away the signed-in flag along with it, which is the
-            // one piece of this message that matters before any music plays.
-            if let signedIn = body["signedIn"] as? Bool, signedIn != self.isSignedIn {
-                self.isSignedIn = signedIn
-                self.logger.notice("Player signed in: \(signedIn, privacy: .public)")
-            }
-
             let title = body["title"] as? String ?? ""
             guard !title.isEmpty else { return }
 
@@ -1110,9 +875,6 @@ extension PlayerService: WKNavigationDelegate {
     ) {
         MainActor.assumeIsolated {
             self.lastError = nil
-            // Re-asserted per page, since each navigation re-runs the script
-            // with the flag back at its default.
-            self.beginAnalysis()
             if self.wantsPlayback { self.nudgeIntoPlaying() }
         }
     }

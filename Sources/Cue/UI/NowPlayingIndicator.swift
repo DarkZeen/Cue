@@ -6,12 +6,13 @@ import SwiftUI
 /// obviously correct. What they share is the discipline: motion only while the
 /// music is moving, nothing that overshoots, and everything derived from one
 /// clock so no two parts can drift.
+///
+/// None of them listens to the audio. WebKit will not start an `AudioContext`
+/// without a gesture inside the page, and Cue's player is deliberately never
+/// touched — so the honest thing is motion that is *shaped* like music without
+/// pretending to follow any. See `ProceduralMotion` for what that costs.
 struct NowPlayingIndicator: View {
     let nowPlaying: PlayerService.NowPlaying
-    /// 0 to 1, already shaped by the envelope in `PlayerService`.
-    var level: Double = 0
-    /// The spectrum, low to high. Only the bars use it.
-    var bands: [Double] = []
     var style: PlaqueAnimation = .wave
     let onOpen: () -> Void
 
@@ -26,9 +27,9 @@ struct NowPlayingIndicator: View {
 
             Group {
                 switch style {
-                case .wave: WaveIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
-                case .disc: DiscIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
-                case .bars: BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                case .wave: WaveIndicator(elapsed: elapsed, isAnimating: isAnimating)
+                case .disc: DiscIndicator(elapsed: elapsed, isAnimating: isAnimating)
+                case .bars: BarsIndicator(elapsed: elapsed, isAnimating: isAnimating)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so
@@ -55,6 +56,27 @@ struct NowPlayingIndicator: View {
     }
 }
 
+// MARK: - Motion
+
+/// The dynamics all three styles borrow, since none of them can hear anything.
+///
+/// A visualiser with a constant amplitude is the giveaway. Real music arrives in
+/// swells — a chorus lifts, a verse settles — and a meter that holds one height
+/// reads as a mechanism within about ten seconds, however well its individual
+/// wiggle is tuned.
+///
+/// So the amplitude itself moves, slowly, on rates chosen to share no common
+/// factor. The eye is very good at finding a period; the defence is not to have
+/// one it can find inside the time anybody looks.
+private enum ProceduralMotion {
+    /// A slow swell, 0 to 1, that never sits still and never repeats visibly.
+    static func swell(at elapsed: TimeInterval) -> Double {
+        let slow = sin(elapsed / 7.3 * 2 * .pi)
+        let slower = sin(elapsed / 11.9 * 2 * .pi + 1.1)
+        return (slow * 0.5 + slower * 0.5 + 1) / 2
+    }
+}
+
 // MARK: - Wave
 
 /// Cue's own mark, each shape stretched about the centre line.
@@ -68,15 +90,15 @@ struct NowPlayingIndicator: View {
 ///   it is inflating; one whose edges move most looks like sound arriving.
 private struct WaveIndicator: View {
     let elapsed: TimeInterval
-    let level: Double
     let isAnimating: Bool
 
     private var count: Int { CueWavePath.shapes.count }
 
-    /// Small. The mark is a status light beside a search field, not a
-    /// centrepiece, and at this size the shapes read as one object that moves
-    /// rather than nine that wobble.
-    private static let height: CGFloat = 18
+    /// Small, and then smaller. The mark is a status light beside a search
+    /// field, not a centrepiece; at this size the nine shapes read as one
+    /// object that moves rather than nine that wobble, and the breath
+    /// underneath them has room to show without the mark crowding the field.
+    private static let height: CGFloat = 14
 
     var body: some View {
         ZStack {
@@ -96,14 +118,17 @@ private struct WaveIndicator: View {
         .scaleEffect(pulse)
     }
 
-    /// A slow swell, lifted by whatever is playing.
+    /// A breath, riding on the slower swell.
     private var pulse: CGFloat {
         guard isAnimating else { return 1 }
 
         // A sine rather than a repeating ease: a breath has no beginning and no
         // end, and any keyframed loop shows its seam eventually.
         let breath = sin(elapsed / 2.6 * 2 * .pi)
-        return 1 + CGFloat(breath * 0.035) + CGFloat(min(max(level, 0), 1) * 0.09)
+        let swell = ProceduralMotion.swell(at: elapsed)
+        // Larger than it was, because the mark is smaller than it was: the
+        // same proportion on a smaller object is less motion, not equal motion.
+        return 1 + CGFloat(breath * 0.05) + CGFloat(swell * 0.08)
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -122,7 +147,7 @@ private struct WaveIndicator: View {
         // values were tuned looking straight at it, which is the one way this
         // is never actually seen — and at that amplitude the mark only
         // shimmered.
-        let amplitude = 0.10 + 0.62 * min(max(level, 0), 1)
+        let amplitude = 0.18 + 0.44 * ProceduralMotion.swell(at: elapsed)
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
@@ -151,7 +176,6 @@ private struct CueWaveShape: Shape {
 /// A record turning, with notes drifting off it.
 private struct DiscIndicator: View {
     let elapsed: TimeInterval
-    let level: Double
     let isAnimating: Bool
 
     /// One turn every four seconds. A record at 33⅓ rpm is 1.8 seconds a turn,
@@ -188,9 +212,9 @@ private struct DiscIndicator: View {
         }
         .rotationEffect(angle)
         .frame(width: 22, height: 22)
-        // The one place the level shows on this style: the record leans into
-        // a loud passage rather than turning at a constant, indifferent rate.
-        .scaleEffect(1 + CGFloat(level) * 0.07)
+        // The one place the swell shows on this style: the record leans in and
+        // out rather than turning at a constant, indifferent rate.
+        .scaleEffect(1 + CGFloat(ProceduralMotion.swell(at: elapsed)) * 0.05)
         .offset(x: 3)
     }
 
@@ -224,10 +248,6 @@ private struct DiscIndicator: View {
 /// which lives in the low end, moves the part of the mark the eye is already on.
 private struct BarsIndicator: View {
     let elapsed: TimeInterval
-    let level: Double
-    /// The spectrum, low to high. Empty when nothing is being analysed, in
-    /// which case the bars fall back to a rhythm of their own.
-    let bands: [Double]
     let isAnimating: Bool
 
     /// Bands either side of the centre. Nine gives seventeen bars, which is
@@ -275,19 +295,16 @@ private struct BarsIndicator: View {
         return resting + CGFloat(min(value * lift, 1)) * reach
     }
 
-    /// The level for a band, from the spectrum when there is one.
+    /// How high a band stands. Invention — but invention shaped like music
+    /// rather than a sine wave wearing a costume.
+    ///
+    /// Three things separate the two. A pulse at a plausible tempo, so the
+    /// whole meter lifts together the way it does on a beat. Bands that decay
+    /// at different speeds, because bass rings on and hi-hats do not. And rates
+    /// that share no common factor, so the pattern never visibly repeats — the
+    /// eye finds a period in seconds otherwise, which is what makes a fake
+    /// meter look fake.
     private func reading(_ band: Int) -> Double {
-        if bands.indices.contains(band) { return bands[band] }
-
-        // No analyser. This is invention, and it should at least be invention
-        // shaped like music rather than a sine wave wearing a costume.
-        //
-        // Three things separate the two. A pulse at a plausible tempo, so the
-        // whole meter lifts together the way it does on a beat. Bands that
-        // decay at different speeds, because bass rings on and hi-hats do not.
-        // And rates that share no common factor, so the pattern never visibly
-        // repeats — the eye finds a period in seconds otherwise, which is what
-        // makes a fake meter look fake.
         let position = Double(band) / Double(Self.bandCount - 1)
 
         // Roughly 100bpm. Sharpened so it reads as a hit rather than a swell.
@@ -301,7 +318,9 @@ private struct BarsIndicator: View {
         let follow = 1 - position
         let shape = wobble * (0.45 + 0.55 * position) + beat * follow * 0.8
 
-        return (0.16 + 0.5 * level) * min(shape, 1)
+        // The whole meter rises and falls underneath the individual bars, which
+        // is what a chorus does and what a loop cannot fake.
+        return (0.24 + 0.4 * ProceduralMotion.swell(at: elapsed)) * min(shape, 1)
     }
 
     /// The tall middle is the brightest, the tips fade out. It is the depth

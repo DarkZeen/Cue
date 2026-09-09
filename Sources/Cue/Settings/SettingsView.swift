@@ -99,18 +99,6 @@ private struct GeneralPane: View {
                 if settings.playbackDestination == .inApp {
                     Toggle("Shuffle playlists and albums", isOn: $settings.shufflesContainers)
 
-                    Toggle("Make the mark react to the music", isOn: $settings.analysesAudio)
-
-                    Text("""
-                        Routes YouTube Music's audio through an analyser so the \
-                        mark follows what you are actually hearing. Off by \
-                        default because the browser API it needs cannot be \
-                        undone within a page — but turning this back off \
-                        reloads the player, which undoes it. If the music ever \
-                        goes quiet, switch this off and it will come back.
-                        """)
-                        .hint(settings.showsHints)
-
                     Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
 
                     Picker("Animation", selection: $settings.plaqueAnimation) {
@@ -122,20 +110,6 @@ private struct GeneralPane: View {
 
                     Text(settings.plaqueAnimation.summary)
                         .hint(settings.showsHints)
-
-                    // Said here rather than only beside the switch that governs
-                    // it. Choosing a visualiser and getting a loop is the kind
-                    // of thing people conclude is broken, and they are not
-                    // wrong — it just is not listening yet.
-                    if !settings.analysesAudio {
-                        Label(
-                            "This moves to a rhythm of its own until \"Make the mark react to the music\" is on.",
-                            systemImage: "waveform.slash"
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
 
                     Text("""
                         A small plaque in the top-right corner of the screen, \

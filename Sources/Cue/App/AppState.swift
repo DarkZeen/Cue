@@ -145,25 +145,6 @@ final class AppState {
         // build a player, before anyone has asked for a song.
         if settings.playbackDestination == .inApp { player.warmUp() }
 
-        player.wantsAnalysis = settings.analysesAudio
-        settings.onAudioAnalysisChange = { [weak self] in
-            guard let self else { return }
-            self.player.wantsAnalysis = self.settings.analysesAudio
-
-            self.player.beginAnalysis()
-
-            if !self.settings.analysesAudio {
-                // Turning it off reloads the page, which is the undo.
-                //
-                // `createMediaElementSource` cannot be reversed for an element,
-                // but the element does not survive a reload — so the switch is
-                // reversible after all, at the cost of restarting the track.
-                // That matters more than the cost: it means someone whose music
-                // has gone silent has a way back that is not "quit the app".
-                self.player.reloadForAnalysisChange()
-            }
-        }
-
         updates.startChecking()
 
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
