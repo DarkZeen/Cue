@@ -18,6 +18,7 @@ final class AppState {
     let playback: PlaybackService
     let miniPlayer: MiniPlayerController
     let layoutEditor = LayoutEditor()
+    let updates: UpdateService
 
     private var panel: CueWindowController?
     private var settingsWindow: NSWindow?
@@ -35,6 +36,7 @@ final class AppState {
         self.player = player
         self.playback = PlaybackService(settings: settings, player: player, coordinator: coordinator)
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
+        self.updates = UpdateService(settings: settings)
     }
 
 
@@ -141,6 +143,8 @@ final class AppState {
         // build a player, before anyone has asked for a song.
         if settings.playbackDestination == .inApp { player.warmUp() }
 
+        updates.startChecking()
+
         if Diagnostics.opensPanelAtLaunch || Diagnostics.debugQuery != nil { openPanel() }
         if Diagnostics.debugSettingsPane != nil { showSettings() }
     }
@@ -188,7 +192,8 @@ final class AppState {
             hotKey: hotKey,
             player: player,
             onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() },
-            onEditLayout: { [weak self] in self?.layoutEditor.begin() }
+            onEditLayout: { [weak self] in self?.layoutEditor.begin() },
+            updates: updates
         )
 
         let window = NSWindow(

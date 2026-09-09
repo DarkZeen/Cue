@@ -147,7 +147,9 @@ final class CueWindowController {
         presenter.present()
         coordinator.refresh()
 
-        logger.notice("Panel presented on a \(Int(visible.width), privacy: .public)×\(Int(visible.height), privacy: .public) display.")
+        logger.notice(
+            "Panel presented: level \(self.panel.level.rawValue, privacy: .public), visible \(self.panel.isVisible, privacy: .public), active space \(self.panel.isOnActiveSpace, privacy: .public), app active \(NSApp.isActive, privacy: .public)"
+        )
     }
 
     func dismiss() {

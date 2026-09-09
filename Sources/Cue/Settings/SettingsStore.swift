@@ -32,6 +32,7 @@ final class SettingsStore {
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
         isExploring = defaults.bool(forKey: Key.isExploring)
+        checksForUpdates = defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true
 
         albumCollection = {
             guard let data = defaults.data(forKey: Key.albumCollection),
@@ -167,6 +168,15 @@ final class SettingsStore {
     private func saveAlbumCollection() {
         guard let data = try? JSONEncoder().encode(albumCollection) else { return }
         defaults.set(data, forKey: Key.albumCollection)
+    }
+
+    /// Whether Cue looks for new versions on its own.
+    ///
+    /// On. An app installed by hand from a repository has no other way of
+    /// telling you it has moved on, and the alternative is a version that
+    /// quietly rots.
+    var checksForUpdates: Bool {
+        didSet { defaults.set(checksForUpdates, forKey: Key.checksForUpdates) }
     }
 
     /// Whether a playlist or album starts shuffled.
@@ -335,6 +345,7 @@ final class SettingsStore {
         static let shufflesContainers = "shufflesContainers"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
+        static let checksForUpdates = "checksForUpdates"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"

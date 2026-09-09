@@ -83,6 +83,29 @@ terms, its advertising and its accounting for the artists — and it breaks ever
 time Google rotates the signature ciphering, which is often. Settings →
 General can switch back to handing off to your browser if you prefer that.
 
+## Updates
+
+Cue checks GitHub for a newer release shortly after launch and once a day after
+that, and offers to install one when it finds it. Settings → General turns that
+off.
+
+It will not install anything not signed by the same identity as the copy asking.
+An updater that downloads code and runs it is a remote execution facility, and
+the signature check is the only thing separating it from a bad one — so an
+archive signed by anyone else is discarded rather than installed.
+
+To publish one:
+
+```sh
+./Scripts/release.sh 0.2.0
+```
+
+Which builds, signs, archives, verifies the archive still passes its own
+signature, tags, and publishes a GitHub release with the zip attached. Keep the
+signing identity: a release signed with a different certificate will be refused
+by every copy already installed, which is the feature working correctly and
+also the way to strand everyone.
+
 ## Connecting an account
 
 Cue talks to YouTube two ways, and the second one is optional.

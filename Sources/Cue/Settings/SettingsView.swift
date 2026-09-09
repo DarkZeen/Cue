@@ -14,6 +14,7 @@ struct SettingsView: View {
     let player: PlayerService
     let onResetMiniPlayer: () -> Void
     let onEditLayout: () -> Void
+    let updates: UpdateService
 
     @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
@@ -33,7 +34,8 @@ struct SettingsView: View {
                     hotKey: hotKey,
                     player: player,
                     onResetMiniPlayer: onResetMiniPlayer,
-                    onEditLayout: onEditLayout
+                    onEditLayout: onEditLayout,
+                    updates: updates
                 )
             } label: {
                 Label("General", systemImage: "gearshape")
@@ -65,6 +67,7 @@ private struct GeneralPane: View {
     let player: PlayerService
     let onResetMiniPlayer: () -> Void
     let onEditLayout: () -> Void
+    let updates: UpdateService
 
     @State private var didCopyCommand = false
 
@@ -259,6 +262,10 @@ private struct GeneralPane: View {
                 Text("\(CueURL.scheme)://toggle closes the panel again if it is already open.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Updates") {
+                UpdatesRow(updates: updates, settings: settings)
             }
 
             Section {
@@ -466,5 +473,77 @@ private struct TilesPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+
+// MARK: - Updates
+
+/// The update row: what version this is, and what Cue knows about newer ones.
+private struct UpdatesRow: View {
+    let updates: UpdateService
+    @Bindable var settings: SettingsStore
+
+    var body: some View {
+        Toggle("Check for updates automatically", isOn: $settings.checksForUpdates)
+
+        LabeledContent("Version") {
+            HStack(spacing: 10) {
+                Text(updates.currentVersion)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                action
+            }
+        }
+
+        if let message = status {
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(isFailure ? .red : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var action: some View {
+        switch updates.state {
+        case .checking:
+            ProgressView().controlSize(.small)
+
+        case .downloading:
+            ProgressView().controlSize(.small)
+
+        case .readyToRelaunch:
+            Button("Relaunch to Update") { updates.installAndRelaunch() }
+                .buttonStyle(.borderedProminent)
+
+        default:
+            Button("Check Now") {
+                Task { await updates.check(userInitiated: true) }
+            }
+        }
+    }
+
+    private var isFailure: Bool {
+        if case .failed = updates.state { return true }
+        return false
+    }
+
+    private var status: String? {
+        switch updates.state {
+        case .idle: nil
+        case .checking: "Looking for a newer version…"
+        case .upToDate: "Cue is up to date."
+        case .available(let version, _): "Version \(version) is available."
+        case .downloading: "Downloading…"
+        case .readyToRelaunch:
+            // Said plainly, because an update that swaps the running app is not
+            // something to do quietly behind someone's back.
+            "An update is downloaded and verified. Relaunching will install it."
+        case .failed(let reason): reason
+        }
     }
 }

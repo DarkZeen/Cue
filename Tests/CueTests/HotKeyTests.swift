@@ -188,3 +188,34 @@ struct HotKeyServiceTests {
         service.unregister()
     }
 }
+
+@Suite("Version comparison")
+struct UpdateVersionTests {
+    @Test("Newer versions are recognised")
+    func newer() {
+        #expect(UpdateService.isNewer("0.2.0", than: "0.1.0"))
+        #expect(UpdateService.isNewer("1.0.0", than: "0.9.9"))
+        #expect(UpdateService.isNewer("0.1.1", than: "0.1.0"))
+    }
+
+    @Test("Ten is newer than nine")
+    func numericNotAlphabetic() {
+        // The whole reason this is not a string comparison: "0.10.0" sorts
+        // *before* "0.9.0" alphabetically, so an app comparing strings stops
+        // updating at version nine and never says why.
+        #expect(UpdateService.isNewer("0.10.0", than: "0.9.0"))
+        #expect(UpdateService.isNewer("1.0.0", than: "0.10.0"))
+    }
+
+    @Test("The same version is not newer")
+    func notNewer() {
+        #expect(!UpdateService.isNewer("0.1.0", than: "0.1.0"))
+        #expect(!UpdateService.isNewer("0.1.0", than: "0.2.0"))
+    }
+
+    @Test("Missing components count as zero")
+    func shortVersions() {
+        #expect(UpdateService.isNewer("1.1", than: "1.0.9"))
+        #expect(!UpdateService.isNewer("1.0", than: "1.0.0"))
+    }
+}
