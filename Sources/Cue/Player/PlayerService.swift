@@ -75,6 +75,9 @@ final class PlayerService: NSObject {
     /// know anything about the music. See `Settings → Playback`.
     private(set) var audioLevel: Double = 0
 
+    /// Whether the page is currently analysing its audio.
+    private(set) var isAnalysing = false
+
     /// The spectrum, low to high. Empty when nothing is being analysed.
     ///
     /// Nine bands rather than one number, because a meter whose bars all share
@@ -202,7 +205,7 @@ final class PlayerService: NSObject {
                 if self.nowPlaying?.isPlaying == true {
                     self.wantsPlayback = false
 
-                    if self.wantsAnalysis { self.evaluate("__cue.enableAnalysis()") }
+                    self.beginAnalysis()
 
                     // Shuffled only once it is actually playing: the control
                     // does not exist until the player bar does, and toggling it
@@ -306,15 +309,24 @@ final class PlayerService: NSObject {
     func reloadForAnalysisChange() {
         guard let webView, isLoaded else { return }
         logger.notice("Reloading the player to release the audio graph.")
+
         audioLevel = 0
         audioBands = []
+        isAnalysing = false
+
+        // Reloading stops the music, and a setting that silently stops the
+        // music is worse than the problem it solves. The page is told to pick
+        // up where the nudge would have left it.
+        wantsPlayback = true
         webView.reload()
     }
 
     /// Asks the page to start analysing its audio, if it is playing.
     func beginAnalysis() {
-        guard wantsAnalysis else { return }
-        evaluate("__cue.enableAnalysis()")
+        // A flag the page reads on its own schedule, rather than a one-shot
+        // call. The page outlives no navigation; the flag survives every one,
+        // because the script re-reads it on the next tick.
+        evaluate("__cue.wantsAnalysis = \(wantsAnalysis); if (!\(wantsAnalysis)) { __cue._analysisFailed = false; }")
     }
 
     func toggleMute() {
@@ -867,6 +879,7 @@ final class PlayerService: NSObject {
             }
           };
 
+          cue.wantsAnalysis = false;
           window.__cue = cue;
 
           let last = null;
@@ -897,8 +910,28 @@ final class PlayerService: NSObject {
           // needless messages a minute about a title that has not changed.
           setInterval(function () {
             try {
+              if (!cue.wantsAnalysis) { return; }
+
+              // Set up here rather than only when Swift asks. A page navigation
+              // replaces the media element and re-runs this script, so an
+              // analyser attached once at the start of a session is attached to
+              // an element that no longer exists by the second track — and the
+              // meter goes flat without anything reporting a failure.
+              if (!cue._analyser && !cue._analysisFailed) {
+                cue.enableAnalysis();
+              }
+
               const reading = cue.analyse(9);
-              if (reading === null) { return; }
+              if (reading === null) {
+                window.webkit.messageHandlers.cue.postMessage({
+                  analysing: false,
+                  failed: !!cue._analysisFailed
+                });
+                return;
+              }
+
+              reading.analysing = true;
+              reading.contextState = cue._context ? cue._context.state : 'none';
               window.webkit.messageHandlers.cue.postMessage(reading);
             } catch (error) {
               /* ignored on purpose */
@@ -968,6 +1001,25 @@ extension PlayerService: WKScriptMessageHandler {
 
             // The level arrives on its own, many times a second, and carries
             // nothing else.
+            // Whether the page is analysing at all, reported separately from
+            // any numbers. A meter reading zero and a meter reading nothing
+            // look identical on screen and need opposite fixes.
+            if let analysing = body["analysing"] as? Bool {
+                if analysing != self.isAnalysing {
+                    self.isAnalysing = analysing
+                    self.logger.notice(
+                        "Audio analysis \(analysing ? "running" : "stopped", privacy: .public); context \(body["contextState"] as? String ?? "none", privacy: .public)"
+                    )
+                }
+                if !analysing {
+                    // Stale numbers are worse than none: nine zeroes hold the
+                    // meter flat for ever and look exactly like silence.
+                    self.audioBands = []
+                    self.audioLevel = 0
+                    return
+                }
+            }
+
             if let level = body["level"] as? Double {
                 let target = min(max(level, 0), 1)
 
@@ -1045,6 +1097,9 @@ extension PlayerService: WKNavigationDelegate {
     ) {
         MainActor.assumeIsolated {
             self.lastError = nil
+            // Re-asserted per page, since each navigation re-runs the script
+            // with the flag back at its default.
+            self.beginAnalysis()
             if self.wantsPlayback { self.nudgeIntoPlaying() }
         }
     }

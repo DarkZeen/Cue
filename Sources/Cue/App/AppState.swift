@@ -150,9 +150,9 @@ final class AppState {
             guard let self else { return }
             self.player.wantsAnalysis = self.settings.analysesAudio
 
-            if self.settings.analysesAudio {
-                self.player.beginAnalysis()
-            } else {
+            self.player.beginAnalysis()
+
+            if !self.settings.analysesAudio {
                 // Turning it off reloads the page, which is the undo.
                 //
                 // `createMediaElementSource` cannot be reversed for an element,
