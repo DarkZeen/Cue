@@ -13,6 +13,32 @@ import SwiftUI
 /// factor. The eye is very good at finding a period; the defence is not to have
 /// one it can find inside the time anybody looks.
 enum ProceduralMotion {
+    /// **Audio may set a position. It may never set a rate.**
+    ///
+    /// Every one of these marks is stateless: it is redrawn each frame from
+    /// `elapsed`, and `elapsed` is seconds since 2001 — about 8×10⁸ of them. So
+    /// a phase written as `elapsed * rate` moves by *hundreds of millions of
+    /// radians* the moment `rate` changes by a fraction. The first version of
+    /// this did exactly that, in two places, and the results were a wave that
+    /// tore itself apart and a ring that span at random.
+    ///
+    /// A rate can only be varied by something that integrates it, and nothing
+    /// here has anywhere to keep the integral. So rates are constants, and the
+    /// music drives what can be set outright and continuously: amplitude, size,
+    /// separation, and bounded *offsets* added to a phase that is still
+    /// advancing at its own steady speed.
+
+    /// A travelling phase: a steady rate, plus a bounded offset the music may
+    /// move.
+    ///
+    /// Written once, in one place, so the rule above has somewhere to live and
+    /// something to test. `surge` is added to the finished phase rather than
+    /// folded into the rate, and it is clamped — a mark that leans on the beat
+    /// is the intent; a mark that can be thrown anywhere is the bug.
+    static func travel(_ elapsed: TimeInterval, rate: Double, surge: Double) -> Double {
+        elapsed * rate + min(max(surge, -1.2), 1.2)
+    }
+
     /// How many readings a mark is drawn from.
     ///
     /// Must equal `SpectrumAnalyser.bandCount`, and is stated separately
@@ -128,25 +154,32 @@ struct WaveIndicator: View {
 
         let reach = 0.28 + 0.72 * distance
 
-        // The travelling phase runs faster when the music is busier, so the
-        // shapes do not keep the same tempo through a quiet passage and a loud
-        // one. Bounded, because a wave that races is a wave nobody can read.
-        let rate = 3.0 + 2.2 * ProceduralMotion.energy(level, at: elapsed)
-        let phase = elapsed * rate - distance * 1.5
+        // The phase is left completely alone. Nothing the music does touches
+        // it — not the rate, and not an offset either.
+        //
+        // The beat is built to spike, so *any* term added to a travelling
+        // phase moves the shapes several times their usual step in a single
+        // frame, and a wave that jumps forward on every hit is exactly what
+        // reads as jagged. Worse, the second sine below multiplies the phase by
+        // 1.63, so it would receive an offset 1.63 times the size and the two
+        // would pull apart on every beat — which is what "not cohesive" looks
+        // like from the outside.
+        let phase = ProceduralMotion.travel(elapsed, rate: 3.6, surge: 0)
+            - distance * 1.5
+
         // Two sines rather than one, at an irrational-ish ratio, so the loop
         // never lands on an obvious repeat.
         let wave = (sin(phase) + sin(phase * 1.63 + 0.7)) / 2
 
-        // Enough travel to be read from the corner of an eye. The earlier
-        // values were tuned looking straight at it, which is the one way this
-        // is never actually seen — and at that amplitude the mark only
-        // shimmered.
-        // The beat lifts the outer shapes hardest, which is where the mark has
-        // the most room to move and where a change is visible from the corner
-        // of an eye.
-        let amplitude = 0.18
-            + 0.36 * ProceduralMotion.energy(level, at: elapsed)
-            + 0.30 * ProceduralMotion.beat(bands, at: elapsed) * distance
+        // The beat is spent here instead, and on the pulse: both are set
+        // outright each frame, both move every shape by the same proportion,
+        // and neither can break the phase relationship that makes nine shapes
+        // look like one object. Enough travel to be read from the corner of an
+        // eye — the earlier values were tuned looking straight at it, which is
+        // the one way this is never actually seen.
+        let amplitude = 0.20
+            + 0.34 * ProceduralMotion.energy(level, at: elapsed)
+            + 0.18 * ProceduralMotion.beat(bands, at: elapsed) * distance
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
@@ -487,8 +520,9 @@ struct BarsIndicator: View {
 ///   inward. Close together, the blobs merge constantly and the mark is nearly
 ///   one shape; spread apart, they come apart into six. That range is the whole
 ///   character of the thing, and the music now drives it end to end.
-/// * **Speed.** The beat drives how fast they travel, so passes and merges
-///   happen on the rhythm rather than at a fixed rate.
+/// * **A lean.** The ring runs slightly ahead through a loud passage and drops
+///   back through a quiet one. An offset, never a rate — see
+///   `ProceduralMotion`, which is where the reasoning for that lives.
 /// * **Size, per band.** Each blob reads one slice of the spectrum, low at the
 ///   top and rising round the ring — so the ring is a spectrum bent into a
 ///   circle, and a bass hit swells one part of it rather than all of it.
@@ -525,7 +559,6 @@ struct OrbitIndicator: View {
                 let centre = CGPoint(x: size.width / 2, y: size.height / 2)
 
                 let energy = ProceduralMotion.energy(level, at: elapsed)
-                let kick = ProceduralMotion.beat(bands, at: elapsed)
 
                 // How far apart they sit. The number that matters most: at the
                 // bottom of this range the blobs overlap almost continuously
@@ -537,13 +570,24 @@ struct OrbitIndicator: View {
                 // shape", and the mark stopped being a ring at all.
                 let separation = 0.84 + 0.38 * energy
 
-                // Travel, wound on the beat. Integrated against `elapsed`
-                // rather than multiplied by it, or a change in rate would jump
-                // every blob to a new position instead of speeding it up.
-                let travel = elapsed * (0.72 + 0.5 * kick)
+                // A steady rate with a surge added, never a rate the music
+                // sets. This is where the runaway was: `elapsed * (a + b·kick)`
+                // moved every blob by an eighth of a billion radians whenever
+                // the kick moved, which is why the ring appeared to spin at
+                // random. The surge is bounded, so the ring leans into a beat
+                // and settles, and the underlying travel never stops being
+                // steady.
+                // The lean follows the level rather than the beat, and that is
+                // the difference between leaning and lurching. The beat has a
+                // fast attack — it is built to spike — so hanging a position on
+                // it moves the blobs several frames' worth in one frame. The
+                // beat is spent on size instead, where a sudden change is a
+                // blob swelling rather than a blob teleporting.
+                let surge = energy * 0.3
 
                 for (index, blob) in Self.blobs.enumerated() {
-                    let angle = blob.phase + travel * blob.speed
+                    let angle = blob.phase
+                        + ProceduralMotion.travel(elapsed, rate: blob.speed, surge: surge)
                     // The orbit breathes a little, so the ring is not a wire
                     // the blobs are threaded on.
                     let radius = (blob.orbit + sin(elapsed * 0.9 + blob.phase) * 0.7) * separation

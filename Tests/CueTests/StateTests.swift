@@ -220,3 +220,57 @@ struct SpectrumShapeTests {
         #expect(ProceduralMotion.bandCount == SpectrumAnalyser.bandCount)
     }
 }
+
+@Suite("Mark motion")
+struct MarkMotionTests {
+    /// The magnitude that made the bug catastrophic rather than merely wrong.
+    /// `elapsed` in the marks is seconds since 2001, so any test using small
+    /// numbers would have passed while the real thing tore itself apart.
+    private let now = Date().timeIntervalSinceReferenceDate
+
+    @Test("A change in the music moves a mark, and never throws it")
+    func audioNeverSetsARate() {
+        // The regression: the phase was `elapsed * (base + audio)`, so going
+        // from quiet to loud advanced it by about 10^8 radians in one frame.
+        // Written as an offset it cannot, whatever the audio does.
+        let quiet = ProceduralMotion.travel(now, rate: 3.6, surge: 0)
+        let loud = ProceduralMotion.travel(now, rate: 3.6, surge: 1.0)
+
+        // A hair of slack, and the reason is the same magnitude the bug fed
+        // on: at 8×10⁸ seconds a Double's step is about 10⁻⁷, so adding 1.2 to
+        // `elapsed` and subtracting it back does not land exactly.
+        #expect(abs(loud - quiet) <= 1.2 + 1e-5)
+    }
+
+    @Test("The surge is clamped however loud it gets")
+    func surgeIsBounded() {
+        let absurd = ProceduralMotion.travel(now, rate: 1, surge: 50)
+        let steady = ProceduralMotion.travel(now, rate: 1, surge: 0)
+
+        #expect(absurd - steady <= 1.2 + 1e-5)
+    }
+
+    @Test("A frame's worth of time is a frame's worth of movement")
+    func advancesSteadily() {
+        // Sixty times a second, and the mark should move by the same amount
+        // each time regardless of what the music is doing in between.
+        let frame = 1.0 / 60
+        let first = ProceduralMotion.travel(now, rate: 3.6, surge: 0.9)
+        let second = ProceduralMotion.travel(now + frame, rate: 3.6, surge: 0.1)
+
+        #expect(second - first < 3.6 * frame + 1.2)
+    }
+
+    @Test("Energy and beat stay inside the range the marks assume")
+    func readingsAreBounded() {
+        // Every style multiplies by these and adds the result to a size or an
+        // amplitude. One value above 1 is a blob leaving the frame.
+        for step in 0..<400 {
+            let moment = now + Double(step) * 0.01
+            #expect((0...1).contains(ProceduralMotion.swell(at: moment)))
+            #expect((0...1).contains(ProceduralMotion.energy(0.5, at: moment)))
+            #expect((0...1).contains(ProceduralMotion.beat([], at: moment)))
+            #expect((0...1).contains(ProceduralMotion.beat([1, 1], at: moment)))
+        }
+    }
+}
