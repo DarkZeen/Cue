@@ -33,13 +33,13 @@ struct NowPlayingIndicator: View {
             Group {
                 switch style {
                 case .wave:
-                    WaveIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                    WaveIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .disc:
-                    DiscIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                    DiscIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .bars:
                     BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .orbit:
-                    OrbitIndicator(elapsed: elapsed, level: level, isAnimating: isAnimating)
+                    OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so

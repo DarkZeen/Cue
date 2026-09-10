@@ -36,7 +36,7 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
         switch self {
         case .wave, .orbit: 26
         case .disc: 30
-        case .bars: 46
+        case .bars: 38
         }
     }
 }

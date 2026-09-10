@@ -207,3 +207,16 @@ struct PresenterTests {
         #expect(presenter.state == .hidden)
     }
 }
+
+@Suite("Spectrum shape")
+struct SpectrumShapeTests {
+    @Test("The drawing and the analysis agree on how many bands there are")
+    func bandCountsMatch() {
+        // Stated in two places on purpose: the marks have to build and be
+        // previewable without Core Audio in the picture, so the drawing cannot
+        // import the analyser to ask. Nothing would crash if these diverged —
+        // the bars would simply stop showing the top of the spectrum, quietly,
+        // and only in the half of the feature that needs a permission to see.
+        #expect(ProceduralMotion.bandCount == SpectrumAnalyser.bandCount)
+    }
+}

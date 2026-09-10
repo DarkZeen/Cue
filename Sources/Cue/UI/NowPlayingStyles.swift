@@ -13,6 +13,14 @@ import SwiftUI
 /// factor. The eye is very good at finding a period; the defence is not to have
 /// one it can find inside the time anybody looks.
 enum ProceduralMotion {
+    /// How many readings a mark is drawn from.
+    ///
+    /// Must equal `SpectrumAnalyser.bandCount`, and is stated separately
+    /// because the drawing cannot depend on the audio code — the mark has to
+    /// build and be previewable with no Core Audio in the picture at all. A
+    /// test holds the two together.
+    static let bandCount = 9
+
     /// What drives a style: the real level when there is one, invention when
     /// there is not.
     ///
@@ -22,6 +30,22 @@ enum ProceduralMotion {
     /// fallback nobody ever looks at.
     static func energy(_ level: Double, at elapsed: TimeInterval) -> Double {
         level > 0.001 ? min(level, 1) : swell(at: elapsed)
+    }
+
+    /// The beat, 0 to 1: the low end, which is where a kick lives.
+    ///
+    /// Separate from `energy` because the two want different things. The level
+    /// is an average and moves like one — it says how loud the passage is. This
+    /// is the bottom two bands only, which spike on a hit and fall between
+    /// them, and that spike is the whole thing the eye reads as rhythm.
+    ///
+    /// Without a tap it is a sharpened pulse at a plausible tempo. Cubed, so it
+    /// reads as a hit rather than as a swell.
+    static func beat(_ bands: [Double], at elapsed: TimeInterval) -> Double {
+        guard bands.count >= 2 else {
+            return pow((sin(elapsed * 1.7 * .pi) + 1) / 2, 3)
+        }
+        return min((bands[0] * 0.65 + bands[1] * 0.35) * 1.35, 1)
     }
 
     /// A slow swell, 0 to 1, that never sits still and never repeats visibly.
@@ -46,6 +70,7 @@ enum ProceduralMotion {
 struct WaveIndicator: View {
     let elapsed: TimeInterval
     var level: Double = 0
+    var bands: [Double] = []
     let isAnimating: Bool
 
     private var count: Int { CueWavePath.shapes.count }
@@ -74,7 +99,12 @@ struct WaveIndicator: View {
         .scaleEffect(pulse)
     }
 
-    /// A breath, riding on the slower swell.
+    /// A breath, a swell, and a kick — three rates, deliberately.
+    ///
+    /// The breath keeps the mark alive when the music is quiet. The swell
+    /// follows the passage. The beat is the one that arrives suddenly, and it
+    /// is the only one anybody consciously notices; the other two are what stop
+    /// it looking like a light being switched.
     private var pulse: CGFloat {
         guard isAnimating else { return 1 }
 
@@ -82,9 +112,12 @@ struct WaveIndicator: View {
         // end, and any keyframed loop shows its seam eventually.
         let breath = sin(elapsed / 2.6 * 2 * .pi)
         let swell = ProceduralMotion.energy(level, at: elapsed)
-        // Larger than it was, because the mark is smaller than it was: the
-        // same proportion on a smaller object is less motion, not equal motion.
-        return 1 + CGFloat(breath * 0.05) + CGFloat(swell * 0.08)
+        let kick = ProceduralMotion.beat(bands, at: elapsed)
+
+        return 1
+            + CGFloat(breath * 0.04)
+            + CGFloat(swell * 0.06)
+            + CGFloat(kick * 0.13)
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -94,7 +127,12 @@ struct WaveIndicator: View {
         let distance = abs(Double(index) - middle) / max(middle, 1)
 
         let reach = 0.28 + 0.72 * distance
-        let phase = elapsed * 3.6 - distance * 1.5
+
+        // The travelling phase runs faster when the music is busier, so the
+        // shapes do not keep the same tempo through a quiet passage and a loud
+        // one. Bounded, because a wave that races is a wave nobody can read.
+        let rate = 3.0 + 2.2 * ProceduralMotion.energy(level, at: elapsed)
+        let phase = elapsed * rate - distance * 1.5
         // Two sines rather than one, at an irrational-ish ratio, so the loop
         // never lands on an obvious repeat.
         let wave = (sin(phase) + sin(phase * 1.63 + 0.7)) / 2
@@ -103,7 +141,12 @@ struct WaveIndicator: View {
         // values were tuned looking straight at it, which is the one way this
         // is never actually seen — and at that amplitude the mark only
         // shimmered.
-        let amplitude = 0.18 + 0.44 * ProceduralMotion.energy(level, at: elapsed)
+        // The beat lifts the outer shapes hardest, which is where the mark has
+        // the most room to move and where a change is visible from the corner
+        // of an eye.
+        let amplitude = 0.18
+            + 0.36 * ProceduralMotion.energy(level, at: elapsed)
+            + 0.30 * ProceduralMotion.beat(bands, at: elapsed) * distance
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
@@ -131,10 +174,9 @@ struct CueWaveShape: Shape {
 
 /// A record turning under its arm, seen from above.
 ///
-/// The notes that used to drift off it are gone. They were the part that said
-/// "music" without the rest of the drawing having to, and once the vinyl reads
-/// as vinyl — black, grooved, a red label, an arm resting on it — saying it
-/// twice is the thing that makes a mark look like clip art.
+/// The notes are back, and they earn their place now that they are not the only
+/// thing saying "music": the vinyl says it, and the notes say *how much*. They
+/// leave on the beat, and a quiet passage produces almost none.
 ///
 /// The difficulty of a record at this size is that a disc is rotationally
 /// symmetric, so it looks identical however fast it turns. Real vinyl solves
@@ -144,6 +186,7 @@ struct CueWaveShape: Shape {
 struct DiscIndicator: View {
     let elapsed: TimeInterval
     var level: Double = 0
+    var bands: [Double] = []
     let isAnimating: Bool
 
     /// One turn every three and a half seconds. A record at 33⅓ rpm is 1.8
@@ -155,6 +198,7 @@ struct DiscIndicator: View {
 
     var body: some View {
         ZStack(alignment: .center) {
+            notes
             record
             Tonearm(isDown: isAnimating, sway: sway)
         }
@@ -167,6 +211,42 @@ struct DiscIndicator: View {
     private var sway: Double {
         guard isAnimating else { return 0 }
         return sin(elapsed / 3.1 * 2 * .pi) * 0.5 + ProceduralMotion.energy(level, at: elapsed) * 0.6
+    }
+
+    /// Notes drifting off the record, up and to the left.
+    ///
+    /// Three of them on their own cycles. What makes them read as *music*
+    /// rather than as decoration is that they are not evenly spaced in time:
+    /// each has its own period, and each is only as visible as the music is
+    /// loud — so a quiet passage produces almost nothing and a chorus produces
+    /// a stream.
+    private var notes: some View {
+        let energy = ProceduralMotion.energy(level, at: elapsed)
+
+        return ForEach(0..<3, id: \.self) { index in
+            // Periods that share no common factor, so the three never fall
+            // into step and start reading as one repeating animation.
+            let period = [2.4, 3.1, 2.75][index]
+            let cycle = ((elapsed / period) + Double(index) * 0.37)
+                .truncatingRemainder(dividingBy: 1)
+
+            // Further out when the music is loud. A note that always travels
+            // the same distance is a note on a rail.
+            let reach = 5.0 + 7.0 * energy
+
+            Image(systemName: ["music.note", "music.quarternote.3", "music.note"][index])
+                .font(.system(size: index == 1 ? 7.5 : 6.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .offset(
+                    x: -8 - cycle * reach + sin(cycle * .pi * 2 + Double(index)) * 2.2,
+                    y: 2 - cycle * (11 + 6 * energy)
+                )
+                .rotationEffect(.degrees(sin(cycle * .pi * 2) * 14))
+                // In quickly, out slowly: a note that fades in over the same
+                // duration it fades out spends most of its life at half
+                // opacity, which reads as blur rather than as motion.
+                .opacity(isAnimating ? min(cycle * 5, 1) * (1 - cycle) * (0.25 + 0.75 * energy) : 0)
+        }
     }
 
     private var record: some View {
@@ -300,10 +380,14 @@ struct BarsIndicator: View {
     /// Bands either side of the centre. Nine gives seventeen bars, which is
     /// enough to read as a spectrum and few enough that each stays visible at
     /// this size.
-    private static let bandCount = 9
-    private static let barWidth: CGFloat = 1.6
-    private static let spacing: CGFloat = 1.1
-    private static let height: CGFloat = 26
+    private static let bandCount = ProceduralMotion.bandCount
+    // Smaller than it was, and shorter by more than it is narrower — a meter
+    // whose bars are as tall as the search field's text competes with the
+    // field. Previously 1.6 / 1.1 / 26, kept here because the difference is
+    // taste rather than correctness and taste is worth being able to undo.
+    private static let barWidth: CGFloat = 1.3
+    private static let spacing: CGFloat = 0.95
+    private static let height: CGFloat = 16
 
     private var barCount: Int { Self.bandCount * 2 - 1 }
 
@@ -395,9 +479,23 @@ struct BarsIndicator: View {
 /// Which means the motion has to earn it. Blobs at one speed never meet, so
 /// each runs at its own — they lap each other, pair up, stretch apart, and the
 /// ring is never twice in the same arrangement.
+///
+/// With a tap running, three separate things answer the music, and they were
+/// chosen because they change *the merging* rather than merely the picture:
+///
+/// * **Separation.** Loud pushes the ring outward and quiet lets it collapse
+///   inward. Close together, the blobs merge constantly and the mark is nearly
+///   one shape; spread apart, they come apart into six. That range is the whole
+///   character of the thing, and the music now drives it end to end.
+/// * **Speed.** The beat drives how fast they travel, so passes and merges
+///   happen on the rhythm rather than at a fixed rate.
+/// * **Size, per band.** Each blob reads one slice of the spectrum, low at the
+///   top and rising round the ring — so the ring is a spectrum bent into a
+///   circle, and a bass hit swells one part of it rather than all of it.
 struct OrbitIndicator: View {
     let elapsed: TimeInterval
     var level: Double = 0
+    var bands: [Double] = []
     let isAnimating: Bool
 
     /// Radius from centre, size, angular speed, where it starts.
@@ -406,12 +504,12 @@ struct OrbitIndicator: View {
     /// mechanism; these differ in every value they have, which is why the
     /// pairings look like something happening rather than something scheduled.
     private static let blobs: [(orbit: Double, size: Double, speed: Double, phase: Double)] = [
-        (7.4, 7.4, 0.64, 0.00),
-        (7.9, 6.2, 0.73, 1.10),
-        (7.1, 5.6, 0.61, 2.15),
-        (8.0, 6.8, 0.70, 3.25),
-        (7.2, 5.2, 0.77, 4.25),
-        (7.7, 6.0, 0.66, 5.35)
+        (6.7, 6.7, 0.64, 0.00),
+        (7.1, 5.6, 0.73, 1.10),
+        (6.4, 5.0, 0.61, 2.15),
+        (7.2, 6.1, 0.70, 3.25),
+        (6.5, 4.7, 0.77, 4.25),
+        (6.9, 5.4, 0.66, 5.35)
     ]
 
     var body: some View {
@@ -425,21 +523,42 @@ struct OrbitIndicator: View {
                 layer.addFilter(.blur(radius: 2.4))
 
                 let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-                // Loud makes them bigger, which makes them meet more often —
-                // so the merging itself is the thing that responds, rather
-                // than the blobs simply inflating.
-                let swell = 0.86 + 0.28 * ProceduralMotion.energy(level, at: elapsed)
 
-                for blob in Self.blobs {
-                    let angle = blob.phase + elapsed * blob.speed
+                let energy = ProceduralMotion.energy(level, at: elapsed)
+                let kick = ProceduralMotion.beat(bands, at: elapsed)
+
+                // How far apart they sit. The number that matters most: at the
+                // bottom of this range the blobs overlap almost continuously
+                // and the mark is one moving shape, at the top they separate
+                // into six. Everything else is detail next to it.
+                // The floor matters as much as the ceiling. At 0.62 the blobs
+                // ran together into a single puddle with a hole in it during
+                // every quiet passage — which is not "merged", it is "one
+                // shape", and the mark stopped being a ring at all.
+                let separation = 0.84 + 0.38 * energy
+
+                // Travel, wound on the beat. Integrated against `elapsed`
+                // rather than multiplied by it, or a change in rate would jump
+                // every blob to a new position instead of speeding it up.
+                let travel = elapsed * (0.72 + 0.5 * kick)
+
+                for (index, blob) in Self.blobs.enumerated() {
+                    let angle = blob.phase + travel * blob.speed
                     // The orbit breathes a little, so the ring is not a wire
                     // the blobs are threaded on.
-                    let radius = blob.orbit + sin(elapsed * 0.9 + blob.phase) * 0.7
+                    let radius = (blob.orbit + sin(elapsed * 0.9 + blob.phase) * 0.7) * separation
                     let point = CGPoint(
                         x: centre.x + cos(angle) * radius,
                         y: centre.y + sin(angle) * radius
                     )
-                    let size = blob.size * swell
+                    // One band each, low at the start and rising round the
+                    // ring. Without a tap they all read the same swell, which
+                    // is what the fallback has always done.
+                    let band = index * (ProceduralMotion.bandCount - 1) / max(Self.blobs.count - 1, 1)
+                    let reading = bands.indices.contains(band) ? bands[band] : energy
+                    // Floored for the same reason: a band at rest should give
+                    // a smaller blob, not a speck.
+                    let size = blob.size * (0.88 + 0.44 * reading)
                     let rect = CGRect(
                         x: point.x - size / 2,
                         y: point.y - size / 2,

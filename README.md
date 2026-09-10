@@ -81,7 +81,9 @@ That mark is the logo itself — the shapes from `Resources/CueLogo.svg`, used
 exactly as drawn. `Scripts/generate-logo.py` flattens the group transforms and
 normalises them into geometry the app and the icon both draw from, so the two
 can never drift apart. Edit the artwork and re-run the script; do not edit the
-generated files. Settings → Playback picks between three forms of it.
+generated files. Settings → Playback picks between four forms of it: the wave, a record under
+its arm with notes coming off it, a mirrored meter, and a ring of blobs that
+run together as they pass.
 
 By default the motion is invented rather than measured — a swell underneath the
 individual movement, rates that share no common factor so the pattern has no
