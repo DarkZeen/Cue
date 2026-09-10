@@ -221,25 +221,31 @@ final class AudioTap {
             return nil
         }
 
-        // Built around the current output device, because a tap is not a
-        // device — it is something an aggregate device can contain, and the
-        // aggregate needs a real clock to run against.
-        let outputUID = Self.defaultOutputUID() ?? ""
-
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Cue",
             kAudioAggregateDeviceUIDKey: "com.cue.tap.\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: outputUID,
+            // Nothing in here but the tap. No main sub-device, no sub-device
+            // list.
+            //
+            // The usual recipe names the current output device as the
+            // aggregate's main sub-device, to give it a clock. That works and
+            // it is wrong here for a reason that only shows up later: the
+            // aggregate then holds a reference to whichever device happened to
+            // be default when the tap was built, so putting headphones in
+            // afterwards leaves Cue's tap wired to the speakers — and an
+            // aggregate holding a Bluetooth device it should not have is not
+            // something to leave in the path of somebody's music.
+            //
+            // A tap alone turned out to be enough: measured, with the log
+            // saying "Hearing the music" and the output device still running
+            // where it was. So the tap is the only member, and there is now no
+            // real device in this aggregate for a change of output to
+            // invalidate.
             // Private, so it never appears in Sound preferences or in another
             // app's device list.
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceTapAutoStartKey: true,
-            // Empty on purpose. Naming the output device here as well as in
-            // `MainSubDevice` puts a real device in the aggregate, and its
-            // input streams — a speaker has none — are then what the IO
-            // callback is handed. The tap is the only thing that should be
-            // feeding this device.
             kAudioAggregateDeviceSubDeviceListKey: [],
             kAudioAggregateDeviceTapListKey: [
                 [
@@ -297,16 +303,6 @@ final class AudioTap {
 
         let responsible = unsafeBitCast(symbol, to: Lookup.self)(pid)
         return responsible > 0 ? responsible : nil
-    }
-
-    private static func defaultOutputUID() -> String? {
-        guard let device = property(
-            AudioObjectID(kAudioObjectSystemObject),
-            kAudioHardwarePropertyDefaultOutputDevice,
-            AudioObjectID.self
-        ) else { return nil }
-
-        return property(device, kAudioDevicePropertyDeviceUID, CFString.self) as String?
     }
 
     // MARK: - Core Audio plumbing

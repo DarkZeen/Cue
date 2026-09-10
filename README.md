@@ -105,6 +105,12 @@ identifies it is the *responsible* process, which is how macOS attributes an XPC
 service back to the app that caused it. Without that the only option is a global
 tap, and a mark that twitches at a notification sound is reading the wrong thing.
 
+The aggregate device it needs contains the tap and nothing else. The usual
+recipe names the current output device as its main sub-device, which works and
+is wrong here for a reason that only appears later: the aggregate then holds
+whichever device was default when the tap was built, so putting headphones in
+afterwards leaves it wired to the speakers. A tap alone turned out to be enough.
+
 macOS asks permission the first time. That is the whole cost, and it is why this
 is a setting rather than the default.
 
