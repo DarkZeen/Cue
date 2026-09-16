@@ -58,6 +58,17 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
 /// the movement is accumulated within a gesture and reported once, after which
 /// the direction is locked until the fingers lift — otherwise a single
 /// enthusiastic swipe pages three times.
+///
+/// Watched from the app's event stream rather than caught by a view, and that
+/// is the difference between a gesture the grid has and a gesture the *gaps*
+/// have. AppKit delivers a scroll to the deepest view under the pointer, so a
+/// catcher sitting behind the content only ever heard the flicks that happened
+/// to land on empty space — which is not where anyone's hand is, because the
+/// hand is over the artwork it is trying to turn past.
+///
+/// A local monitor sees the event before any of that, and the region is then
+/// decided here: inside this view's own bounds, which is the grid and its dots
+/// and nothing above them. The search field keeps its own scrolling.
 struct HorizontalSwipeModifier: ViewModifier {
     let onSwipe: (Int) -> Void
 
@@ -91,6 +102,38 @@ private struct SwipeCatcher: NSViewRepresentable {
 
         private var travelled: CGFloat = 0
         private var handled = false
+        private var monitor: Any?
+
+        /// Installed while the view is in a window, removed when it leaves.
+        ///
+        /// Not in `deinit`: the panel is torn down and rebuilt, and a monitor
+        /// outliving its view is one that pages a grid nobody is looking at.
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+            guard window != nil else { return }
+
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                self?.handle(event) == true ? nil : event
+            }
+        }
+
+        /// Whether this swallowed the event.
+        ///
+        /// Horizontal gestures inside the grid are taken; everything else is
+        /// handed straight back, so a vertical scroll still reaches whatever
+        /// was going to receive it.
+        private func handle(_ event: NSEvent) -> Bool {
+            guard let window, event.window === window else { return false }
+            guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
+
+            accumulate(event)
+            return abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+        }
 
         /// How far two fingers must travel before it counts.
         ///
@@ -98,7 +141,7 @@ private struct SwipeCatcher: NSViewRepresentable {
         /// past the panel on the way somewhere else does not turn a page.
         private static let threshold: CGFloat = 42
 
-        override func scrollWheel(with event: NSEvent) {
+        private func accumulate(_ event: NSEvent) {
             // Momentum is not intent. After the fingers lift, macOS keeps
             // sending events for the coast — and since the gesture had already
             // "ended" by then, the accumulator had reset and each burst of
