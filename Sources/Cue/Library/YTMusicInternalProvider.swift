@@ -246,6 +246,21 @@ final class YTMusicInternalProvider: MusicLibraryProvider {
         return Self.items(in: response)
     }
 
+    /// The radio YouTube Music would build from one track.
+    ///
+    /// `RDAMVM…` is the site's own identifier for "start a station from this
+    /// video" — the same list its "Radio" menu item opens. Asked through
+    /// `next` rather than `browse`, because a station has no page: it is a
+    /// queue, generated on the spot, and `next` is how the site itself gets it.
+    func radio(after videoID: String) async throws -> [MusicItem] {
+        let songs = try await queue(forPlaylist: "RDAMVM" + videoID)
+
+        // The seed comes back first, every time. Leaving it in makes the page
+        // open on the track that is already playing, which is the one thing
+        // there is no reason to offer.
+        return songs.filter { $0.videoID != videoID }
+    }
+
     /// Every mood and genre, as the service names them today.
     func genres() async throws -> [MusicGenre] {
         let response = try await post("browse", body: ["browseId": BrowseID.moodsAndGenres])

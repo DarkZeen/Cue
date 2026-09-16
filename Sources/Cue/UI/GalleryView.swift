@@ -37,8 +37,12 @@ struct GalleryView: View {
         // Two fingers, the way pages are turned everywhere else on this
         // machine. The arrow keys still work; this is the same journey by hand.
         .onHorizontalSwipe { presenter.movePage(by: $0) }
+        // The last page comes and goes with the music, so the thing that does
+        // the paging has to be told.
+        .onChange(of: coordinator.visiblePages) { _, pages in presenter.setPages(pages) }
         .onAppear {
             presenter.setSelectableCount(SettingsStore.tileCount)
+            presenter.setPages(coordinator.visiblePages)
             coordinator.refresh()
             if coordinator.isExploring { coordinator.refreshExplore() }
             prefetchNeighbours()
@@ -121,7 +125,7 @@ struct GalleryView: View {
     /// says you went somewhere, which is what the dots are already promising.
     private var pages: some View {
         HStack(spacing: 0) {
-            ForEach(LibraryCoordinator.Page.allCases, id: \.self) { page in
+            ForEach(coordinator.visiblePages, id: \.self) { page in
                 grid(for: page)
                     .frame(width: pageWidth)
             }
@@ -191,7 +195,7 @@ struct GalleryView: View {
 
     private var dots: some View {
         HStack(spacing: 6) {
-            ForEach(LibraryCoordinator.Page.allCases, id: \.self) { page in
+            ForEach(coordinator.visiblePages, id: \.self) { page in
                 let isCurrent = presenter.page == page
 
                 Capsule()
@@ -230,7 +234,7 @@ struct GalleryView: View {
             thumbnails.prefetch(tile?.thumbnailURL, soon: true)
         }
 
-        for page in LibraryCoordinator.Page.allCases {
+        for page in coordinator.visiblePages {
             for tile in coordinator.tiles(for: page) {
                 thumbnails.prefetch(tile?.thumbnailURL, soon: page == presenter.page)
             }

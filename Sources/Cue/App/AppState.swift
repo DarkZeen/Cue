@@ -113,6 +113,11 @@ final class AppState {
             guard let self else { return }
             self.miniPlayer.sync()
 
+            // The fourth page follows the music: a station built from whatever
+            // is sounding now, which is the one question the other three pages
+            // cannot hear.
+            self.coordinator.buildRadio(after: self.player.nowPlaying?.videoID)
+
             // The page says whether it is signed in; the API provider needs to
             // know, because signing in inside the player is now the only
             // sign-in there is.

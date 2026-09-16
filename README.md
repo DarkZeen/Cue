@@ -163,17 +163,29 @@ cookie in your keychain, which is how the site itself works. It uses endpoints
 Google does not document and may change without notice. If it breaks, turn it
 off — everything official keeps running.
 
-Search asks both and merges the answers, preferring whichever knows more.
+Search asks both and merges the answers, preferring whichever knows more. A
+result marked **YouTube** is one the official API returned and YouTube Music did
+not — it plays, but on youtube.com, with the adverts a Premium subscription has
+already paid to be rid of. Nothing is marked when the Music session is off,
+since then there is nothing to have been ruled out by.
 
 ## The grid
 
-Three pages, arrow keys or two fingers between them.
+Three pages, arrow keys or two fingers anywhere on the grid.
 
 | | Your music | Explore (⌘E) |
 |---|---|---|
 | 1 | Speed dial — what you kept, gaps filled from your history and likes | For you |
 | 2 | Liked songs | New releases |
 | 3 | Albums you added by hand | Albums |
+| 4 | More like this — only while something is playing | |
+
+The fourth is a station built from whatever is sounding *now*, seeded from the
+address the player is on rather than from what you clicked, so it follows a
+playlist as it advances. It answers the one question the other three cannot: not
+"what do I already know I want", which is what a speed dial is for, but "more of
+this". It is there only while music is, because a dot leading to an empty page
+is a promise the grid cannot keep.
 
 Both first pages are songs and nothing else. A playlist or an album in one of
 those nine positions is a container you have to go *into*, and going into things

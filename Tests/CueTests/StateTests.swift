@@ -274,3 +274,40 @@ struct MarkMotionTests {
         }
     }
 }
+
+@Suite("Pages that come and go")
+struct VisiblePagesTests {
+    /// The rule, without the coordinator: the station is a page only while
+    /// there is a station.
+    private func pages(stationIsEmpty: Bool) -> [LibraryCoordinator.Page] {
+        stationIsEmpty ? [.pinned, .liked, .albums] : LibraryCoordinator.Page.allCases
+    }
+
+    @Test("With nothing playing there are three pages")
+    func threeWhenQuiet() {
+        #expect(pages(stationIsEmpty: true).count == 3)
+        #expect(!pages(stationIsEmpty: true).contains(.radio))
+    }
+
+    @Test("With a station there are four, and it is last")
+    func fourWhenPlaying() {
+        #expect(pages(stationIsEmpty: false) == [.pinned, .liked, .albums, .radio])
+    }
+
+    @Test("Paging is clamped to the pages that exist")
+    func pagingStaysInRange() {
+        // The failure this guards: standing on the station, the music stops,
+        // and the arrow keys are still clamped against four while the dots
+        // draw three. The two then disagree about where you are.
+        let presenter = CuePresenter()
+        presenter.setPages(pages(stationIsEmpty: false))
+        presenter.movePage(by: 3)
+        #expect(presenter.page == .radio)
+
+        presenter.setPages(pages(stationIsEmpty: true))
+        #expect(presenter.page == .albums)
+
+        presenter.movePage(by: 5)
+        #expect(presenter.page == .albums)
+    }
+}

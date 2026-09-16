@@ -100,6 +100,9 @@ final class PlayerService: NSObject {
         var artworkURL: URL?
         var isPlaying: Bool
         var isMuted: Bool = false
+        /// What is playing, as an identifier. Empty when the page is somewhere
+        /// that is not a track.
+        var videoID: String = ""
     }
 
     /// How much of the concealed window is left on screen.
@@ -764,7 +767,12 @@ final class PlayerService: NSObject {
                 // a sign-in button whose markup changes with every redesign.
                 signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
                 isPlaying: playing,
-                muted: !!media && media.muted
+                muted: !!media && media.muted,
+                // Read from the address rather than from what Cue asked to
+                // play. A playlist advances on its own, and the station should
+                // follow the track actually sounding — not the one clicked
+                // twenty minutes ago.
+                videoId: new URLSearchParams(location.search).get('v') || ''
               };
             }
           };
@@ -867,7 +875,8 @@ extension PlayerService: WKScriptMessageHandler {
                 artist: (artist?.isEmpty == false) ? artist : nil,
                 artworkURL: (artwork?.isEmpty == false) ? artwork.flatMap(URL.init(string:)) : nil,
                 isPlaying: body["isPlaying"] as? Bool ?? false,
-                isMuted: body["muted"] as? Bool ?? false
+                isMuted: body["muted"] as? Bool ?? false,
+                videoID: body["videoId"] as? String ?? ""
             )
 
             // The tap can only find the process once that process is making a

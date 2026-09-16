@@ -125,6 +125,61 @@ final class LibraryCoordinator {
         }
     }
 
+    /// The station built from whatever is playing.
+    ///
+    /// Held rather than fetched on demand, because the page has to be there the
+    /// moment somebody swipes to it — and swiping is how it will be found.
+    private(set) var radio: [MusicItem] = []
+    /// Which track the station was built from, so it is not rebuilt for a
+    /// track it already describes.
+    private var radioSeed: String?
+    private var radioTask: Task<Void, Never>?
+
+    /// Builds the station for a track, if it is not the one already showing.
+    ///
+    /// The seed is a video id rather than a title: a live version and a studio
+    /// version share a name and go to very different places.
+    func buildRadio(after videoID: String?) {
+        guard let videoID, !videoID.isEmpty else { return }
+        guard videoID != radioSeed else { return }
+        guard !activeProviders.isEmpty else { return }
+
+        radioSeed = videoID
+        radioTask?.cancel()
+        radioTask = Task { [weak self] in
+            guard let self else { return }
+
+            var found: [MusicItem] = []
+            for provider in self.activeProviders where found.isEmpty {
+                found = (try? await provider.radio(after: videoID)) ?? []
+            }
+
+            guard !Task.isCancelled, self.radioSeed == videoID else { return }
+
+            // Empty never overwrites, the same rule the rest of this file
+            // follows: these endpoints answer an over-frequent caller with
+            // nothing, and a station that empties itself mid-track looks like
+            // a bug in the page rather than a rate limit.
+            guard !found.isEmpty else {
+                self.logger.notice("The station came back empty; keeping the last one.")
+                return
+            }
+
+            self.radio = found
+            self.deal[.radio] = nil
+            self.logger.notice("Station: \(found.count, privacy: .public) tracks.")
+        }
+    }
+
+    /// The pages with something to show, in order.
+    ///
+    /// Four only while music is playing. A dot that leads to an empty page is
+    /// a promise the grid cannot keep, and a page that is sometimes there is
+    /// better than a page that is always there and usually blank.
+    var visiblePages: [Page] {
+        radio.isEmpty ? [.pinned, .liked, .albums] : Page.allCases
+    }
+
     private var lastExploreRefresh: Date?
 
     /// Fetches the three Explore pages.
@@ -657,6 +712,9 @@ final class LibraryCoordinator {
         case pinned
         case liked
         case albums
+        /// More of what is playing. Present only while something is, which is
+        /// the only time the question makes sense.
+        case radio
 
         /// What this page is called, which depends on which world the grid is
         /// showing. The three positions are the same; what fills them is not.
@@ -666,12 +724,14 @@ final class LibraryCoordinator {
                 case .pinned: return "Speed dial"
                 case .liked: return "Liked songs"
                 case .albums: return "Albums"
+                case .radio: return "More like this"
                 }
             }
             switch self {
             case .pinned: return "For you"
             case .liked: return "New releases"
             case .albums: return "Albums"
+            case .radio: return "More like this"
             }
         }
 
@@ -687,6 +747,7 @@ final class LibraryCoordinator {
                 case .pinned: return "Search for something, then keep it here."
                 case .liked: return "Songs you like in YouTube Music will appear here."
                 case .albums: return "Right-click anything and choose Add to Albums."
+                case .radio: return "Cue is asking what goes with this one."
                 }
             }
             return "Nothing here yet — Cue is still looking."
@@ -708,6 +769,7 @@ final class LibraryCoordinator {
     func pool(for page: Page) -> [MusicItem] {
         if settings.isExploring {
             switch page {
+            case .radio: return radio
             case .pinned: return recommendations
             case .liked: return newReleases
             case .albums:
@@ -722,6 +784,7 @@ final class LibraryCoordinator {
         }
 
         switch page {
+        case .radio: return radio
         case .pinned: return []
         case .liked: return likedSongs
         // Curated, not fetched. What the library reports as your albums and
@@ -788,6 +851,8 @@ final class LibraryCoordinator {
         }
 
         switch page {
+        case .radio:
+            return radio.count > SettingsStore.tileCount
         case .pinned:
             // Only worth offering when there is at least one slot Cue filled in
             // and something else it could have put there.

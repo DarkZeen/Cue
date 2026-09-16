@@ -79,6 +79,13 @@ protocol MusicLibraryProvider: AnyObject {
     /// for the other two, which on a real account is almost entirely albums.
     func charts() async throws -> [MusicItem]
 
+    /// What the service would play after this track, as a list of songs.
+    ///
+    /// The one question the rest of the grid cannot hear: not "what do I
+    /// already know I want", which is what a speed dial and a liked-songs page
+    /// answer, but "more of *this*".
+    func radio(after videoID: String) async throws -> [MusicItem]
+
     /// Every mood and genre the service offers.
     func genres() async throws -> [MusicGenre]
 
@@ -123,6 +130,7 @@ extension MusicLibraryProvider {
     func newReleases() async throws -> [MusicItem] { [] }
     func charts() async throws -> [MusicItem] { [] }
     func tracks(of album: MusicItem) async throws -> [MusicItem] { [] }
+    func radio(after videoID: String) async throws -> [MusicItem] { [] }
     func genres() async throws -> [MusicGenre] { [] }
     func genre(_ genre: MusicGenre) async throws -> [MusicItem] { [] }
 

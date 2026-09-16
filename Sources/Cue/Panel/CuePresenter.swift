@@ -114,13 +114,31 @@ final class CuePresenter {
         selection = nil
     }
 
+    /// Which pages exist right now. Set by the gallery, because the last of
+    /// them comes and goes with the music.
+    private var pages: [LibraryCoordinator.Page] = [.pinned, .liked, .albums]
+
+    func setPages(_ pages: [LibraryCoordinator.Page]) {
+        guard pages != self.pages, !pages.isEmpty else { return }
+        self.pages = pages
+
+        // The page being looked at may have just stopped existing — the music
+        // stopped, and the station went with it. Standing on a page that is no
+        // longer in the list means arrow keys and dots disagree about where
+        // you are.
+        if !pages.contains(page) { setPage(pages[pages.count - 1]) }
+    }
+
     /// Moves by whole pages, clamped.
     ///
-    /// Not wrapped: three pages held under an arrow key would cycle forever,
+    /// Not wrapped: a few pages held under an arrow key would cycle forever,
     /// and "go to the last page" stops being something you can do by feel.
     func movePage(by offset: Int) {
-        let pages = LibraryCoordinator.Page.allCases
-        let target = min(max(page.rawValue + offset, 0), pages.count - 1)
+        guard let current = pages.firstIndex(of: page) else {
+            setPage(pages[0])
+            return
+        }
+        let target = min(max(current + offset, 0), pages.count - 1)
         setPage(pages[target])
     }
 
