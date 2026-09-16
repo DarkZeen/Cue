@@ -145,10 +145,17 @@ real audio with invention bolted on afterwards is a style whose invention nobody
 looks at. Both go through one path, and the swell is what fills it when no
 reading arrives.
 
-**Explicitly undecided.** Media keys and Now Playing in Control Centre were
-scoped and agreed but not built. Badging results that are not in YouTube Music's
-catalogue — which redirect the player to youtube.com — was chosen but not built.
-Neither is a commitment.
+**Media keys and Now Playing already worked, and the app should stay out of it.**
+Recorded because it was scoped twice as missing work on my say-so and was not.
+YouTube Music's page implements the Media Session API; WebKit registers that with
+`mediaremoted`, and the log shows `com.apple.WebKit.GPU/com.cue.app` as the
+*active* now-playing client, publishing player state, the queue, supported
+commands and the display name "Cue". Commands land on the site's own handlers,
+which can seek where an `MPRemoteCommandCenter` layer in the app could not. Such
+a layer was written, and removed: it registered a second client for the same
+bundle, which is something for Control Centre to pick wrongly between.
+
+**Explicitly undecided.** Nothing currently.
 
 ## Brand Commitments
 

@@ -202,6 +202,14 @@ different list in every country and it is translated.
 the slots Cue filled in — what you pinned stays where you put it, because the
 fourth thing still being fourth tomorrow is the entire reason the page works.
 
+Media keys, Control Centre and a squeeze on a pair of AirPods already reach it.
+Cue adds nothing for this and deliberately so: YouTube Music's page implements
+the Media Session API, WebKit registers that with the system, and the commands
+land on the site's own handlers — which can do more than Cue could, seeking
+included. Publishing a second Now Playing entry from the app was tried and
+removed; two registrations for one bundle is something for Control Centre to
+pick wrongly between.
+
 ## Keyboard
 
 | Key | Does |

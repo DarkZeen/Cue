@@ -108,6 +108,7 @@ final class AppState {
         }
         panel.onEndEditing = { [weak self] in self?.layoutEditor.end() }
 
+
         player.onStateChange = { [weak self] in
             guard let self else { return }
             self.miniPlayer.sync()

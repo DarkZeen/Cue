@@ -173,3 +173,36 @@ struct ExploreFilterTests {
         #expect(LibraryCoordinator.albums(in: feed).map(\.id) == ["album"])
     }
 }
+
+@Suite("Outside the catalogue")
+struct CatalogueBadgeTests {
+    /// The rule, without the coordinator around it: an item is marked when the
+    /// Music backend was asked and did not return it.
+    private func isOutside(_ source: ProviderID, videoID: String?, musicConnected: Bool) -> Bool {
+        guard musicConnected else { return false }
+        return source == .dataAPI && videoID != nil
+    }
+
+    @Test("A video only the official API knew about is marked")
+    func officialOnlyIsMarked() {
+        #expect(isOutside(.dataAPI, videoID: "abc", musicConnected: true))
+    }
+
+    @Test("Anything YouTube Music returned is not")
+    func musicResultsAreNotMarked() {
+        #expect(!isOutside(.ytMusic, videoID: "abc", musicConnected: true))
+    }
+
+    @Test("With no Music session, nothing is marked")
+    func nothingIsMarkedWithoutTheComparison() {
+        // Everything arrives from the official API then, so the mark would be
+        // on every row — which says nothing, and would be wrong besides: none
+        // of it has been ruled out by anybody.
+        #expect(!isOutside(.dataAPI, videoID: "abc", musicConnected: false))
+    }
+
+    @Test("A playlist is not marked, having no video to play elsewhere")
+    func containersAreNotMarked() {
+        #expect(!isOutside(.dataAPI, videoID: nil, musicConnected: true))
+    }
+}

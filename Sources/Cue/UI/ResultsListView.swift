@@ -38,7 +38,8 @@ struct ResultsListView: View {
                                 coordinator.isInAlbums(item)
                                     ? coordinator.removeFromAlbums(item)
                                     : coordinator.addToAlbums(item)
-                            }
+                            },
+                            isOutsideCatalogue: coordinator.isOutsideMusicCatalogue(item)
                         )
                         .id(index)
                     }
@@ -88,6 +89,8 @@ private struct ResultRow: View {
     let onPin: () -> Void
     let isInAlbums: Bool
     let onToggleAlbum: () -> Void
+    /// A YouTube video rather than a YouTube Music track. Plays, but elsewhere.
+    let isOutsideCatalogue: Bool
 
     @State private var isHovered = false
 
@@ -100,11 +103,31 @@ private struct ResultRow: View {
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
 
-                if let subtitle = item.subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                HStack(spacing: 5) {
+                    if let subtitle = item.subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    // On every row it applies to, not only the aimed-at one.
+                    // The kind symbol opposite is decoration and can afford to
+                    // wait for attention; this one changes what pressing Return
+                    // will do, so it has to be legible before the decision.
+                    if isOutsideCatalogue {
+                        Text("YouTube")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(.secondary.opacity(0.16))
+                            )
+                            .help("Not in YouTube Music. This one opens on youtube.com, with adverts.")
+                            .fixedSize()
+                    }
                 }
             }
 

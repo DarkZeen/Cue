@@ -386,6 +386,25 @@ final class LibraryCoordinator {
 
     var isConnectedToAnything: Bool { !activeProviders.isEmpty }
 
+    /// Whether this is a YouTube video rather than a YouTube Music track.
+    ///
+    /// Everything Cue plays is addressed at music.youtube.com, and for a video
+    /// the catalogue does not carry, that address quietly becomes youtube.com —
+    /// a different player, different controls, and adverts a Premium
+    /// subscription has already paid to be rid of. It still plays, so this is a
+    /// mark rather than a refusal.
+    ///
+    /// The test is which backend knew about it. Both are asked and their
+    /// answers merged, so an item that only ever came from the official API is
+    /// one YouTube Music was asked about and did not return. That reasoning
+    /// only holds while there is something to compare against: with the Music
+    /// session off, everything arrives from the official API and none of it has
+    /// been ruled out by anybody.
+    func isOutsideMusicCatalogue(_ item: MusicItem) -> Bool {
+        guard settings.unofficialProviderEnabled, ytMusic.isConnected else { return false }
+        return item.source == .dataAPI && item.videoID != nil
+    }
+
     /// Whether the real YouTube Music library is reachable.
     var hasMusicSession: Bool {
         settings.unofficialProviderEnabled && ytMusic.isConnected
