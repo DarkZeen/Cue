@@ -171,14 +171,15 @@ final class LibraryCoordinator {
         }
     }
 
-    /// The pages with something to show, in order.
+    /// The pages, in order. Always four.
     ///
-    /// Four only while music is playing. A dot that leads to an empty page is
-    /// a promise the grid cannot keep, and a page that is sometimes there is
-    /// better than a page that is always there and usually blank.
-    var visiblePages: [Page] {
-        radio.isEmpty ? [.pinned, .liked, .albums] : Page.allCases
-    }
+    /// The station used to appear and disappear with the music, on the grounds
+    /// that a dot leading to an empty page is a promise the grid cannot keep.
+    /// Moving it to third settled that argument the other way: a page that
+    /// comes and goes in the *middle* pushes Albums between third and fourth
+    /// depending on whether anything happens to be playing, and a position that
+    /// moves is the one thing this grid cannot have. Third is third.
+    var visiblePages: [Page] { Page.allCases }
 
     private var lastExploreRefresh: Date?
 
@@ -711,10 +712,9 @@ final class LibraryCoordinator {
     enum Page: Int, CaseIterable, Hashable {
         case pinned
         case liked
-        case albums
-        /// More of what is playing. Present only while something is, which is
-        /// the only time the question makes sense.
+        /// More of what is playing.
         case radio
+        case albums
 
         /// What this page is called, which depends on which world the grid is
         /// showing. The three positions are the same; what fills them is not.
@@ -747,7 +747,7 @@ final class LibraryCoordinator {
                 case .pinned: return "Search for something, then keep it here."
                 case .liked: return "Songs you like in YouTube Music will appear here."
                 case .albums: return "Right-click anything and choose Add to Albums."
-                case .radio: return "Cue is asking what goes with this one."
+                case .radio: return "Play something, and more like it appears here."
                 }
             }
             return "Nothing here yet — Cue is still looking."

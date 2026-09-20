@@ -177,15 +177,17 @@ Three pages, arrow keys or two fingers anywhere on the grid.
 |---|---|---|
 | 1 | Speed dial — what you kept, gaps filled from your history and likes | For you |
 | 2 | Liked songs | New releases |
-| 3 | Albums you added by hand | Albums |
-| 4 | More like this — only while something is playing | |
+| 3 | More like this | |
+| 4 | Albums you added by hand | Albums |
 
-The fourth is a station built from whatever is sounding *now*, seeded from the
+The third is a station built from whatever is sounding *now*, seeded from the
 address the player is on rather than from what you clicked, so it follows a
 playlist as it advances. It answers the one question the other three cannot: not
 "what do I already know I want", which is what a speed dial is for, but "more of
-this". It is there only while music is, because a dot leading to an empty page
-is a promise the grid cannot keep.
+this". It is empty until something plays, and it stays in the list anyway — a
+page that came and went from the middle would push Albums between third and
+fourth depending on whether music happened to be on, and a position that moves
+is the one thing this grid cannot have.
 
 Both first pages are songs and nothing else. A playlist or an album in one of
 those nine positions is a container you have to go *into*, and going into things
@@ -227,7 +229,7 @@ pick wrongly between.
 | Key | Does |
 |---|---|
 | ⌥Space | Open the panel, or close it if it is already open |
-| ← → , or two fingers | Move between the grid's pages |
+| ← → , or two fingers | Move between the grid's pages (while the search field is empty) |
 | Scroll the plaque's speaker | Volume |
 | ⌘, | Settings |
 | ⌘1 – ⌘9 | Open that position in the grid |

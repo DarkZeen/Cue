@@ -462,10 +462,21 @@ final class CueWindowController {
             presenter.moveSelection(by: presenter.mode == .grid ? -CueLayout.gridColumns : -1)
             return true
 
-        // Left and Right are deliberately absent. This monitor never received
-        // them — the panel's arrows did nothing until SwiftUI's focus system
-        // was given them in `CueContentView` — and leaving a second handler
-        // here would mean two mechanisms racing to move one page.
+        case 123, 124: // Left, Right
+            // Handled here rather than by SwiftUI's `onKeyPress`, which needs
+            // the container to hold keyboard focus — and the search field
+            // holds it, because the whole panel is built around being able to
+            // type the moment it opens. A text field eats Left and Right to
+            // move its caret, so the page never turned.
+            //
+            // Only with an empty field, which is what `.grid` means: with
+            // something typed, these belong to the caret and are passed
+            // straight through.
+            guard presenter.mode == .grid, !isEditing else { return false }
+            let offset = event.keyCode == 124 ? 1 : -1
+            isGallery ? presenter.movePage(by: offset) : presenter.moveSelection(by: offset)
+            return true
+
 
         case 48: // Tab
             presenter.moveSelection(by: modifiers == .shift ? -1 : 1)

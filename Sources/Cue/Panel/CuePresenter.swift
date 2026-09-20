@@ -114,18 +114,16 @@ final class CuePresenter {
         selection = nil
     }
 
-    /// Which pages exist right now. Set by the gallery, because the last of
-    /// them comes and goes with the music.
-    private var pages: [LibraryCoordinator.Page] = [.pinned, .liked, .albums]
+    /// Which pages exist, in order.
+    private var pages: [LibraryCoordinator.Page] = LibraryCoordinator.Page.allCases
 
     func setPages(_ pages: [LibraryCoordinator.Page]) {
         guard pages != self.pages, !pages.isEmpty else { return }
         self.pages = pages
 
-        // The page being looked at may have just stopped existing — the music
-        // stopped, and the station went with it. Standing on a page that is no
-        // longer in the list means arrow keys and dots disagree about where
-        // you are.
+        // Kept for the case where the list ever shrinks again: standing on a
+        // page that is no longer in it means the arrow keys and the dots
+        // disagree about where you are.
         if !pages.contains(page) { setPage(pages[pages.count - 1]) }
     }
 

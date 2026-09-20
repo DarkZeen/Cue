@@ -275,39 +275,38 @@ struct MarkMotionTests {
     }
 }
 
-@Suite("Pages that come and go")
-struct VisiblePagesTests {
-    /// The rule, without the coordinator: the station is a page only while
-    /// there is a station.
-    private func pages(stationIsEmpty: Bool) -> [LibraryCoordinator.Page] {
-        stationIsEmpty ? [.pinned, .liked, .albums] : LibraryCoordinator.Page.allCases
+@Suite("Page order")
+struct PageOrderTests {
+    @Test("Every page keeps one position, always")
+    func orderIsFixed() {
+        // The whole grid rests on this. A page that moves depending on what is
+        // happening is a page you have to look for, and looking is the thirty
+        // seconds the app exists to save.
+        #expect(LibraryCoordinator.Page.allCases == [.pinned, .liked, .radio, .albums])
     }
 
-    @Test("With nothing playing there are three pages")
-    func threeWhenQuiet() {
-        #expect(pages(stationIsEmpty: true).count == 3)
-        #expect(!pages(stationIsEmpty: true).contains(.radio))
-    }
-
-    @Test("With a station there are four, and it is last")
-    func fourWhenPlaying() {
-        #expect(pages(stationIsEmpty: false) == [.pinned, .liked, .albums, .radio])
-    }
-
-    @Test("Paging is clamped to the pages that exist")
+    @Test("Paging is clamped to the ends")
     func pagingStaysInRange() {
-        // The failure this guards: standing on the station, the music stops,
-        // and the arrow keys are still clamped against four while the dots
-        // draw three. The two then disagree about where you are.
         let presenter = CuePresenter()
-        presenter.setPages(pages(stationIsEmpty: false))
-        presenter.movePage(by: 3)
-        #expect(presenter.page == .radio)
+        presenter.setPages(LibraryCoordinator.Page.allCases)
 
-        presenter.setPages(pages(stationIsEmpty: true))
+        presenter.movePage(by: 3)
         #expect(presenter.page == .albums)
 
         presenter.movePage(by: 5)
         #expect(presenter.page == .albums)
+
+        presenter.movePage(by: -9)
+        #expect(presenter.page == .pinned)
+    }
+
+    @Test("A page that leaves the list does not strand the highlight")
+    func shrinkingIsSurvivable() {
+        let presenter = CuePresenter()
+        presenter.setPages(LibraryCoordinator.Page.allCases)
+        presenter.movePage(by: 3)
+
+        presenter.setPages([.pinned, .liked])
+        #expect(presenter.page == .liked)
     }
 }

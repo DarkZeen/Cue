@@ -377,7 +377,22 @@ final class PlayerService: NSObject {
         // Above other windows so nothing can cover it: an occluded window is a
         // hidden page, which is the thing being worked around.
         window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        // `.fullScreenAuxiliary` matters as much as the rest, and its absence
+        // is what stopped the panel appearing over a full-screen app.
+        //
+        // This window is always there — warmed up at launch and never closed —
+        // and `present()` activates the app so the search field can be typed
+        // into. Activating brings *every* window of the app forward, so a
+        // window that cannot exist on a full-screen space drags the whole app
+        // back to the space where it can: the desktop. The panel joined all
+        // spaces correctly the entire time; it was this one pulling the user
+        // away from the app they were looking at.
+        window.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle,
+        ]
         window.setContentSize(Self.hiddenSize)
 
         // Pushed down and left until only its top-right corner pokes into the

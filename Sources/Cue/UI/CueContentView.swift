@@ -106,23 +106,6 @@ struct CueContentView: View {
             coordinator.toggleExplore()
             return .handled
         }
-        .onKeyPress(.leftArrow) { horizontal(-1) }
-        .onKeyPress(.rightArrow) { horizontal(1) }
-    }
-
-    /// Left and Right: pages in the gallery, selection in the compact grid.
-    ///
-    /// Here rather than in the window controller's event monitor, which never
-    /// received these keys at all — the arrows did nothing until this existed.
-    private func horizontal(_ offset: Int) -> KeyPress.Result {
-        guard presenter.mode == .grid, !isEditing else { return .ignored }
-
-        if settings.panelDesign == .gallery {
-            presenter.movePage(by: offset)
-        } else {
-            presenter.moveSelection(by: offset)
-        }
-        return .handled
     }
 
     /// Brings the presenter in line with what is actually in the search field.
