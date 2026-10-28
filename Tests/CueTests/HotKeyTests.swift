@@ -219,3 +219,26 @@ struct UpdateVersionTests {
         #expect(!UpdateService.isNewer("1.0", than: "1.0.0"))
     }
 }
+
+@Suite("Panel keyboard")
+struct PanelKeyTests {
+    @Test("An arrow key is not a modifier held down")
+    func arrowsCarryNoHeldModifiers() {
+        // What macOS puts on every arrow key press — measured, not assumed.
+        // Read as held modifiers, they made the panel hand every arrow back to
+        // the search field, so the pages never turned.
+        let arrow: NSEvent.ModifierFlags = [.function, .numericPad]
+        #expect(CueWindowController.heldModifiers(arrow).isEmpty)
+    }
+
+    @Test("Caps Lock is not a modifier held down")
+    func capsLockIsNotHeld() {
+        #expect(CueWindowController.heldModifiers([.capsLock]).isEmpty)
+    }
+
+    @Test("Real modifiers survive alongside an arrow")
+    func realModifiersSurvive() {
+        #expect(CueWindowController.heldModifiers([.shift, .function, .numericPad]) == .shift)
+        #expect(CueWindowController.heldModifiers([.command, .capsLock]) == .command)
+    }
+}

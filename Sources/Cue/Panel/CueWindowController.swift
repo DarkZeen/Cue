@@ -422,9 +422,25 @@ final class CueWindowController {
         keyMonitor = nil
     }
 
+    /// The modifiers someone is actually holding down.
+    ///
+    /// `deviceIndependentFlagsMask` is not that. macOS sets `.function` and
+    /// `.numericPad` on every arrow key press, so read raw, an arrow is never
+    /// unmodified — and the guard in `handle` passed every one straight back
+    /// to the search field. That is why the pages never turned, from the
+    /// monitor or, before it, from a monitor that "never received these keys".
+    /// It received them; this threw them away. Caps Lock is the same mistake
+    /// waiting: a state, not a key being held, and it would have taken Escape
+    /// and Return down with it.
+    static func heldModifiers(_ flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
+        flags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting([.function, .numericPad, .capsLock])
+    }
+
     /// Returns true when the event was consumed.
     private func handle(_ event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let modifiers = Self.heldModifiers(event.modifierFlags)
 
         // ⌘1 … ⌘9 open a tile without looking at it. The whole reason the grid
         // has fixed positions.
