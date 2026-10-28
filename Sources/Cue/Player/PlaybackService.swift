@@ -51,6 +51,29 @@ final class PlaybackService {
             return NSWorkspace.shared.open(url)
         }
     }
+
+    /// Whether a song can be queued and rated from Cue. Both go through Cue's
+    /// own player, so a browser hand-off has nothing to do them with.
+    func canQueueAndRate(_ item: MusicItem) -> Bool {
+        settings.playbackDestination == .inApp && item.videoID != nil
+    }
+
+    /// Puts a song after the one playing. False when there is nothing playing
+    /// to put it after.
+    func playNext(_ item: MusicItem) async -> Bool {
+        guard canQueueAndRate(item), let videoID = item.videoID else { return false }
+        let queued = await player.playNext(videoID: videoID)
+        logger.notice("Play next: \(queued ? "queued" : "no queue to join", privacy: .public).")
+        return queued
+    }
+
+    func rate(_ item: MusicItem, _ rating: PlayerService.Rating) async {
+        guard canQueueAndRate(item), let videoID = item.videoID else { return }
+        let rated = await player.rate(videoID: videoID, rating)
+        if !rated {
+            logger.error("Could not \(rating.rawValue, privacy: .public) a song; the page had no way to.")
+        }
+    }
 }
 
 /// What happens when you pick something.

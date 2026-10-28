@@ -147,6 +147,7 @@ struct ArtworkTileView: View {
     private var menu: some View {
         if let item {
             Button("Play", action: onOpen)
+            SongMenu(item: item)
             Divider()
             if isPinned {
                 Button("Unpin", action: onUnpin)

@@ -127,6 +127,7 @@ struct TileView: View {
     private var menu: some View {
         if let item {
             Button("Open in YouTube Music", action: onOpen)
+            SongMenu(item: item)
             Divider()
             if isPinned {
                 Button("Unpin", action: onUnpin)

@@ -325,6 +325,50 @@ final class PlayerService: NSObject {
         evaluate("__cue.nudgeVolume(\(delta))")
     }
 
+    // MARK: - Queue and ratings
+
+    /// What a thumb in YouTube Music says about a song. The raw values are the
+    /// site's own names for them.
+    enum Rating: String, Sendable {
+        case like = "LIKE"
+        case dislike = "DISLIKE"
+    }
+
+    /// Puts a song straight after the one playing.
+    ///
+    /// False when there is no queue to put it in — nothing has played yet, or
+    /// the page is somewhere that is not a player — so the caller can play it
+    /// outright instead of quietly doing nothing.
+    func playNext(videoID: String) async -> Bool {
+        await call("return await __cue.playNext(id)", arguments: ["id": videoID])
+    }
+
+    /// Likes or dislikes a song, on the account the player is signed in as.
+    func rate(videoID: String, _ rating: Rating) async -> Bool {
+        await call(
+            "return await __cue.rate(id, rating)",
+            arguments: ["id": videoID, "rating": rating.rawValue]
+        )
+    }
+
+    /// Runs a script that answers, with its arguments passed as values rather
+    /// than spliced into the source — a video ID is just a string from a
+    /// server, and it does not get to be code.
+    private func call(_ script: String, arguments: [String: Any]) async -> Bool {
+        guard let webView, isLoaded else { return false }
+        do {
+            let result = try await webView.callAsyncJavaScript(
+                script,
+                arguments: arguments,
+                contentWorld: .page
+            )
+            return result as? Bool ?? false
+        } catch {
+            logger.debug("Player script failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     private func evaluate(_ script: String) {
         guard let webView else { return }
         webView.evaluateJavaScript(script) { [weak self] _, error in
@@ -786,6 +830,88 @@ final class PlayerService: NSObject {
               if (!media) { return; }
               media.muted = false;
               media.volume = Math.min(1, Math.max(0, media.volume + delta));
+            },
+
+            // The page's own API client: already signed in, already carrying
+            // the context and the authorization header the endpoints want.
+            // Nobody promised it would stay, so its absence is an answer
+            // rather than an exception.
+            async api(path, body) {
+              const app = document.querySelector('ytmusic-app');
+              const network = app && app.networkManager;
+              if (!network || typeof network.fetch !== 'function') { return null; }
+              return network.fetch(path, body);
+            },
+
+            // The queue panel and the store behind it — the same queue the
+            // site's own "Play next" writes to, so what Cue adds is shown,
+            // skipped to and saved exactly as if it had been added there.
+            queue() {
+              const panel = document.querySelector('#queue') || deep('ytmusic-player-queue');
+              const inner = panel && panel.queue && panel.queue.store;
+              const store = inner && (inner.store || inner);
+              if (!store || typeof store.getState !== 'function') { return null; }
+              const dispatch = typeof panel.dispatch === 'function'
+                ? panel.dispatch.bind(panel)
+                : store.dispatch.bind(store);
+              return { store, dispatch };
+            },
+
+            async playNext(videoId) {
+              const queue = this.queue();
+              const state = queue && queue.store.getState().queue;
+              if (!state || !Array.isArray(state.items) || !state.items.length) { return false; }
+
+              const result = await this.api('/music/get_queue', {
+                queueContextParams: state.queueContextParams,
+                queueInsertPosition: 'INSERT_AFTER_CURRENT_VIDEO',
+                videoIds: [videoId]
+              });
+              const items = ((result && result.queueDatas) || [])
+                .map((data) => data && data.content)
+                .filter(Boolean);
+              if (!items.length) { return false; }
+
+              // Read again: the request took long enough for the track to
+              // have moved on.
+              const now = queue.store.getState().queue;
+              const current = now.items.findIndex((item) => {
+                const wrapper = item.playlistPanelVideoWrapperRenderer;
+                const row = item.playlistPanelVideoRenderer
+                  || (wrapper && wrapper.primaryRenderer && wrapper.primaryRenderer.playlistPanelVideoRenderer);
+                return row && row.selected;
+              });
+              queue.dispatch({
+                type: 'ADD_ITEMS',
+                payload: {
+                  nextQueueItemId: now.nextQueueItemId,
+                  index: current >= 0 ? current + 1 : now.items.length,
+                  items,
+                  shuffleEnabled: false,
+                  shouldAssignIds: true
+                }
+              });
+              return true;
+            },
+
+            async rate(videoId, rating) {
+              // The track that is playing goes through the player bar's own
+              // thumbs, so the bar shows it and a dislike skips the song the
+              // way it does when pressed there. The buttons toggle, hence the
+              // check: pressing Like on a liked song would un-like it.
+              const current = new URLSearchParams(location.search).get('v');
+              const thumbs = deep('ytmusic-player-bar ytmusic-like-button-renderer');
+              if (videoId === current && thumbs) {
+                if (thumbs.getAttribute('like-status') === rating) { return true; }
+                const button = rating === 'LIKE'
+                  ? deep('#button-shape-like button', thumbs) || deep('.like', thumbs)
+                  : deep('#button-shape-dislike button', thumbs) || deep('.dislike', thumbs);
+                if (button) { button.click(); return true; }
+              }
+
+              const path = rating === 'LIKE' ? '/like/like' : '/like/dislike';
+              const result = await this.api(path, { target: { videoId } });
+              return result !== null && result !== undefined;
             },
 
             // Reported whether or not anything is playing.

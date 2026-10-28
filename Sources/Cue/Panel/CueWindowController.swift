@@ -392,6 +392,7 @@ final class CueWindowController {
                 view
                 Spacer(minLength: 0)
             }
+            .environment(\.songActions, songActions)
         ))
         hostingView.frame = container.bounds
         hostingView.autoresizingMask = [.width, .height]
@@ -403,6 +404,26 @@ final class CueWindowController {
     private func open(_ item: MusicItem) {
         guard playback.open(item) else { return }
         if settings.closesAfterOpening { dismiss() }
+    }
+
+    /// Play Next and the thumbs. Neither closes the panel: queueing is
+    /// something done several times in a row, and a like is not a choice of
+    /// what to hear.
+    private var songActions: SongActions {
+        SongActions(
+            isAvailable: { [weak self] item in self?.playback.canQueueAndRate(item) ?? false },
+            playNext: { [weak self] item in
+                Task {
+                    guard let self else { return }
+                    // Nothing playing means no queue to join — so it plays,
+                    // which is what "next" means when there is no "now".
+                    if await !self.playback.playNext(item) { self.open(item) }
+                }
+            },
+            rate: { [weak self] item, rating in
+                Task { await self?.playback.rate(item, rating) }
+            }
+        )
     }
 
     // MARK: - Focus

@@ -155,6 +155,8 @@ private struct ResultRow: View {
         .animation(CueAnimation.selection, value: isSelected)
         .contextMenu {
             Button("Open in YouTube Music", action: onOpen)
+            SongMenu(item: item)
+            Divider()
             Button("Keep in the Grid", action: onPin)
             Button(isInAlbums ? "Remove from Albums" : "Add to Albums", action: onToggleAlbum)
             Divider()
