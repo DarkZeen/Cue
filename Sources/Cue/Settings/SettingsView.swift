@@ -99,6 +99,17 @@ private struct GeneralPane: View {
                 if settings.playbackDestination == .inApp {
                     Toggle("Shuffle playlists and albums", isOn: $settings.shufflesContainers)
 
+                    Toggle("Pause when another app plays sound", isOn: $settings.pausesForOtherAudio)
+
+                    Text("""
+                        A video, a call, a game: Cue pauses while it plays and \
+                        carries on once it has been quiet for two seconds. A \
+                        pause you make yourself stays a pause. Notification \
+                        sounds do not count, and pressing play in Cue while \
+                        something else is playing keeps Cue playing.
+                        """)
+                        .hint(settings.showsHints)
+
                     Toggle("Make the mark move with the music", isOn: $settings.analysesAudio)
 
                     Text("""

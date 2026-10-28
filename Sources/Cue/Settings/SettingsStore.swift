@@ -33,6 +33,7 @@ final class SettingsStore {
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
+        pausesForOtherAudio = defaults.bool(forKey: Key.pausesForOtherAudio)
         checksForUpdates = defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true
         showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
@@ -167,6 +168,20 @@ final class SettingsStore {
     }
 
     var onAudioAnalysisChange: (() -> Void)?
+
+    /// Whether Cue pauses while another app plays sound, and resumes after.
+    ///
+    /// Off by default: stopping someone's music because something else made a
+    /// noise is the kind of thing a person should have asked for.
+    var pausesForOtherAudio: Bool {
+        didSet {
+            guard pausesForOtherAudio != oldValue else { return }
+            defaults.set(pausesForOtherAudio, forKey: Key.pausesForOtherAudio)
+            onOtherAudioChange?()
+        }
+    }
+
+    var onOtherAudioChange: (() -> Void)?
 
     /// Which mood or genre Explore is asking about, or nil for whatever the
     /// service would have suggested anyway.
@@ -409,6 +424,7 @@ final class SettingsStore {
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"
         static let analysesAudio = "analysesAudio"
+        static let pausesForOtherAudio = "pausesForOtherAudio"
         static let checksForUpdates = "checksForUpdates"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"

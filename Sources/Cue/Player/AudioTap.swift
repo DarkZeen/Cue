@@ -294,7 +294,7 @@ final class AudioTap {
     /// Not in a public header, so it is resolved by name at runtime and the
     /// whole feature degrades to "no processes found" if it ever goes away —
     /// which is a mark that does not move, not a crash and not silence.
-    private static func responsibleProcess(for pid: pid_t) -> pid_t? {
+    static func responsibleProcess(for pid: pid_t) -> pid_t? {
         typealias Lookup = @convention(c) (pid_t) -> pid_t
         guard let symbol = dlsym(
             UnsafeMutableRawPointer(bitPattern: -2),

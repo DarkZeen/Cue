@@ -17,6 +17,7 @@ final class AppState {
     let player: PlayerService
     let playback: PlaybackService
     let miniPlayer: MiniPlayerController
+    let otherAudio: OtherAudioWatcher
     let layoutEditor = LayoutEditor()
     let updates: UpdateService
 
@@ -36,6 +37,7 @@ final class AppState {
         self.player = player
         self.playback = PlaybackService(settings: settings, player: player, coordinator: coordinator)
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
+        self.otherAudio = OtherAudioWatcher(player: player)
         self.updates = UpdateService(settings: settings)
     }
 
@@ -150,6 +152,12 @@ final class AppState {
         // moment of visibility, and YouTube Music gets the seconds it needs to
         // build a player, before anyone has asked for a song.
         if settings.playbackDestination == .inApp { player.warmUp() }
+
+        otherAudio.isEnabled = settings.pausesForOtherAudio
+        settings.onOtherAudioChange = { [weak self] in
+            guard let self else { return }
+            self.otherAudio.isEnabled = self.settings.pausesForOtherAudio
+        }
 
         player.wantsAudioAnalysis = settings.analysesAudio
         settings.onAudioAnalysisChange = { [weak self] in

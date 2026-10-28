@@ -294,6 +294,20 @@ final class PlayerService: NSObject {
         evaluate("__cue.toggle()")
     }
 
+    /// Pause, and only pause.
+    ///
+    /// Separate from the toggle for anything acting on its own rather than on
+    /// a click: the toggle on a page whose report is a second stale is how
+    /// "make way for that video" starts the music instead of stopping it.
+    func pause() {
+        evaluate("__cue.pause()")
+    }
+
+    /// Play, and only play. See `pause()`.
+    func resume() {
+        evaluate("__cue.play()")
+    }
+
     func next() {
         evaluate("__cue.next()")
     }
@@ -716,6 +730,24 @@ final class PlayerService: NSObject {
               if (this.press(['#play-pause-button', '.play-pause-button'])) { return; }
               const media = this.deepMedia();
               if (media) { media.paused ? media.play() : media.pause(); }
+            },
+
+            // Whether the page is playing, by the same reading `state()`
+            // reports, so a pause or play decided on a report is checked
+            // against the same thing.
+            playing() {
+              const session = navigator.mediaSession;
+              if (session && session.playbackState) { return session.playbackState === 'playing'; }
+              const media = this.deepMedia();
+              return !!media && !media.paused;
+            },
+
+            pause() {
+              if (this.playing()) { this.toggle(); }
+            },
+
+            play() {
+              if (!this.playing()) { this.toggle(); }
             },
 
             next() {
