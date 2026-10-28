@@ -22,6 +22,8 @@ final class CueWindowController {
 
     private var keyMonitor: Any?
     private var resignObserver: (any NSObjectProtocol)?
+    // DIAGNOSTIC (space): remove once the Space bug is understood.
+    private var spaceObserver: (any NSObjectProtocol)?
 
     /// When the panel last appeared, and whether its focus has already been
     /// rescued once. See `shouldReassertFocus`.
@@ -88,11 +90,36 @@ final class CueWindowController {
         }
 
         configureFocusHandling()
+
+        // DIAGNOSTIC (space): when the Space changes, how long after the panel
+        // was presented, and whether the panel is on the one we arrived at.
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let since = self.presentedAt.map { String(format: "%.0fms after present", Date().timeIntervalSince($0) * 1000) } ?? "panel not presented"
+                self.logger.notice("SPACE changed (\(since, privacy: .public)); panel on active space \(self.panel.isOnActiveSpace, privacy: .public); frontmost \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public)")
+            }
+        }
+    }
+
+    // DIAGNOSTIC (space): every window the app owns, as the window server sees
+    // it — activation brings all of them forward, so any one could be the one
+    // taking the user to another Space.
+    private func logWindows(_ moment: String) {
+        let lines = NSApp.windows.map { window in
+            "\(type(of: window)) #\(window.windowNumber) \(Int(window.frame.width))x\(Int(window.frame.height)) level \(window.level.rawValue) visible \(window.isVisible) onActiveSpace \(window.isOnActiveSpace) behaviour \(window.collectionBehavior.rawValue) title '\(window.title)'"
+        }
+        logger.notice("SPACE \(moment, privacy: .public): frontmost \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?", privacy: .public); \(lines.joined(separator: " | "), privacy: .public)")
     }
 
     isolated deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
     }
 
     // MARK: - Presentation
@@ -128,8 +155,12 @@ final class CueWindowController {
         presentedAt = Date()
         didReassertFocus = false
 
+        logWindows("before present")
+
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
+
+        logger.notice("SPACE after orderFront, before activate: panel on active space \(self.panel.isOnActiveSpace, privacy: .public)")
 
         // Keyboard events go to the *active application*, so an overlay that
         // is typed into has to activate — a non-activating panel can be key
@@ -150,6 +181,12 @@ final class CueWindowController {
         logger.notice(
             "Panel presented: level \(self.panel.level.rawValue, privacy: .public), visible \(self.panel.isVisible, privacy: .public), active space \(self.panel.isOnActiveSpace, privacy: .public), app active \(NSApp.isActive, privacy: .public)"
         )
+
+        // DIAGNOSTIC (space): where everything settled once activation is done.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            self?.logWindows("300ms after present")
+        }
     }
 
     func dismiss() {

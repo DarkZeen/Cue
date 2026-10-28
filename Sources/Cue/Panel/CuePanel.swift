@@ -47,8 +47,19 @@ final class CuePanel: NSPanel {
         // there is nothing in this panel worth covering a system alert with.
         level = .floating
 
+        // `.moveToActiveSpace`, not `.canJoinAllSpaces` — and the difference
+        // only shows once the panel has been closed. A window on every Space
+        // follows you from one to the next only while it is on screen; ordered
+        // out, it forgets that, and ordering it back in puts it on whichever
+        // Space it was last shown on. The log said exactly that: "on active
+        // space false" before activating, with the plaque and the player —
+        // same flags, never ordered out — on the active Space every time.
+        //
+        // This panel exists only when summoned, so "come to the Space I am
+        // on" is what it means anyway. The player window found the same thing
+        // first.
         collectionBehavior = [
-            .canJoinAllSpaces,
+            .moveToActiveSpace,
             .fullScreenAuxiliary,
             .stationary,
             .ignoresCycle,
