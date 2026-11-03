@@ -12,6 +12,9 @@ import AppKit
 /// * **drag activation region** — much wider, and live only while a mouse
 ///   button is down. Throwing a file at the top of the screen should not
 ///   demand aim.
+/// * **control regions** — while closed, the now-playing wings either side of
+///   the housing. Live, so they can be clicked, but never hover: pointing at
+///   the mark to pause it must not open the shelf around it.
 ///
 /// Every point outside the region that currently applies returns `nil` from
 /// `hitTest`, so the window is genuinely transparent to the app underneath.
@@ -36,7 +39,7 @@ final class TrayDropView: NSView {
             window?.invalidateCursorRects(for: self)
             // The region moved under a stationary pointer, so what was inside
             // may now be outside without the mouse having gone anywhere.
-            revalidatePointerRegion()
+            if !isMovingRegions { revalidatePointerRegion() }
         }
     }
 
@@ -48,6 +51,38 @@ final class TrayDropView: NSView {
             needsLayout = true
             revalidatePointerRegion()
         }
+    }
+
+    /// Things on the closed shelf that are clicked rather than hovered — the
+    /// now-playing wings — in this view's coordinates. Set by the controller
+    /// from the shape; empty while open, and whenever there are no wings.
+    var controlRects: [CGRect] = [] {
+        didSet {
+            guard controlRects != oldValue else { return }
+            needsLayout = true
+            // Wings growing under a resting pointer move the boundary without
+            // the pointer moving — and must not count as it arriving.
+            if !isMovingRegions { revalidatePointerRegion() }
+        }
+    }
+
+    /// Set while `setRegions` moves the shape and its controls together.
+    private var isMovingRegions = false
+
+    /// Moves the shape and its controls in one step, checking a resting
+    /// pointer once against the finished pair.
+    ///
+    /// Separately, there is always a moment with one new and one old. Wings
+    /// arriving after a shape already pill-wide leave a strip that spans the
+    /// whole pill; wings leaving before the shape narrows do the same — and a
+    /// pointer resting on a wing in that moment counts as having entered, and
+    /// the shelf opens under it.
+    func setRegions(content: CGRect, controls: [CGRect]) {
+        isMovingRegions = true
+        contentRect = content
+        controlRects = controls
+        isMovingRegions = false
+        revalidatePointerRegion()
     }
 
     /// A drag is under way somewhere on the system, so the wider drag region
@@ -78,6 +113,16 @@ final class TrayDropView: NSView {
 
     /// Where the catchment is currently painted, in this view's coordinates.
     var catchmentFrame: CGRect { catchmentLayer.frame }
+
+    /// One faint fill per control, beside the main catchment rather than
+    /// merged into it. A single rectangle around strip and wings together
+    /// would paint — and claim clicks in — whatever its corners take in
+    /// besides: on a 24pt bar, a band under each wing over the app below,
+    /// which is the trap §74 forbids.
+    private var controlCatchments: [CALayer] = []
+
+    /// Where the controls' catchments are painted, in this view's coordinates.
+    var controlCatchmentFrames: [CGRect] { controlCatchments.map(\.frame) }
 
     /// Keyboard commands. The tray only has a keyboard while it is key, which
     /// only happens when the user clicks into it — hovering and dropping never
@@ -141,8 +186,17 @@ final class TrayDropView: NSView {
 
     /// The narrow strip at the top centre that a resting pointer opens the
     /// tray from — or the closed shape, if that is bigger.
+    ///
+    /// The shape less its wings: the strip is the housing's, and the wings
+    /// either side of it are for clicking.
     private var closedActivationRect: CGRect {
-        let width = max(TrayMetrics.hoverActivationWidth, contentRect.width)
+        // What lies between the controls, when there are any: measured from
+        // them rather than by subtracting their widths, which stop short of
+        // the shape's ends where the menu bar shows through.
+        let housing = controlRects.count == 2
+            ? controlRects.map(\.minX).max()! - controlRects.map(\.maxX).min()!
+            : contentRect.width
+        let width = max(TrayMetrics.hoverActivationWidth, housing)
         let height = max(TrayMetrics.hoverActivationHeight, contentRect.height)
         return CGRect(
             x: bounds.midX - width / 2,
@@ -165,10 +219,32 @@ final class TrayDropView: NSView {
         )
     }
 
-    /// The region that currently counts: the hover region, widened to the
-    /// drag region while a drag might be heading this way.
+    /// Whether a point counts as the pointer being "on the tray" — inside the
+    /// hover region, and not on a control.
+    ///
+    /// The controls are carved out only while closed. Open, the shelf covers
+    /// where the wings were and all of it is hover; and `isOpen` flips a beat
+    /// before the controller clears them, which must not leave a hole in the
+    /// region the pointer just opened the shelf from.
+    func countsAsHover(_ point: CGPoint) -> Bool {
+        guard hoverActivationRect.contains(point) else { return false }
+        guard !isOpen else { return true }
+        return !controlRects.contains { $0.contains(point) }
+    }
+
+    /// The main region that currently counts: the hover region, widened to
+    /// the drag region while a drag might be heading this way. The controls
+    /// count beside it, each exactly its own rectangle.
     private func liveRegion(widened: Bool) -> CGRect {
         widened ? dragActivationRect.union(hoverActivationRect) : hoverActivationRect
+    }
+
+    /// Whether a point is anywhere that answers: the live region or a control.
+    /// What is painted has to be exactly what answers, so `layout` paints the
+    /// same rectangles this tests.
+    private func isLive(_ point: CGPoint, widened: Bool) -> Bool {
+        liveRegion(widened: widened).contains(point)
+            || controlRects.contains { $0.contains(point) }
     }
 
     /// The button is held right now.
@@ -183,6 +259,21 @@ final class TrayDropView: NSView {
     override func layout() {
         super.layout()
         catchmentLayer.frame = liveRegion(widened: isSystemDragActive)
+
+        while controlCatchments.count < controlRects.count {
+            let layer = CALayer()
+            layer.backgroundColor = catchmentLayer.backgroundColor
+            layer.actions = catchmentLayer.actions
+            layer.zPosition = catchmentLayer.zPosition
+            self.layer?.addSublayer(layer)
+            controlCatchments.append(layer)
+        }
+        while controlCatchments.count > controlRects.count {
+            controlCatchments.removeLast().removeFromSuperlayer()
+        }
+        for (layer, rect) in zip(controlCatchments, controlRects) {
+            layer.frame = rect
+        }
     }
 
     // MARK: - Keyboard (§35, §36)
@@ -247,9 +338,7 @@ final class TrayDropView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let region = liveRegion(widened: isSystemDragActive || pointerButtonIsDown)
-
-        guard region.contains(local) else { return nil }
+        guard isLive(local, widened: isSystemDragActive || pointerButtonIsDown) else { return nil }
         return super.hitTest(point) ?? self
     }
 
@@ -294,7 +383,19 @@ final class TrayDropView: NSView {
 
     private func updatePointerRegion(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
-        setPointerInside(hoverActivationRect.contains(local))
+        setPointerInside(countsAsHover(local))
+    }
+
+    /// Where the pointer is right now, in this view's coordinates, when that
+    /// cannot wait for it to move. Replaceable so a test — which has no window
+    /// and no pointer — can say where it is.
+    var locatePointer: (() -> CGPoint?)?
+
+    private func currentPointerLocation() -> CGPoint? {
+        if let locatePointer { return locatePointer() }
+        guard let window else { return nil }
+        let inWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        return convert(inWindow, from: nil)
     }
 
     /// Re-checks where the pointer is without waiting for it to move.
@@ -303,10 +404,8 @@ final class TrayDropView: NSView {
     /// tray changes shape, which is exactly when a stationary pointer can find
     /// itself on the other side of the boundary.
     private func revalidatePointerRegion() {
-        guard let window else { return }
-        let inWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
-        let local = convert(inWindow, from: nil)
-        setPointerInside(bounds.contains(local) && hoverActivationRect.contains(local))
+        guard let local = currentPointerLocation() else { return }
+        setPointerInside(bounds.contains(local) && countsAsHover(local))
     }
 
     private func setPointerInside(_ inside: Bool) {
@@ -370,14 +469,29 @@ final class TrayDropView: NSView {
         performDrop(sender)
     }
 
+    /// Where a drag is, as far as the tray is concerned (§13).
+    enum DragPhase: Equatable {
+        /// Nearby: the tray should lean toward it.
+        case approaching
+        /// Over the target: releasing would stash.
+        case over
+    }
+
+    /// The whole shape counts, wings included. The wings are kept out of
+    /// hover so a pointer can reach the mark without opening the shelf, but a
+    /// file dragged onto them is a file aimed at the shelf.
+    func dragPhase(at local: CGPoint) -> DragPhase {
+        contentRect.insetBy(dx: -TrayMetrics.hoverSlop, dy: -TrayMetrics.hoverSlop).contains(local)
+            ? .over
+            : .approaching
+    }
+
     /// Distinguishes "a drag is nearby and the tray should lean toward it"
     /// from "a drag is over the target and releasing would stash" (§13).
     private func updateDragPhase(for sender: any NSDraggingInfo) {
-        let local = convert(sender.draggingLocation, from: nil)
-        if contentRect.insetBy(dx: -TrayMetrics.hoverSlop, dy: -TrayMetrics.hoverSlop).contains(local) {
-            onDragEnter()
-        } else {
-            onDragApproach()
+        switch dragPhase(at: convert(sender.draggingLocation, from: nil)) {
+        case .over: onDragEnter()
+        case .approaching: onDragApproach()
         }
     }
 }

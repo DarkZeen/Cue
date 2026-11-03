@@ -75,11 +75,34 @@ struct TrayPalette: Equatable, Sendable {
         case .graphite:
             // Almost-black rather than black, so the surface still reads as a
             // material when it happens to sit over black content.
-            Color(red: 0.055, green: 0.058, blue: 0.065)
+            Self.colour(Self.graphiteGround)
                 .opacity(reduceTransparency ? 1 : 0.78)
         case .light:
-            Color(red: 0.93, green: 0.93, blue: 0.945)
+            Self.colour(Self.lightGround)
                 .opacity(reduceTransparency ? 1 : 0.76)
+        }
+    }
+
+    /// The two translucent grounds' own colours, kept once so the fill and
+    /// the luminance below cannot drift apart.
+    private static let graphiteGround = ArtworkTint.RGB(red: 0.055, green: 0.058, blue: 0.065)
+    private static let lightGround = ArtworkTint.RGB(red: 0.93, green: 0.93, blue: 0.945)
+
+    private static func colour(_ rgb: ArtworkTint.RGB) -> Color {
+        Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    }
+
+    /// How bright the surface is, as WCAG relative luminance: what a colour
+    /// drawn on it has to contrast with.
+    ///
+    /// Taken from the opaque fill. The translucent surfaces let a little of
+    /// the desktop through, which no number here can know; at 76–78% opacity
+    /// the fill is most of what is seen.
+    var groundLuminance: Double {
+        switch appearance {
+        case .black: 0
+        case .graphite: ArtworkTint.relativeLuminance(Self.graphiteGround)
+        case .light: ArtworkTint.relativeLuminance(Self.lightGround)
         }
     }
 

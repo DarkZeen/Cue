@@ -16,6 +16,10 @@ final class ShelfState {
     let launchAtLogin: LaunchAtLoginService
     let quickLook = QuickLookService()
 
+    /// Cue's music, for the wings the closed shelf grows while it plays.
+    /// Handed in, like the login item, because the player belongs to the app.
+    private let nowPlaying: NowPlayingSource?
+
     private(set) var displays: DisplayCoordinator!
     private let statusItem = StatusItemController()
     private var settingsWindow: SettingsWindowController?
@@ -24,17 +28,19 @@ final class ShelfState {
 
     /// The login item belongs to the app, not the shelf, so it is handed in:
     /// one registration, one switch, whichever settings page it is shown on.
-    init(launchAtLogin: LaunchAtLoginService) {
+    init(launchAtLogin: LaunchAtLoginService, nowPlaying: NowPlayingSource? = nil) {
         ShelfSettingsStore.importFromTray()
         self.settings = ShelfSettingsStore()
         self.launchAtLogin = launchAtLogin
+        self.nowPlaying = nowPlaying
     }
 
     func start() {
         displays = DisplayCoordinator(
             store: store,
             thumbnails: thumbnails,
-            settings: settings
+            settings: settings,
+            nowPlaying: nowPlaying
         )
 
         displays.onQuickLookRequest = { [weak self] item in

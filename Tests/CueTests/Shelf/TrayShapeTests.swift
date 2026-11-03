@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Cue
@@ -404,6 +405,128 @@ struct TrayShapeTests {
         // 28pt when there is room for it, half the height when there is not.
         #expect(TrayShape.radius(forHeight: 200) == TrayMetrics.cornerRadius)
         #expect(TrayShape.radius(forHeight: 32) == 16)
+    }
+
+    // MARK: - Now playing
+
+    /// The housing heights worth checking: the smallest bar the cutout
+    /// allows, the development Mac's notch, a tall notch, and the ceiling.
+    private let housingHeights: [CGFloat] = [16, 32, 38, 64]
+
+    @Test func `the pill is the housing with a wing either side`() {
+        for height in housingHeights {
+            let cutout = CGSize(width: 180 * height / 32, height: height)
+            let pill = TrayShape.nowPlaying(cutout: cutout)
+            let wing = TrayMetrics.wingWidth(forHeight: height)
+
+            #expect(pill.width == cutout.width + 2 * wing)
+            #expect(pill.height == cutout.height)
+            #expect(pill.wingWidth == wing)
+            #expect(pill.cornerRadius == TrayShape.radius(forHeight: height))
+            #expect(pill.shoulder == TrayMetrics.shoulder)
+        }
+    }
+
+    @Test func `the wings come from the housing's height, not from pixels`() {
+        // The island's own numbers at 32: a 22pt cover with 8pt either side,
+        // in from a shoulder that the surface has scaled to 8.96.
+        #expect(TrayMetrics.wingArtSize(forHeight: 32) == 22)
+        #expect(TrayMetrics.wingPadding(forHeight: 32) == 8)
+        #expect(abs(TrayMetrics.effectiveShoulder(forHeight: 32) - 8.96) < 0.0001)
+        #expect(abs(TrayMetrics.wingWidth(forHeight: 32) - (8.96 + 8 + 22 + 8)) < 0.0001)
+        #expect(abs(TrayMetrics.wingArtRadius(forHeight: 32) - 22 * 0.27) < 0.0001)
+
+        // The cover is clamped at both ends, and the shoulder at the island's 14.
+        #expect(TrayMetrics.wingArtSize(forHeight: 16) == 16)
+        #expect(TrayMetrics.wingPadding(forHeight: 16) == 6)
+        #expect(TrayMetrics.wingArtSize(forHeight: 38) == 26)
+        #expect(TrayMetrics.wingPadding(forHeight: 38) == 10)
+        #expect(TrayMetrics.wingArtSize(forHeight: 64) == 28)
+        #expect(TrayMetrics.wingPadding(forHeight: 64) == 16)
+        #expect(TrayMetrics.effectiveShoulder(forHeight: 64) == TrayMetrics.shoulder)
+    }
+
+    @Test func `wings grow with the housing`() {
+        let widths = housingHeights.map(TrayMetrics.wingWidth(forHeight:))
+
+        #expect(widths == widths.sorted())
+        #expect(Set(widths).count == widths.count)
+    }
+
+    @Test func `the cover fits inside the housing's height`() {
+        for height in housingHeights {
+            #expect(TrayMetrics.wingArtSize(forHeight: height) <= height)
+        }
+    }
+
+    @Test func `the wings' inset matches the surface's own shoulder`() {
+        // `TraySurface` scales the shoulder to 0.28 of a short shape's height;
+        // content inset by anything else sits under the curve.
+        // So the wall is measured on the path the surface actually draws,
+        // not on a copy of its formula.
+        for height in housingHeights {
+            let pill = TrayShape.nowPlaying(cutout: CGSize(width: 180, height: height))
+            let path = TraySurface(cornerRadius: pill.cornerRadius, shoulder: pill.shoulder)
+                .path(in: CGRect(x: 0, y: 0, width: pill.width, height: pill.height))
+            let inset = TrayMetrics.effectiveShoulder(forHeight: height)
+            // Below the shoulder's curve and above the bottom corner.
+            let y = height * 0.4
+
+            #expect(path.contains(CGPoint(x: inset + 0.25, y: y)))
+            #expect(!path.contains(CGPoint(x: inset - 0.25, y: y)))
+            #expect(path.contains(CGPoint(x: pill.width - inset - 0.25, y: y)))
+            #expect(!path.contains(CGPoint(x: pill.width - inset + 0.25, y: y)))
+        }
+    }
+
+    @Test func `an empty shelf grows its wings from the housing, not the handle`() {
+        let handle = TrayShape.collapsed(cutout: notchedCutout, isEmpty: true)
+        let pill = TrayShape.nowPlaying(cutout: notchedCutout)
+
+        #expect(handle.height == TrayMetrics.handleHeight)
+        #expect(pill.height == notchedCutout.height)
+        #expect(pill.width > notchedCutout.width)
+    }
+
+    @Test func `the closed shapes without music are unchanged`() {
+        let closed = TrayShape.collapsed(cutout: notchedCutout, isEmpty: false)
+        let handle = TrayShape.collapsed(cutout: notchedCutout, isEmpty: true)
+
+        #expect(closed == TrayShape(
+            width: notchedCutout.width,
+            height: notchedCutout.height,
+            cornerRadius: TrayShape.radius(forHeight: notchedCutout.height)
+        ))
+        #expect(closed.wingWidth == 0)
+        #expect(handle.wingWidth == 0)
+        #expect(expanded(.spacious).wingWidth == 0)
+    }
+
+    @Test func `the wings hang from the top edge at either end of the pill`() {
+        let pill = TrayShape.nowPlaying(cutout: notchedCutout)
+        let rects = pill.wingRects(centredOn: 450, top: 400)
+
+        #expect(rects.count == 2)
+        let left = rects[0]
+        let right = rects[1]
+
+        // In from each end by the shoulder, where the menu bar shows through.
+        let shoulder = TrayMetrics.effectiveShoulder(forHeight: pill.height)
+        #expect(left.minX == 450 - pill.width / 2 + shoulder)
+        #expect(right.maxX == 450 + pill.width / 2 - shoulder)
+        for rect in rects {
+            #expect(rect.width == pill.wingWidth - shoulder)
+            #expect(rect.height == pill.height)
+            #expect(rect.maxY == 400)
+        }
+        // Between them, exactly the housing.
+        #expect(abs(right.minX - left.maxX - notchedCutout.width) < 0.0001)
+    }
+
+    @Test func `shapes without wings have no wing rects`() {
+        let closed = TrayShape.collapsed(cutout: notchedCutout, isEmpty: false)
+
+        #expect(closed.wingRects(centredOn: 450, top: 400).isEmpty)
     }
 
     // MARK: - Scrolling

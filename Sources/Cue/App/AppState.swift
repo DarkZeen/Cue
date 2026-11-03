@@ -41,7 +41,52 @@ final class AppState {
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
         self.otherAudio = OtherAudioWatcher(player: player)
         self.updates = UpdateService(settings: settings)
-        self.shelf = ShelfState(launchAtLogin: launchAtLogin)
+        self.shelf = ShelfState(
+            launchAtLogin: launchAtLogin,
+            nowPlaying: Self.nowPlayingSource(player: player, thumbnails: thumbnails, settings: settings)
+        )
+    }
+
+    /// What the shelf is told about the music: Cue's own player, read through
+    /// closures so the shelf never holds the player itself.
+    ///
+    /// The player's `onStateChange` is deliberately not involved. The shelf's
+    /// views read these closures in their bodies, and the reads are tracked, so
+    /// the wings follow the music by observation alone.
+    private static func nowPlayingSource(
+        player: PlayerService,
+        thumbnails: ThumbnailProvider,
+        settings: SettingsStore
+    ) -> NowPlayingSource {
+        NowPlayingSource(
+            track: {
+                guard let current = player.nowPlaying,
+                      NowPlayingSource.isShowable(
+                          playsInApp: settings.playbackDestination == .inApp,
+                          videoID: current.videoID
+                      )
+                else { return nil }
+                return NowPlayingSource.Track(
+                    title: current.title,
+                    artist: current.artist,
+                    artworkURL: current.artworkURL,
+                    isPlaying: current.isPlaying,
+                    videoID: current.videoID
+                )
+            },
+            level: { player.audioLevel },
+            bands: { player.audioBands },
+            artwork: { url in
+                // Read so a cover landing redraws whoever asked. See
+                // `ThumbnailProvider.version`.
+                _ = thumbnails.version
+                return thumbnails.image(for: url)
+            },
+            prefetchArtwork: { url in thumbnails.prefetch(url, soon: true) },
+            togglePlayPause: { player.togglePlayPause() },
+            next: { player.next() },
+            like: { videoID in await player.rate(videoID: videoID, .like) }
+        )
     }
 
 

@@ -74,6 +74,15 @@ enum TrayAnimation {
 
     /// How long the tray stays compressed before springing back.
     static let dropImpactDuration: TimeInterval = 0.09
+
+    /// The heart that springs out of the cover on a like.
+    ///
+    /// The one other spring allowed to overshoot. It is not the shelf moving
+    /// — it is a small mark leaving it — and a like that arrives without any
+    /// give reads as a status change rather than as something you did. Quick,
+    /// so it is over well inside the heart's own 0.7s.
+    static let heartResponse = 0.28
+    static let heartDamping = 0.58
 }
 
 /// The tray's animations, resolved against the viewer's motion preference.
@@ -121,6 +130,13 @@ struct TrayMotion: Equatable, Sendable {
 
     var dropImpact: Animation {
         spring(TrayAnimation.dropImpactResponse, TrayAnimation.dropImpactDamping)
+    }
+
+    /// The like heart's scale. Its size, unlike everything in `TrayScale`, is
+    /// a mark appearing rather than the shelf giving way, so its amplitude is
+    /// its own (see `LikeHeart`).
+    var heart: Animation {
+        spring(TrayAnimation.heartResponse, TrayAnimation.heartDamping)
     }
 
     /// A colour change is not a movement, so it gets a plain curve rather than

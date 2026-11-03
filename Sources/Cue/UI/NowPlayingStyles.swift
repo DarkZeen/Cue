@@ -99,23 +99,39 @@ struct WaveIndicator: View {
     var bands: [Double] = []
     let isAnimating: Bool
 
-    private var count: Int { CueWavePath.shapes.count }
-
     /// Small, and then smaller. The mark is a status light beside a search
     /// field, not a centrepiece; at this size the nine shapes read as one
     /// object that moves rather than nine that wobble, and the breath
     /// underneath them has room to show without the mark crowding the field.
-    private static let height: CGFloat = 14
+    ///
+    /// A parameter rather than a constant only so the shelf's now-playing
+    /// wing can draw it a little smaller still; 14 is the mark's own size and
+    /// what every other caller gets.
+    var height: CGFloat = 14
+
+    /// White, because the logo is white on black and stays that way
+    /// (`CuePalette`). The one caller that passes anything else is the
+    /// shelf's now-playing wing, which takes its colour from the cover — a
+    /// deliberate exception confined to that wing.
+    var tint: Color = .white
+
+    /// How far the motion is allowed to travel, as a share of its designed
+    /// reach. 1 is the mark as designed. Less keeps it inside a small housing
+    /// — the shapes and the breath scale outward from rest by this much, and
+    /// nothing else about the motion changes.
+    var excursion: Double = 1
+
+    private var count: Int { CueWavePath.shapes.count }
 
     var body: some View {
         ZStack {
             ForEach(0..<count, id: \.self) { index in
                 CueWaveShape(index: index)
-                    .fill(.white)
+                    .fill(tint)
                     .scaleEffect(y: displacement(index), anchor: .center)
             }
         }
-        .frame(width: Self.height * CueWavePath.aspect, height: Self.height)
+        .frame(width: height * CueWavePath.aspect, height: height)
         // The whole mark breathes underneath the individual shapes.
         //
         // Two motions at different rates, which is what stops it reading as a
@@ -140,10 +156,12 @@ struct WaveIndicator: View {
         let swell = ProceduralMotion.energy(level, at: elapsed)
         let kick = ProceduralMotion.beat(bands, at: elapsed)
 
+        // Each term scaled on its own rather than summed first, so the
+        // default excursion of 1 is bit-for-bit the mark as it always was.
         return 1
-            + CGFloat(breath * 0.04)
-            + CGFloat(swell * 0.06)
-            + CGFloat(kick * 0.13)
+            + CGFloat(breath * 0.04 * excursion)
+            + CGFloat(swell * 0.06 * excursion)
+            + CGFloat(kick * 0.13 * excursion)
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -183,7 +201,9 @@ struct WaveIndicator: View {
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
-        return max(1 + CGFloat(wave * amplitude) * reach, 0.22)
+        // The floor holds whatever the excursion, which only scales the
+        // stretch away from rest.
+        return max(1 + CGFloat(wave * amplitude * excursion) * reach, 0.22)
     }
 }
 

@@ -20,6 +20,23 @@ final class TrayWindowController {
     private let settings: ShelfSettingsStore
     private let dropHandler: FileDropHandler
 
+    /// Cue's music, for the closed shelf's wings. Held by every tray, shown
+    /// by one.
+    private let nowPlaying: NowPlayingSource?
+
+    /// Whether this display is the one that grows the now-playing wings.
+    /// Decided by `DisplayCoordinator` each time the displays change.
+    var showsNowPlaying = false {
+        didSet {
+            guard showsNowPlaying != oldValue else { return }
+            hostingView.rootView = makeRootView()
+        }
+    }
+
+    /// The shape SwiftUI last reported, so the regions can be re-measured
+    /// when the panel moves without the shape changing.
+    private var lastShape: TrayShape?
+
     private let panel: TrayPanel
     private let dropView: TrayDropView
     private var hostingView: TrayHostingView<AnyView>!
@@ -43,13 +60,17 @@ final class TrayWindowController {
         geometry: ScreenGeometry,
         store: TrayStore,
         thumbnails: FileThumbnailProvider,
-        settings: ShelfSettingsStore
+        settings: ShelfSettingsStore,
+        nowPlaying: NowPlayingSource? = nil,
+        showsNowPlaying: Bool = false
     ) {
         self.geometry = geometry
         self.store = store
         self.thumbnails = thumbnails
         self.settings = settings
         self.dropHandler = FileDropHandler(store: store)
+        self.nowPlaying = nowPlaying
+        self.showsNowPlaying = showsNowPlaying
 
         let frame = Self.panelFrame(for: geometry)
         self.panel = TrayPanel(contentRect: frame)
@@ -142,6 +163,11 @@ final class TrayWindowController {
         dropView.frame = NSRect(origin: .zero, size: frame.size)
         hostingView.frame = dropView.bounds
         dropView.needsLayout = true
+        // The regions are measured from the view's centre and top edge, both
+        // of which just moved; the shape did not change, so SwiftUI will not
+        // report it again. Re-measured here, or the wings' click targets stay
+        // where the old frame put them.
+        if let lastShape { updateHitRegions(for: lastShape) }
     }
 
     func close() {
@@ -158,6 +184,17 @@ final class TrayWindowController {
     // MARK: - Content
 
     private func configureContent() {
+        hostingView = TrayHostingView(rootView: makeRootView())
+        hostingView.frame = dropView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        // The window is mostly empty space; only the tray should ever paint.
+        hostingView.layer?.backgroundColor = .clear
+        dropView.addSubview(hostingView)
+    }
+
+    /// The SwiftUI side, rebuilt only when this display starts or stops being
+    /// the one that shows what is playing. Everything else in it is observed.
+    private func makeRootView() -> AnyView {
         let view = TrayContentView(
             store: store,
             presenter: presenter,
@@ -184,10 +221,12 @@ final class TrayWindowController {
             onOpenSettings: { [weak self] in self?.onOpenSettingsRequest?() },
             onShapeChange: { [weak self] shape in
                 self?.updateHitRegions(for: shape)
-            }
+            },
+            nowPlaying: nowPlaying,
+            showsNowPlaying: showsNowPlaying
         )
 
-        let root = AnyView(
+        return AnyView(
             ZStack(alignment: .top) {
                 view
                 if Diagnostics.isDebugOverlayEnabled {
@@ -195,25 +234,29 @@ final class TrayWindowController {
                 }
             }
         )
-
-        hostingView = TrayHostingView(rootView: root)
-        hostingView.frame = dropView.bounds
-        hostingView.autoresizingMask = [.width, .height]
-        // The window is mostly empty space; only the tray should ever paint.
-        hostingView.layer?.backgroundColor = .clear
-        dropView.addSubview(hostingView)
     }
 
     /// Keeps the interactive regions exactly on the visible pixels (§74).
+    ///
+    /// The wings are pushed down as well as the shape: they are live while
+    /// closed, so the cover and the mark can be clicked, but kept out of the
+    /// hover strip, so reaching for them does not open the shelf.
     private func updateHitRegions(for shape: TrayShape) {
+        lastShape = shape
         let rect = CGRect(
             x: dropView.bounds.midX - shape.width / 2,
             y: dropView.bounds.maxY - shape.height,
             width: shape.width,
             height: shape.height
         )
-        dropView.contentRect = rect
-        dropView.isOpen = presenter.state.isOpen
+        let isOpen = presenter.state.isOpen
+        dropView.setRegions(
+            content: rect,
+            controls: isOpen
+                ? []
+                : shape.wingRects(centredOn: dropView.bounds.midX, top: dropView.bounds.maxY)
+        )
+        dropView.isOpen = isOpen
     }
 
     // MARK: - Mouse and drags
@@ -263,6 +306,12 @@ final class TrayWindowController {
         presenter.onStateChange = { [weak self] state in
             guard let self else { return }
             self.dropView.isOpen = state.isOpen
+            // The wings are a closed-shelf thing; open, the shelf covers where
+            // they were and all of it is the shelf. Cleared here rather than
+            // waiting for the new shape, which is reported a beat later — and
+            // after `isOpen`, which already stops them being carved out of
+            // the hover region, so clearing them moves nothing under a pointer.
+            if state.isOpen { self.dropView.controlRects = [] }
             // A closed tray has nothing to have selected, and leaving a stale
             // selection behind means the next Delete acts on something the user
             // picked minutes ago.

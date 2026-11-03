@@ -82,6 +82,115 @@ struct TrayAppearanceTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: output.path).count >= 16)
     }
 
+    /// The closed shelf while Cue plays: the cover and the mark in wings
+    /// either side of the housing.
+    ///
+    /// The cover is drawn here rather than fetched, so the tint the mark
+    /// takes from it is the same on every run. Rendered small and cropped to
+    /// the top of the display, because the pill is a 32pt strip and anything
+    /// larger is mostly wallpaper.
+    ///
+    /// Async, unlike the others, because the mark's tint is worked out off
+    /// the main actor and comes back to it: a test that holds the main actor
+    /// for the whole render never lets it land, and every mark comes out
+    /// white.
+    @Test(.enabled(if: TrayAppearanceTests.isEnabled))
+    func `render the now-playing pill`() async throws {
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let notchless = ScreenGeometry(
+            id: 1,
+            frame: CGRect(x: 0, y: 0, width: 1470, height: 956),
+            notchSize: nil,
+            topInset: 0,
+            menuBarHeight: 24
+        )
+        let notched = ScreenGeometry(
+            id: 2,
+            frame: CGRect(x: 0, y: 0, width: 1470, height: 956),
+            notchSize: CGSize(width: 200, height: 32),
+            topInset: 32,
+            menuBarHeight: 32
+        )
+
+        let cover = Self.sampleCover()
+        let playing = NowPlayingSource.Track(
+            title: "Midnight City",
+            artist: "M83",
+            artworkURL: URL(string: "https://example.invalid/cover.jpg"),
+            isPlaying: true,
+            videoID: "preview"
+        )
+        var paused = playing
+        paused.isPlaying = false
+        var bare = playing
+        bare.artworkURL = nil
+
+        let pills: [(String, ScreenGeometry, Int, NowPlayingSource, TrayAppearance)] = [
+            ("17-pill-playing", notchless, 3, .fixed(playing, artwork: cover), .black),
+            ("18-pill-paused", notchless, 3, .fixed(paused, artwork: cover), .black),
+            ("19-pill-notched", notched, 3, .fixed(playing, artwork: cover), .black),
+            ("20-pill-empty-shelf", notched, 0, .fixed(playing, artwork: cover), .black),
+            ("21-pill-no-cover", notchless, 0, .fixed(bare), .black),
+            ("22-pill-light", notchless, 3, .fixed(playing, artwork: cover), .light),
+            ("23-pill-graphite-paused", notched, 3, .fixed(paused, artwork: cover), .graphite),
+        ]
+
+        // Thrown away. The first pill a test process hosts comes out with a
+        // white mark however long it is left to settle, and the identical one
+        // drawn straight after it is tinted — so it is the harness, not the
+        // tint, and the previews below should not carry it.
+        let (_, firstGeometry, firstItems, firstSource, firstAppearance) = pills[0]
+        _ = await Self.rasterize(
+            trayView(
+                geometry: firstGeometry,
+                items: firstItems,
+                state: .collapsed,
+                appearance: firstAppearance,
+                nowPlaying: firstSource
+            ),
+            size: CGSize(width: 820, height: 90),
+            settle: 1.5
+        )
+
+        for (name, geometry, items, source, appearance) in pills {
+            let view = trayView(
+                geometry: geometry,
+                items: items,
+                state: .collapsed,
+                appearance: appearance,
+                nowPlaying: source
+            )
+            // Long enough for the tint to arrive and finish fading in, with
+            // the rest of the suite running beside it.
+            guard let png = await Self.rasterize(view, size: CGSize(width: 820, height: 90), settle: 1.5)
+            else {
+                Issue.record("could not render \(name)")
+                continue
+            }
+            try png.write(to: output.appendingPathComponent("\(name).png"))
+        }
+    }
+
+    /// A cover with a clear colour and some structure: a deep blue ground,
+    /// a warm orange disc, a pale band. The dominant colour is the orange or
+    /// the blue, and either way the mark should not come out grey.
+    private static func sampleCover() -> NSImage {
+        let side: CGFloat = 300
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.lockFocus()
+        NSGradient(
+            starting: NSColor(srgbRed: 0.05, green: 0.10, blue: 0.35, alpha: 1),
+            ending: NSColor(srgbRed: 0.20, green: 0.05, blue: 0.40, alpha: 1)
+        )?.draw(in: NSRect(x: 0, y: 0, width: side, height: side), angle: 90)
+        NSColor(srgbRed: 0.98, green: 0.52, blue: 0.12, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 70, y: 90, width: 160, height: 160)).fill()
+        NSColor(srgbRed: 0.95, green: 0.92, blue: 0.85, alpha: 1).setFill()
+        NSRect(x: 0, y: 30, width: side, height: 18).fill()
+        image.unlockFocus()
+        return image
+    }
+
     /// The images the README shows.
     ///
     /// Rendered through the same path as everything else, so they are the real
@@ -90,7 +199,7 @@ struct TrayAppearanceTests {
     @Test(.enabled(if: TrayAppearanceTests.isEnabled))
     func `render the readme images`() throws {
         let assets = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("docs/assets/readme")
+            .appendingPathComponent("docs/tray/assets/readme")
         try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
 
         let screen = ScreenGeometry(
@@ -215,6 +324,33 @@ struct TrayAppearanceTests {
         appearance: TrayAppearance = .black,
         outlined: Bool = false
     ) throws {
+        let view = trayView(
+            geometry: geometry,
+            items: items,
+            state: state,
+            selecting: indices,
+            appearance: appearance,
+            outlined: outlined
+        )
+
+        guard let png = Self.rasterize(view, size: CGSize(width: 820, height: 300)) else {
+            Issue.record("could not render \(name)")
+            return
+        }
+
+        try png.write(to: output.appendingPathComponent("\(name).png"))
+    }
+
+    /// The tray as the app builds it, over the test wallpaper.
+    private func trayView(
+        geometry: ScreenGeometry,
+        items: Int,
+        state: TrayPresentationState,
+        selecting indices: [Int] = [],
+        appearance: TrayAppearance = .black,
+        outlined: Bool = false,
+        nowPlaying: NowPlayingSource? = nil
+    ) -> some View {
         let store = TrayStore()
         store.add(Self.sampleURLs(count: items))
 
@@ -241,24 +377,44 @@ struct TrayAppearanceTests {
             onRemove: { _ in }, onCopy: { _ in }, onClick: { _, _ in },
             onReveal: { _ in }, onQuickLook: { _ in },
             onItemDragBegan: { _ in }, onItemDragEnded: { _, _ in },
-            onShapeChange: { _ in }
+            onShapeChange: { _ in },
+            nowPlaying: nowPlaying,
+            showsNowPlaying: nowPlaying != nil
         )
         // A busy, bright backdrop is the hard case: it is where a dark surface
         // with no border disappears, and where the edge highlight earns its
         // keep (§48, §49).
-        .background(Self.wallpaper)
-
-        guard let png = Self.rasterize(view, size: CGSize(width: 820, height: 300)) else {
-            Issue.record("could not render \(name)")
-            return
-        }
-
-        try png.write(to: output.appendingPathComponent("\(name).png"))
+        return view.background(Self.wallpaper)
     }
 
     /// Draws a view the way the app draws it: hosted in a real window, then
     /// captured from the layer tree.
     private static func rasterize(_ view: some View, size: CGSize) -> Data? {
+        let (window, hosting) = host(view, size: size)
+
+        // Let SwiftUI lay out and the icons resolve before the snapshot.
+        hosting.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+
+        return withExtendedLifetime(window) { snapshot(hosting) }
+    }
+
+    /// The same, for a view with work that comes back to the main actor:
+    /// sleeping rather than spinning the run loop lets it.
+    private static func rasterize(_ view: some View, size: CGSize, settle: TimeInterval) async -> Data? {
+        let (window, hosting) = host(view, size: size)
+
+        hosting.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        try? await Task.sleep(for: .seconds(settle))
+        hosting.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+
+        return withExtendedLifetime(window) { snapshot(hosting) }
+    }
+
+    private static func host(_ view: some View, size: CGSize) -> (NSWindow, NSView) {
         let frame = NSRect(origin: .zero, size: size)
 
         let window = NSWindow(
@@ -273,15 +429,15 @@ struct TrayAppearanceTests {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = frame
         window.contentView = hosting
+        return (window, hosting)
+    }
 
-        // Let SwiftUI lay out and the icons resolve before the snapshot.
-        hosting.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-
+    /// Captures the hosting view from the layer tree.
+    private static func snapshot(_ hosting: NSView) -> Data? {
+        let frame = hosting.bounds
         guard let representation = hosting.bitmapImageRepForCachingDisplay(in: frame)
         else { return nil }
-        representation.size = size
+        representation.size = frame.size
         hosting.cacheDisplay(in: frame, to: representation)
 
         return representation.representation(using: .png, properties: [:])

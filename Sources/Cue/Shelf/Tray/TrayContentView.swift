@@ -37,6 +37,18 @@ struct TrayContentView: View {
     /// the pixels the user can see (§74).
     let onShapeChange: (TrayShape) -> Void
 
+    /// Cue's music, for the wings the closed shelf grows while it plays.
+    var nowPlaying: NowPlayingSource? = nil
+
+    /// Whether this display is the one that shows them. Only one does — see
+    /// `DisplayCoordinator` — so a double click likes a song once, and one
+    /// mark animates rather than one per screen (§26).
+    var showsNowPlaying = false
+
+    /// The like heart currently in flight, if any. A fresh identity per like,
+    /// so a second like while one is still drifting starts it over.
+    @State private var heartBurst: UUID?
+
     /// The viewer's motion preference, read here rather than from a static, so
     /// that switching Reduce Motion takes effect immediately (§50).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,10 +81,14 @@ struct TrayContentView: View {
             collapsedContents
                 .frame(width: shape.width, height: shape.height)
                 .opacity(isOpen ? 0 : 1)
+                // The faded layer stays in the hierarchy; it must not keep
+                // catching clicks meant for the one on show.
+                .allowsHitTesting(!isOpen)
 
             expandedContents
                 .frame(width: shape.width, height: shape.height)
                 .opacity(isOpen ? 1 : 0)
+                .allowsHitTesting(isOpen)
         }
         .frame(width: shape.width, height: shape.height)
         // Nothing escapes the surface. As well as being correct at rest, this
@@ -87,6 +103,9 @@ struct TrayContentView: View {
             dropOutlineInset: settings.dropOutlineInset,
             contentTop: shape.contentTop
         )
+        // After the clip, so the heart can leave the cover — leaving it is the
+        // whole gesture.
+        .overlay(alignment: .topLeading) { likeHeart }
         // Scaled from the top, because that is where the object is attached.
         // Scaling from the centre would lift it off the edge of the screen.
         .scaleEffect(presenter.containerScale, anchor: .top)
@@ -142,7 +161,20 @@ struct TrayContentView: View {
                 item: contentMetrics
             )
         }
+        if pillTrack != nil {
+            return .nowPlaying(cutout: cutout)
+        }
         return .collapsed(cutout: cutout, isEmpty: store.isEmpty)
+    }
+
+    /// The track the closed shelf's wings are about, when it has them.
+    ///
+    /// Reads the player through the source, which is a dependency SwiftUI
+    /// tracks — so music starting or stopping reshapes the shelf. Only the
+    /// track: the audio level is read further down, in the mark itself.
+    private var pillTrack: NowPlayingSource.Track? {
+        guard !isOpen, showsNowPlaying, let nowPlaying else { return nil }
+        return nowPlaying.track()
     }
 
     /// Opening and closing get different springs: leaving should feel calmer
@@ -153,9 +185,29 @@ struct TrayContentView: View {
 
     // MARK: - Closed
 
-    /// Closed, the tray says only whether it is holding anything (§76, §77).
+    /// Closed, the tray says only whether it is holding anything (§76, §77) —
+    /// and, while Cue plays, what is playing, in a wing either side of the
+    /// housing.
     @ViewBuilder
     private var collapsedContents: some View {
+        if let nowPlaying, let track = pillTrack {
+            NowPlayingWings(
+                source: nowPlaying,
+                track: track,
+                cutout: cutout,
+                onLike: { heartBurst = UUID() }
+            ) {
+                itemDots
+            }
+            .transition(.opacity)
+        } else {
+            itemDots
+        }
+    }
+
+    /// Whether the shelf is holding anything, as up to three dots and a count.
+    @ViewBuilder
+    private var itemDots: some View {
         if !store.isEmpty {
             HStack(spacing: 4) {
                 ForEach(0..<min(store.count, 3), id: \.self) { _ in
@@ -172,6 +224,27 @@ struct TrayContentView: View {
             }
             .padding(.bottom, geometry.hasNotch ? 4 : 0)
             .frame(maxHeight: .infinity, alignment: geometry.hasNotch ? .bottom : .center)
+        }
+    }
+
+    /// The heart that springs out of the cover on a like, centred on the
+    /// cover and drawn over the surface rather than inside it.
+    @ViewBuilder
+    private var likeHeart: some View {
+        if let burst = heartBurst, shape.wingWidth > 0 {
+            let height = cutout.height
+            LikeHeart(reduceMotion: reduceMotion) {
+                // Only the heart that is still showing may clear itself; an
+                // older one finishing must not take a newer one with it.
+                if heartBurst == burst { heartBurst = nil }
+            }
+            .id(burst)
+            .position(
+                x: TrayMetrics.effectiveShoulder(forHeight: height)
+                    + TrayMetrics.wingPadding(forHeight: height)
+                    + TrayMetrics.wingArtSize(forHeight: height) / 2,
+                y: height / 2
+            )
         }
     }
 

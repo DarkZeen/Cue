@@ -112,6 +112,51 @@ nonisolated enum TrayMetrics {
     static let handleWidth: CGFloat = 56
     static let handleHeight: CGFloat = 5
 
+    // MARK: Now playing
+
+    /// The wings the closed shelf grows while Cue's own player has a track:
+    /// the cover on the left, the mark on the right, the housing between them.
+    ///
+    /// Everything here is a function of the housing's height, never a pixel
+    /// count, for the same reason the cutout is (§8): a 32pt notch, a 24pt
+    /// menu bar and a 38pt one at a larger text size all have to come out
+    /// looking like the same object. At 32pt they give the island's own
+    /// numbers — a 22pt cover, 8pt of air either side of it.
+
+    /// The cover, square. Clamped so a very short bar still has a cover large
+    /// enough to recognise and a very tall one does not get a poster.
+    static func wingArtSize(forHeight height: CGFloat) -> CGFloat {
+        min(28, max(16, (height * 0.6875).rounded()))
+    }
+
+    /// The cover's corners: the same proportion at every size, so it reads as
+    /// a small tile rather than as a circle at 16pt and a square at 28pt.
+    static func wingArtRadius(forHeight height: CGFloat) -> CGFloat {
+        wingArtSize(forHeight: height) * 0.27
+    }
+
+    /// The air either side of what a wing holds.
+    static func wingPadding(forHeight height: CGFloat) -> CGFloat {
+        max(6, (height * 0.25).rounded())
+    }
+
+    /// How far a shape this tall actually draws in at the top.
+    ///
+    /// Must agree with `TraySurface.path(in:)`, which scales the shoulder down
+    /// on a short shape: content has to sit inside the visible body, and the
+    /// body's outer wall is this far in from the declared width.
+    static func effectiveShoulder(forHeight height: CGFloat) -> CGFloat {
+        min(shoulder, max(0, height) * 0.28)
+    }
+
+    /// One wing, wall to housing: the shoulder, then the padding, the cover or
+    /// the mark, and the padding again.
+    static func wingWidth(forHeight height: CGFloat) -> CGFloat {
+        effectiveShoulder(forHeight: height)
+            + wingPadding(forHeight: height) * 2
+            + wingArtSize(forHeight: height)
+    }
+
     // MARK: Drop hint
 
     /// The dashed outline around the drop area, inset from the surface edge.
@@ -329,8 +374,8 @@ nonisolated struct TrayShape: Equatable {
     var height: CGFloat
     var cornerRadius: CGFloat
 
-    /// How far the top corners draw in. Zero while closed on a notched Mac,
-    /// where the tray *is* the housing and has to match its silhouette.
+    /// How far the top corners draw in. The surface scales it down on a short
+    /// shape, so the closed cutout keeps the same 14 as the open shelf.
     var shoulder: CGFloat = TrayMetrics.shoulder
 
     /// Where the files start: below the menu bar strip the header sits in.
@@ -340,6 +385,11 @@ nonisolated struct TrayShape: Equatable {
     /// still covers the menu bar. Either way the row of files starts under it,
     /// and the header is up in the strip alongside the menu bar's own items.
     var contentTop: CGFloat = 0
+
+    /// How wide each now-playing wing is. Zero for every shape but the closed
+    /// one that has grown them, which is how the window knows where the
+    /// clickable parts of a closed shelf are (§74).
+    var wingWidth: CGFloat = 0
 
     /// The island's radius expression, clamped so the closed cutout rounds
     /// like a cutout and the open shelf like a shelf without two constants
@@ -367,6 +417,45 @@ nonisolated struct TrayShape: Equatable {
             height: cutout.height,
             cornerRadius: radius(forHeight: cutout.height)
         )
+    }
+
+    /// Closed, with Cue playing: the housing with a wing either side.
+    ///
+    /// The same surface growing wider, never a second one beside it (§16), so
+    /// the morph from the plain cutout to this and back is one continuous
+    /// change of width. It starts from the housing even when the shelf is
+    /// empty: wings hung off a 56 × 5 handle would be wings hung off nothing.
+    static func nowPlaying(cutout: CGSize) -> TrayShape {
+        let wing = TrayMetrics.wingWidth(forHeight: cutout.height)
+        return TrayShape(
+            width: cutout.width + wing * 2,
+            height: cutout.height,
+            cornerRadius: radius(forHeight: cutout.height),
+            wingWidth: wing
+        )
+    }
+
+    /// The two wings, in an unflipped view's coordinates, for a shape hanging
+    /// from `top` and centred on `midX`. Empty when the shape has none.
+    ///
+    /// These are what the cover and the mark are clicked through, so the
+    /// window keeps them live while closed and keeps them out of the hover
+    /// strip — reaching for the mark must not open the shelf (§74, §75).
+    ///
+    /// Each stops at the body's outer wall, not the shape's outer edge: the
+    /// outermost shoulder's width is where the surface draws in over the
+    /// bezel and the menu bar shows through, and a click there was aimed at
+    /// whatever sits beside the notch.
+    func wingRects(centredOn midX: CGFloat, top: CGFloat) -> [CGRect] {
+        guard wingWidth > 0 else { return [] }
+        let shoulder = TrayMetrics.effectiveShoulder(forHeight: height)
+        let minX = midX - width / 2
+        let y = top - height
+        let clickable = wingWidth - shoulder
+        return [
+            CGRect(x: minX + shoulder, y: y, width: clickable, height: height),
+            CGRect(x: minX + width - wingWidth, y: y, width: clickable, height: height),
+        ]
     }
 
     /// Width the shelf's items want, before any clamping.

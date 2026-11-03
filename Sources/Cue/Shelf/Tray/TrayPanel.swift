@@ -60,7 +60,31 @@ final class TrayPanel: NSPanel {
     /// Allowed, but only on demand — see `becomesKeyOnlyIfNeeded`. A borderless
     /// panel returns `false` by default, which would break keyboard access to
     /// the shelf entirely (§35, §36).
-    override var canBecomeKey: Bool { true }
+    ///
+    /// Except for a click on the now-playing wings. Pausing the music is not
+    /// a click into the shelf, and taking key for it would leave the user's
+    /// next keystrokes going to a closed tray instead of the document they
+    /// were typing in.
+    override var canBecomeKey: Bool { !isClickingControl }
+
+    /// Set for the length of one mouse-down that lands on a wing.
+    private var isClickingControl = false
+
+    /// AppKit makes a panel key from inside `sendEvent`, before the view under
+    /// the pointer sees the click, so this is the only place that can say no.
+    override func sendEvent(_ event: NSEvent) {
+        guard event.type == .leftMouseDown,
+              let contentView,
+              contentView.hitTest(event.locationInWindow) is PillClickView
+        else {
+            super.sendEvent(event)
+            return
+        }
+
+        isClickingControl = true
+        defer { isClickingControl = false }
+        super.sendEvent(event)
+    }
 
     /// Never. Becoming main is what would make Tray look like the foreground
     /// application (§28, §37).
