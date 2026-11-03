@@ -182,7 +182,7 @@ final class TrayWindowController {
             NotificationCenter.default.removeObserver(focusObserver)
         }
         if let spaceObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
+            NotificationCenter.default.removeObserver(spaceObserver)
         }
     }
 
@@ -335,17 +335,23 @@ final class TrayWindowController {
     /// closes it.
     /// A Space switch hides the tray for the length of the system's
     /// animation; the presenter makes its return a movement, not a pop.
+    /// Occlusion, not the Space notification: it says hidden as the switch
+    /// begins, while the notification only comes once the window is back.
     private func configureSpaceHandling() {
-        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification,
-            object: nil,
+        spaceObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification,
+            object: panel,
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.presenter.spaceChanged(
-                    reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                )
+                if self.panel.occlusionState.contains(.visible) {
+                    self.presenter.windowShown(
+                        reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    )
+                } else {
+                    self.presenter.windowHidden()
+                }
             }
         }
     }

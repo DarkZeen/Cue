@@ -30,38 +30,46 @@ final class TrayPresenter {
 
     private var dropImpactTask: Task<Void, Never>?
 
-    /// True for the moment after a Space switch, while the closed shelf
-    /// waits under the notch to grow back out.
+    /// True while the window is out of sight — a Space switch under way —
+    /// and the closed shelf waits under the notch to grow back out.
     ///
     /// macOS hides every all-Spaces window while it animates a switch to or
     /// from a full-screen app — tested at every window level, in every part
     /// of the screen — and shows it again at full size when the animation
     /// ends. There is no public way to stay up through it, so the pill does
-    /// not try: it drops to the bare housing the instant the switch begins,
-    /// and grows back out of the notch once it can be seen again, the same
-    /// motion the headphones use to hand back to the music.
+    /// not try. Recorded across real switches, the window's occlusion state
+    /// goes hidden the moment the slide starts and visible as it ends — the
+    /// Space-change notification only arrives at the end, after the window is
+    /// already back, which is why reacting to it popped the pill in first. So:
+    /// hidden, it drops to the bare housing where nobody can see it go;
+    /// visible, it grows back out of the notch, the motion the headphones use
+    /// to hand back to the music.
     private(set) var isReturningFromSpace = false
     private var spaceReturnTask: Task<Void, Never>?
 
-    /// How long the pill waits under the notch: about as long as the
-    /// system's own switch takes to clear the screen.
-    static let spaceReturnDelay: Duration = .milliseconds(380)
-
-    func spaceChanged(reduceMotion: Bool) {
+    /// The window has gone out of sight.
+    func windowHidden() {
         spaceReturnTask?.cancel()
-        // At once and unanimated: this happens while the window is hidden,
-        // and a shrink that ran visibly would be the pop it exists to hide.
+        guard !isReturningFromSpace else { return }
+        // Unanimated: nobody is watching, and the next thing they see should
+        // be the growth, not the end of a shrink.
         var instant = Transaction(animation: nil)
         instant.disablesAnimations = true
         withTransaction(instant) { isReturningFromSpace = true }
+    }
 
+    /// The window can be seen again: grow back out.
+    func windowShown(reduceMotion: Bool) {
+        guard isReturningFromSpace else { return }
+        spaceReturnTask?.cancel()
         spaceReturnTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.spaceReturnDelay)
+            // A frame for the window to be on screen before it moves.
+            try? await Task.sleep(for: .milliseconds(30))
             guard !Task.isCancelled, let self else { return }
             withAnimation(
                 reduceMotion
                     ? .easeOut(duration: 0.2)
-                    : .spring(response: 0.7, dampingFraction: 0.82)
+                    : .spring(response: 0.9, dampingFraction: 0.84)
             ) {
                 self.isReturningFromSpace = false
             }
