@@ -31,6 +31,7 @@ final class SettingsStore {
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
         partyIntensity = Self.clampedParty(defaults.double(forKey: Key.partyIntensity))
         showsHeadphones = defaults.object(forKey: Key.showsHeadphones) as? Bool ?? true
+        showsArrivalOutline = defaults.object(forKey: Key.showsArrivalOutline) as? Bool ?? true
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
@@ -276,6 +277,11 @@ final class SettingsStore {
 
     var onHeadphonesChange: (() -> Void)?
 
+    /// Whether headphones arriving draw a green line round the notch.
+    var showsArrivalOutline: Bool {
+        didSet { defaults.set(showsArrivalOutline, forKey: Key.showsArrivalOutline) }
+    }
+
     static func clampedParty(_ value: Double) -> Double {
         value.isFinite ? min(max(value, 0), 1) : 0
     }
@@ -421,6 +427,7 @@ final class SettingsStore {
         static let shufflesContainers = "shufflesContainers"
         static let partyIntensity = "partyIntensity"
         static let showsHeadphones = "showsHeadphones"
+        static let showsArrivalOutline = "showsArrivalOutline"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"

@@ -128,7 +128,7 @@ struct TrayContentView: View {
     /// Party mode, round the closed pill only — never the open shelf.
     @ViewBuilder
     private var partyBorder: some View {
-        if arrival != nil {
+        if arrival != nil, nowPlaying?.arrivalOutline() ?? true {
             // Headphones arriving: the outline in green, whatever the party.
             ArrivalBorder(cornerRadius: shape.cornerRadius, shoulder: shape.shoulder)
                 .transition(.opacity)
@@ -237,11 +237,21 @@ struct TrayContentView: View {
     /// housing.
     @ViewBuilder
     private var collapsedContents: some View {
+        Group {
+            closedWings
+        }
+        // The hand-over between headphones and music: one set sinks into
+        // the notch, the next comes out of it (`AnyTransition.wings`).
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : .easeInOut(duration: 0.3), value: arrival?.id)
+    }
+
+    @ViewBuilder
+    private var closedWings: some View {
         if let arrival {
             ArrivalWings(arrival: arrival, cutout: cutout) {
                 itemDots
             }
-            .transition(.opacity)
+            .transition(.wings(reduceMotion: reduceMotion))
         } else if let nowPlaying, let track = pillTrack {
             NowPlayingWings(
                 source: nowPlaying,
@@ -251,7 +261,7 @@ struct TrayContentView: View {
             ) {
                 itemDots
             }
-            .transition(.opacity)
+            .transition(.wings(reduceMotion: reduceMotion))
         } else {
             itemDots
         }

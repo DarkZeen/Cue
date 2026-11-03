@@ -583,6 +583,8 @@ private struct NotchPane: View {
 
             Section("Headphones") {
                 Toggle("Show AirPods when they connect", isOn: $settings.showsHeadphones)
+                Toggle("Green outline while they connect", isOn: $settings.showsArrivalOutline)
+                    .disabled(!settings.showsHeadphones)
                 Text("""
                     When AirPods or other Bluetooth headphones connect, or move \
                     over to this Mac, the notch shows them for a few seconds \

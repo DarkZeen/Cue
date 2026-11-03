@@ -99,7 +99,8 @@ final class AppState {
             markStyle: { settings.plaqueAnimation },
             markReaction: { settings.markReaction },
             party: { settings.partyIntensity },
-            arrival: { headphones.arrival }
+            arrival: { headphones.arrival },
+            arrivalOutline: { settings.showsArrivalOutline }
         )
     }
 

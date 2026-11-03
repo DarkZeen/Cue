@@ -78,4 +78,12 @@ struct HeadphonesWatcherTests {
         #expect(report?.vendorID == "0x004C")
         #expect(report?.productID == "0x2014")
     }
+
+    @Test func `the green outline is on until it is turned off`() {
+        let defaults = UserDefaults(suiteName: "HeadphonesWatcherTests-\(UUID().uuidString)")!
+        #expect(SettingsStore(defaults: defaults).showsArrivalOutline)
+
+        SettingsStore(defaults: defaults).showsArrivalOutline = false
+        #expect(!SettingsStore(defaults: defaults).showsArrivalOutline)
+    }
 }
