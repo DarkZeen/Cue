@@ -1,0 +1,21 @@
+# Build products
+.build/
+.swiftpm/
+build/
+dist/
+*.dmg
+*.xcodeproj
+
+# macOS
+.DS_Store
+
+# Local agent tooling — not part of the app.
+# `.github/` itself stays: the workflows live there.
+.agents/
+.claude/
+.codex/
+.impeccable/
+.github/agents/
+.github/hooks/
+.github/skills/
+skills-lock.json

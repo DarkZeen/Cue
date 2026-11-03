@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    # A macOS 26 SDK is required — the app's deployment target is macOS 26 (§60).
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: |
+          swift --version
+          xcodebuild -version || true
+
+      - name: Build
+        run: swift build -c release --arch arm64
+
+      - name: Test
+        run: swift test
+
+      # Exercises the same script a developer runs, so a packaging break shows
+      # up on a pull request rather than at release time (§66).
+      - name: Assemble the app bundle
+        run: ./Scripts/build.sh
+
+      - name: Verify the signature
+        run: codesign --verify --deep --strict --verbose=2 build/Tray.app

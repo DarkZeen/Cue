@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Deliberately empty (§39).
+
+  Tray is not sandboxed: it is distributed directly as a DMG, so the sandbox
+  would buy nothing and would add security-scoped bookmark handling to every
+  dropped URL. The hardened runtime is still applied at signing time because
+  notarization requires it — and it blocks nothing this app does. Tray needs no
+  Full Disk Access, no Accessibility, no Screen Recording, no camera, no
+  microphone. It knows about the files you drag onto it and nothing else.
+-->
+<dict/>
+</plist>
