@@ -84,8 +84,9 @@ struct PartyBorder: View {
     }
 }
 
-/// The pill's sides and bottom, `gap` outside its surface: an open line that
-/// starts below one shoulder and ends below the other.
+/// The pill's shoulders, sides and bottom, `gap` outside its surface: an open
+/// line that starts at the screen's top edge beside one shoulder and ends at
+/// it beside the other, never running along the edge itself.
 ///
 /// Traced from the same numbers `TraySurface` draws with — its shoulder and
 /// bottom-corner rules — so it follows the black at a constant distance.
@@ -108,8 +109,26 @@ struct PartyOutline: Shape {
         let radius = bottom + gap
         let top = rect.minY + shoulder
 
+        // The shoulders are concave quarter circles centred out beside the
+        // shape, at the wall's top; outside them is toward that centre, so the
+        // offset curve has the same centre and a radius `gap` smaller.
+        let shoulderRadius = shoulder - gap
+        let rightShoulder = CGPoint(x: rect.maxX, y: top)
+        let leftShoulder = CGPoint(x: rect.minX, y: top)
+
         var path = Path()
-        path.move(to: CGPoint(x: right, y: top))
+        if shoulderRadius > 0 {
+            path.move(to: CGPoint(x: rect.maxX, y: top - shoulderRadius))
+            path.addArc(
+                center: rightShoulder,
+                radius: shoulderRadius,
+                startAngle: .degrees(270),
+                endAngle: .degrees(180),
+                clockwise: true
+            )
+        } else {
+            path.move(to: CGPoint(x: right, y: top))
+        }
         path.addLine(to: CGPoint(x: right, y: floor - radius))
         path.addArc(
             center: CGPoint(x: right - radius, y: floor - radius),
@@ -127,6 +146,15 @@ struct PartyOutline: Shape {
             clockwise: false
         )
         path.addLine(to: CGPoint(x: left, y: top))
+        if shoulderRadius > 0 {
+            path.addArc(
+                center: leftShoulder,
+                radius: shoulderRadius,
+                startAngle: .degrees(0),
+                endAngle: .degrees(270),
+                clockwise: true
+            )
+        }
         return path
     }
 }

@@ -560,6 +560,20 @@ private struct NotchPane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
+                Picker("Reacts to", selection: $settings.markReaction) {
+                    ForEach(MarkReaction.allCases, id: \.self) { reaction in
+                        Text(reaction.title).tag(reaction)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!settings.plaqueAnimation.reacts)
+
+                Text(settings.plaqueAnimation.reacts
+                    ? settings.markReaction.summary
+                    : "\(settings.plaqueAnimation.title) moves the way it always has; Wave and Island follow this.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
                 Text("""
                     Drawn in the notch beside the cover, in the cover's colour, \
                     and in the search bar. The Record keeps its own colours.

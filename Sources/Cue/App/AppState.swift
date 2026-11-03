@@ -89,6 +89,7 @@ final class AppState {
             previous: { player.previous() },
             like: { videoID in await player.rate(videoID: videoID, .like) },
             markStyle: { settings.plaqueAnimation },
+            markReaction: { settings.markReaction },
             party: { settings.partyIntensity }
         )
     }

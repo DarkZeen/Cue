@@ -126,6 +126,11 @@ struct WaveIndicator: View {
     /// take `tint`, the short ones this — so the colours move with the music.
     var shortTint: Color? = nil
 
+    /// What the shapes answer to. `frequencies` is the mark as it always was.
+    var reaction: MarkReaction = .frequencies
+    /// The kick envelope, from a `BeatFollower`, for `.beat`.
+    var kick: Double = 0
+
     private var count: Int { CueWavePath.shapes.count }
 
     /// Each shape's height as a share of the mark's, from the artwork.
@@ -173,12 +178,24 @@ struct WaveIndicator: View {
         let swell = ProceduralMotion.energy(level, at: elapsed)
         let kick = ProceduralMotion.beat(bands, at: elapsed)
 
-        // Each term scaled on its own rather than summed first, so the
-        // default excursion of 1 is bit-for-bit the mark as it always was.
-        return 1
-            + CGFloat(breath * 0.04 * excursion)
-            + CGFloat(swell * 0.06 * excursion)
-            + CGFloat(kick * 0.13 * excursion)
+        switch reaction {
+        case .frequencies:
+            // Each term scaled on its own rather than summed first, so the
+            // default excursion of 1 is bit-for-bit the mark as it always was.
+            return 1
+                + CGFloat(breath * 0.04 * excursion)
+                + CGFloat(swell * 0.06 * excursion)
+                + CGFloat(kick * 0.13 * excursion)
+        case .beat:
+            // The whole mark punches on the kick and breathes in between.
+            return 1
+                + CGFloat(breath * 0.02 * excursion)
+                + CGFloat(self.kick * 0.2 * excursion)
+        case .smooth:
+            return 1
+                + CGFloat(breath * 0.04 * excursion)
+                + CGFloat(swell * 0.07 * excursion)
+        }
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -212,9 +229,18 @@ struct WaveIndicator: View {
         // look like one object. Enough travel to be read from the corner of an
         // eye — the earlier values were tuned looking straight at it, which is
         // the one way this is never actually seen.
-        let amplitude = 0.20
-            + 0.34 * ProceduralMotion.energy(level, at: elapsed)
-            + 0.18 * ProceduralMotion.beat(bands, at: elapsed) * distance
+        let amplitude: Double
+        switch reaction {
+        case .frequencies:
+            amplitude = 0.20
+                + 0.34 * ProceduralMotion.energy(level, at: elapsed)
+                + 0.18 * ProceduralMotion.beat(bands, at: elapsed) * distance
+        case .beat:
+            // Small between kicks, so the kick is what is seen.
+            amplitude = 0.08 + 0.62 * kick * (0.45 + 0.55 * distance)
+        case .smooth:
+            amplitude = 0.14 + 0.3 * ProceduralMotion.energy(level, at: elapsed)
+        }
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
@@ -701,6 +727,10 @@ struct IslandIndicator: View {
     /// Party mode's second colour: the short bars take it, the tall ones
     /// `tint`, mixed by height.
     var shortTint: Color? = nil
+    /// What the bars answer to.
+    var reaction: MarkReaction = .frequencies
+    /// The kick envelope, from a `BeatFollower`, for `.beat`.
+    var kick: Double = 0
 
     static let barCount = 5
 
@@ -737,7 +767,15 @@ struct IslandIndicator: View {
 
         let energy = ProceduralMotion.energy(level, at: elapsed)
         let reach: Double
-        if let heard = heard(index) {
+        if reaction == .beat {
+            // All five on the kick, the middle highest — the shape of a hit —
+            // with a little of each bar's own motion so they are not a block.
+            reach = kick * Self.hitShape[index] * 0.92 + own * 0.12
+        } else if reaction == .smooth {
+            let slow = (sin(ProceduralMotion.travel(elapsed, rate: Self.rates[index] * 0.35, surge: 0)
+                + Self.offsets[index]) + 1) / 2
+            reach = energy * Self.hitShape[index] * 0.7 + slow * 0.25
+        } else if let heard = heard(index) {
             // Listening: the music drives the bars, and their own motion is
             // only a flicker underneath, so nothing reads as a loop.
             reach = heard + own * 0.08
@@ -770,6 +808,9 @@ struct IslandIndicator: View {
         return pow(own, 1.4) * 0.45 + relative * 0.45 * (0.4 + 0.6 * level) + kick * 0.25 * centre
     }
 
+    /// How a kick stands the bars up: the middle highest.
+    private static let hitShape: [Double] = [0.6, 0.85, 1, 0.85, 0.6]
+
     /// Still, the bars sit as the iPhone draws them paused: a low, even
     /// skyline with the middle a little taller.
     private static let resting: [CGFloat] = [0.35, 0.55, 0.75, 0.55, 0.35]
@@ -784,6 +825,39 @@ private extension CGFloat {
     func rounded(toPlaces places: Int) -> CGFloat {
         let scale = pow(10, CGFloat(places))
         return (self * scale).rounded() / scale
+    }
+}
+
+// MARK: - The beat
+
+/// Finds the kicks in the music: the bass jumping above where it has been.
+///
+/// The marks are otherwise pure functions of one instant, and one instant
+/// cannot tell a kick from a loud bass line — both are simply "a lot of
+/// bass". A kick is the bass *rising* past its recent level, so this keeps
+/// that level, a third of a second's worth, and answers with an envelope that
+/// jumps on each rise and dies away in about a seventh of a second. Held by the
+/// view that draws the mark and advanced once a frame. With nothing listening
+/// it passes on the invented beat the marks already fall back to.
+@MainActor
+final class BeatFollower {
+    private var average = 0.0
+    private var envelope = 0.0
+    private var last: Date?
+
+    func update(level: Double, bands: [Double], at now: Date) -> Double {
+        defer { last = now }
+        let elapsed = now.timeIntervalSinceReferenceDate
+        guard bands.count >= 2 else {
+            return ProceduralMotion.beat(bands, at: elapsed)
+        }
+        let step = last.map { min(max(now.timeIntervalSince($0), 0), 0.1) } ?? 0
+
+        let bass = bands[0] * 0.65 + bands[1] * 0.35
+        average += (bass - average) * min(1, step * 3)
+        let onset = min(max((bass - average - 0.02) * 5, 0), 1)
+        envelope = max(onset, envelope * exp(-step * 7))
+        return envelope
     }
 }
 

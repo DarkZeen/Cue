@@ -34,6 +34,10 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Whether "Reacts to" changes this mark. The Wave and Island are built
+    /// to answer to it; the others have their own idea of the music.
+    var reacts: Bool { self == .wave || self == .island }
+
     /// How wide the mark is. Height is fixed; only the bars and the record
     /// need more room than a square — the meter because it is a row of
     /// seventeen, the record because its arm reaches past the edge.
@@ -45,3 +49,30 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
         }
     }
 }
+
+/// What the moving mark answers to.
+enum MarkReaction: String, Codable, CaseIterable, Sendable {
+    /// Each part follows its own slice of the spectrum: busy, detailed.
+    case frequencies
+    /// The whole mark jumps on each kick and settles between them.
+    case beat
+    /// How loud it is, slowly: a calm swell rather than a meter.
+    case smooth
+
+    var title: String {
+        switch self {
+        case .frequencies: "Frequencies"
+        case .beat: "Beat"
+        case .smooth: "Smooth"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .frequencies: "Each line follows its own part of the sound — bass in the middle, highs at the edges."
+        case .beat: "The lines jump together on every kick and fall back between them."
+        case .smooth: "A slow swell with the volume. Calm enough to leave on all day."
+        }
+    }
+}
+

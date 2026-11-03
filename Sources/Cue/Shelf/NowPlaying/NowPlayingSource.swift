@@ -45,6 +45,8 @@ struct NowPlayingSource {
     var like: @MainActor (String) async -> Bool
     /// Which mark the right wing draws — the one chosen in Settings.
     var markStyle: @MainActor () -> PlaqueAnimation = { .wave }
+    /// What the mark answers to — the spectrum, the beat, or the volume.
+    var markReaction: @MainActor () -> MarkReaction = { .frequencies }
     /// Party mode's strength, 0 (off) to 1.
     var party: @MainActor () -> Double = { 0 }
     /// The covers' colours, kept for as long as the source is: the wings are

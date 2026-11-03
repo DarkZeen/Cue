@@ -448,8 +448,11 @@ private struct PillWave: View {
 
     private var isAnimating: Bool { isPlaying && !reduceMotion }
 
+    @State private var beat = BeatFollower()
+
     var body: some View {
         let style = source.markStyle()
+        let reaction = source.markReaction()
 
         // Capped at 60: this is permanently on screen while anything plays,
         // and a 12pt mark gains nothing from a 120Hz display.
@@ -460,6 +463,9 @@ private struct PillWave: View {
             // mark that is not moving.
             let level = isAnimating ? source.level() : 0
             let bands = isAnimating ? source.bands() : []
+            let kick = isAnimating && reaction == .beat
+                ? beat.update(level: level, bands: bands, at: context.date)
+                : 0
 
             switch style {
             case .wave:
@@ -473,7 +479,9 @@ private struct PillWave: View {
                     // Kept inside the housing: at full excursion the centre
                     // shape would reach past a 32pt menu bar.
                     excursion: 0.6,
-                    shortTint: shortTint
+                    shortTint: shortTint,
+                    reaction: reaction,
+                    kick: kick
                 )
             case .island:
                 // Drawn at the wing's own size: five bars at fourteen points
@@ -485,7 +493,9 @@ private struct PillWave: View {
                     isAnimating: isAnimating,
                     height: min(14, slot.height - 10),
                     tint: tint,
-                    shortTint: shortTint
+                    shortTint: shortTint,
+                    reaction: reaction,
+                    kick: kick
                 )
             default:
                 // The other marks are drawn at a fixed size of their own, so

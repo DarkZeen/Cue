@@ -38,6 +38,8 @@ final class SettingsStore {
         showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
             .flatMap(PlaqueAnimation.init(rawValue:)) ?? .wave
+        markReaction = defaults.string(forKey: Key.markReaction)
+            .flatMap(MarkReaction.init(rawValue:)) ?? .frequencies
 
         exploreGenre = {
             guard let data = defaults.data(forKey: Key.exploreGenre) else { return nil }
@@ -210,9 +212,15 @@ final class SettingsStore {
         defaults.set(data, forKey: Key.albumCollection)
     }
 
-    /// Which animation the mark in the corner uses.
+    /// Which mark moves while something plays — in the notch and the search
+    /// bar.
     var plaqueAnimation: PlaqueAnimation {
         didSet { defaults.set(plaqueAnimation.rawValue, forKey: Key.plaqueAnimation) }
+    }
+
+    /// What that mark answers to: the spectrum, the beat, or the volume.
+    var markReaction: MarkReaction {
+        didSet { defaults.set(markReaction.rawValue, forKey: Key.markReaction) }
     }
 
     /// Whether Settings explains itself.
@@ -408,6 +416,7 @@ final class SettingsStore {
         static let checksForUpdates = "checksForUpdates"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"
+        static let markReaction = "markReaction"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
