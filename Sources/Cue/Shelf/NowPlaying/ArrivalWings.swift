@@ -163,6 +163,19 @@ struct DeviceTurn: View {
                     .interpolation(.high)
                     .frame(width: size, height: size)
             }
+            // A soft light-grey glow behind the device, the way a product is
+            // shot against a lit backdrop: just enough to lift a black pair of
+            // headphones off the black notch, never enough to read as a disc.
+            .background {
+                RadialGradient(
+                    colors: [Color(white: 0.85).opacity(0.13), Color(white: 0.85).opacity(0)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: size * 0.55
+                )
+                .frame(width: size * 1.1, height: size * 1.1)
+                .allowsHitTesting(false)
+            }
             .accessibilityHidden(true)
         }
     }
