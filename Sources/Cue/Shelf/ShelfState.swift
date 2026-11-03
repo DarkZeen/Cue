@@ -21,8 +21,10 @@ final class ShelfState {
     private let nowPlaying: NowPlayingSource?
 
     private(set) var displays: DisplayCoordinator!
-    private let statusItem = StatusItemController()
-    private var settingsWindow: SettingsWindowController?
+
+    /// The shelf's gear asks for Settings; Cue has one Settings window, and
+    /// the app owns it.
+    var onOpenSettings: () -> Void = {}
 
     private let logger = Diagnostics.logger("shelf")
 
@@ -48,13 +50,11 @@ final class ShelfState {
             self.quickLook.preview(item, within: self.store.items)
         }
 
-        displays.onOpenSettingsRequest = { [weak self] in self?.showSettings() }
+        displays.onOpenSettingsRequest = { [weak self] in self?.onOpenSettings() }
 
         // Changing how the tray looks opens the tray. Set here rather than in
         // the store's initialiser because the displays do not exist yet then.
         settings.onPreviewRequested = { [weak self] in self?.displays.previewActive() }
-
-        configureStatusItem()
 
         // The startup repair pass from §34: the stored wish and the system's
         // registration are reconciled before anything else can read either.
@@ -74,30 +74,16 @@ final class ShelfState {
 
         // Holding the tray open implies wanting to see it, including when it
         // is empty — which is the one state a seed cannot produce.
-        if Diagnostics.debugSettingsPane != nil { showSettings() }
-
         guard !urls.isEmpty || Diagnostics.holdsTrayOpen else { return }
         displays.openActive()
     }
 
-    // MARK: - Menu bar
-
-    private func configureStatusItem() {
-        statusItem.onOpenTray = { [weak self] in self?.displays.openActive() }
-        statusItem.onOpenSettings = { [weak self] in self?.showSettings() }
-        statusItem.isLaunchAtLoginEnabled = { [weak self] in
-            self?.launchAtLogin.state.isEffectivelyEnabled ?? false
-        }
-        statusItem.launchAtLoginExplanation = { [weak self] in
-            self?.launchAtLogin.state.explanation
-        }
-        statusItem.onToggleLaunchAtLogin = { [weak self] in
-            guard let self else { return }
-            self.setLaunchAtLogin(!self.launchAtLogin.state.isEffectivelyEnabled)
-        }
-
-        statusItem.setVisible(settings.showsMenuBarIcon)
+    /// Opens the shelf on the display under the pointer.
+    func open() {
+        displays.openActive()
     }
+
+    // MARK: - Launch at login
 
     /// Writes the wish first, then attempts the registration, then adopts
     /// whatever actually happened — so the UI can never show a toggle the
@@ -110,19 +96,5 @@ final class ShelfState {
         if case .requiresApproval = result {
             launchAtLogin.openLoginItemsSettings()
         }
-    }
-
-    func setMenuBarIconVisible(_ visible: Bool) {
-        settings.showsMenuBarIcon = visible
-        statusItem.setVisible(visible)
-    }
-
-    // MARK: - Settings
-
-    func showSettings() {
-        if settingsWindow == nil {
-            settingsWindow = SettingsWindowController(state: self)
-        }
-        settingsWindow?.show()
     }
 }

@@ -166,7 +166,7 @@ struct TrayItemView: View {
     /// Move, Delete — stays out.
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addAction(title: "Remove from Tray", handler: onRemove)
+        menu.addAction(title: "Remove from Shelf", handler: onRemove)
         menu.addAction(title: "Copy", isEnabled: item.isAvailable, handler: onCopy)
         menu.addAction(title: "Reveal in Finder", isEnabled: item.isAvailable, handler: onReveal)
         menu.addAction(title: "Quick Look", isEnabled: item.isAvailable, handler: onQuickLook)

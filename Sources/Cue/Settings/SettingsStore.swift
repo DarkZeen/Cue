@@ -28,7 +28,6 @@ final class SettingsStore {
         pinnedTiles = Self.loadPinnedTiles(from: defaults)
         hotKey = Self.loadHotKey(from: defaults)
 
-        showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
 
         isExploring = defaults.bool(forKey: Key.isExploring)
@@ -63,13 +62,6 @@ final class SettingsStore {
                   stored.count == 2
             else { return SettingsStore.defaultPanelPosition }
             return CGPoint(x: min(max(stored[0], 0), 1), y: min(max(stored[1], 0), 1))
-        }()
-
-        miniPlayerOrigin = {
-            guard let stored = defaults.array(forKey: Key.miniPlayerOrigin) as? [Double],
-                  stored.count == 2
-            else { return nil }
-            return CGPoint(x: stored[0], y: stored[1])
         }()
 
         let storedDesign = defaults.string(forKey: Key.panelDesign)
@@ -107,22 +99,6 @@ final class SettingsStore {
     func resetPanelLayout() {
         panelPosition = Self.defaultPanelPosition
         panelWidth = Double(CueLayout.defaultPanelWidth)
-    }
-
-    /// Where the plaque was last left, or `nil` for its default corner.
-    ///
-    /// Stored rather than derived because the plaque is draggable: it is a
-    /// permanent surface that has to get out of the way of whatever else lives
-    /// in that corner, and only the person looking at the screen knows where
-    /// that is.
-    var miniPlayerOrigin: CGPoint? {
-        didSet {
-            guard let miniPlayerOrigin else {
-                defaults.removeObject(forKey: Key.miniPlayerOrigin)
-                return
-            }
-            defaults.set([miniPlayerOrigin.x, miniPlayerOrigin.y], forKey: Key.miniPlayerOrigin)
-        }
     }
 
     /// Raised when the panel's size or position changed and the window has to
@@ -265,21 +241,6 @@ final class SettingsStore {
         didSet { defaults.set(shufflesContainers, forKey: Key.shufflesContainers) }
     }
 
-    /// Whether the plaque appears in the corner of the screen while playing.
-    ///
-    /// On, because with the player window parked off screen it is the only
-    /// thing that says Cue is playing at all — and the only way to pause
-    /// without summoning something.
-    var showsMiniPlayer: Bool {
-        didSet {
-            defaults.set(showsMiniPlayer, forKey: Key.showsMiniPlayer)
-            onMiniPlayerChange?()
-        }
-    }
-
-    /// Raised when the plaque should be reconsidered.
-    var onMiniPlayerChange: (() -> Void)?
-
     /// Whether picking something plays it in Cue or hands it to the browser.
     ///
     /// In Cue, because that is what the app is for: a panel that sends you to
@@ -418,7 +379,6 @@ final class SettingsStore {
     private enum Key {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
-        static let showsMiniPlayer = "showsMiniPlayer"
         static let shufflesContainers = "shufflesContainers"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
@@ -431,7 +391,6 @@ final class SettingsStore {
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
-        static let miniPlayerOrigin = "miniPlayerOrigin"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"

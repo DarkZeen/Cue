@@ -289,7 +289,7 @@ struct TrayAppearanceTests {
         NSColor(calibratedWhite: 0.93, alpha: 1).setFill()
         NSRect(origin: .zero, size: canvas).fill()
 
-        let glyph = TrayIcon.menuBarImage()
+        let glyph = MenuBarIcon.menuBarImage()
         var x = padding
         for height in heights {
             let width = height * glyph.size.width / glyph.size.height

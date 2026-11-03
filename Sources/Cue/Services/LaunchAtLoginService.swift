@@ -35,15 +35,10 @@ final class LaunchAtLoginService {
 
     private(set) var state: State = .disabled
 
-    /// The switch as Cue's General page shows it: on only when the system
-    /// agrees, and setting it goes through the same checks as everything else.
-    var isEnabled: Bool {
-        get { state.isEffectivelyEnabled }
-        set { setEnabled(newValue) }
-    }
-
-    /// Whether macOS is holding the request behind the user's approval.
-    var requiresApproval: Bool { state == .requiresApproval }
+    /// The switch as Settings shows it: on only when the system agrees.
+    /// Read-only on purpose — turning it on or off goes through
+    /// `ShelfState.setLaunchAtLogin`, which records the wish as well (§34).
+    var isEnabled: Bool { state.isEffectivelyEnabled }
 
     private let logger = Diagnostics.logger("launch-at-login")
     private let service = SMAppService.mainApp

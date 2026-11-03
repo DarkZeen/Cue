@@ -16,7 +16,6 @@ final class AppState {
     let coordinator: LibraryCoordinator
     let player: PlayerService
     let playback: PlaybackService
-    let miniPlayer: MiniPlayerController
     let otherAudio: OtherAudioWatcher
     let layoutEditor = LayoutEditor()
     let updates: UpdateService
@@ -24,6 +23,9 @@ final class AppState {
     let shelf: ShelfState
 
     private var panel: CueWindowController?
+    /// The menu bar item: Tray's, now Cue's, and the app's rather than the
+    /// shelf's — it opens the speed dial and the player as well.
+    private let statusItem = StatusItemController()
     private var settingsWindow: NSWindow?
 
     private let logger = Diagnostics.logger("app-state")
@@ -38,7 +40,6 @@ final class AppState {
         self.coordinator = coordinator
         self.player = player
         self.playback = PlaybackService(settings: settings, player: player, coordinator: coordinator)
-        self.miniPlayer = MiniPlayerController(player: player, settings: settings)
         self.otherAudio = OtherAudioWatcher(player: player)
         self.updates = UpdateService(settings: settings)
         self.shelf = ShelfState(
@@ -114,7 +115,9 @@ final class AppState {
     }
 
     func start() {
+        shelf.onOpenSettings = { [weak self] in self?.showSettings() }
         shelf.start()
+        configureStatusItem()
 
         let panel = CueWindowController(
             coordinator: coordinator,
@@ -134,9 +137,6 @@ final class AppState {
         }
         hotKey.register(settings.hotKey)
 
-        // The plaque is the only thing on screen that says Cue is playing, so
-        // it has to keep up with both the music and the window it stands in
-        // for.
         // Read before anything is built, so the first presentation is already
         // the chosen size rather than briefly the designed default.
         CueLayout.panelWidth = CGFloat(settings.panelWidth)
@@ -149,20 +149,13 @@ final class AppState {
             await player?.currentCookies() ?? []
         }
 
-        layoutEditor.onBegin = { [weak self] in
-            self?.panel?.beginEditing()
-            self?.miniPlayer.beginEditing()
-        }
-        layoutEditor.onEnd = { [weak self] in
-            self?.panel?.endEditing()
-            self?.miniPlayer.endEditing()
-        }
+        layoutEditor.onBegin = { [weak self] in self?.panel?.beginEditing() }
+        layoutEditor.onEnd = { [weak self] in self?.panel?.endEditing() }
         panel.onEndEditing = { [weak self] in self?.layoutEditor.end() }
 
 
         player.onStateChange = { [weak self] in
             guard let self else { return }
-            self.miniPlayer.sync()
 
             // The fourth page follows the music: a station built from whatever
             // is sounding now, which is the one question the other three pages
@@ -182,7 +175,6 @@ final class AppState {
                 self.coordinator.refreshNow()
             }
         }
-        settings.onMiniPlayerChange = { [weak self] in self?.miniPlayer.sync() }
 
         let shortcut = settings.hotKey?.displayString ?? "none"
         logger.notice("Started. \(self.coordinator.connectionSummary, privacy: .public); shortcut \(shortcut, privacy: .public).")
@@ -284,31 +276,72 @@ final class AppState {
 
         let view = SettingsView(
             settings: settings,
+            shelfSettings: shelf.settings,
             coordinator: coordinator,
             launchAtLogin: launchAtLogin,
             hotKey: hotKey,
             player: player,
-            onResetMiniPlayer: { [weak self] in self?.miniPlayer.resetPosition() },
             onEditLayout: { [weak self] in self?.layoutEditor.begin() },
             updates: updates,
-            onShowPlayer: { [weak self] in self?.player.showHome() }
+            onShowPlayer: { [weak self] in self?.player.showHome() },
+            onLaunchAtLoginChanged: { [weak self] in self?.shelf.setLaunchAtLogin($0) },
+            onMenuBarIconChanged: { [weak self] in self?.setMenuBarIconVisible($0) }
         )
 
+        let size = NSSize(
+            width: SettingsMetrics.sidebarWidth + SettingsMetrics.detailWidth,
+            height: SettingsMetrics.windowHeight
+        )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Cue Settings"
+        // Lets the sidebar's material run to the top of the window, so it
+        // reads as one surface rather than a panel with a bar stuck on it.
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unified
         window.contentView = NSHostingView(rootView: view)
+        window.setContentSize(size)
+        window.contentMinSize = NSSize(width: 600, height: 420)
         window.center()
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("CueSettings")
+        // A new name: the old one remembers the tab window's smaller frame.
+        window.setFrameAutosaveName("CueSettingsWindow")
 
         settingsWindow = window
 
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - Menu bar
+
+    private func configureStatusItem() {
+        statusItem.onOpenPanel = { [weak self] in self?.openPanel() }
+        statusItem.onOpenShelf = { [weak self] in self?.shelf.open() }
+        statusItem.onTogglePlayer = { [weak self] in self?.togglePlayer() }
+        statusItem.isPlayerVisible = { [weak self] in self?.player.isWindowVisible ?? false }
+        statusItem.panelShortcut = { [weak self] in self?.settings.hotKey?.displayString }
+        statusItem.onOpenSettings = { [weak self] in self?.showSettings() }
+        statusItem.isLaunchAtLoginEnabled = { [weak self] in
+            self?.launchAtLogin.isEnabled ?? false
+        }
+        statusItem.launchAtLoginExplanation = { [weak self] in
+            self?.launchAtLogin.state.explanation
+        }
+        statusItem.onToggleLaunchAtLogin = { [weak self] in
+            guard let self else { return }
+            self.shelf.setLaunchAtLogin(!self.launchAtLogin.isEnabled)
+        }
+
+        statusItem.setVisible(shelf.settings.showsMenuBarIcon)
+    }
+
+    func setMenuBarIconVisible(_ visible: Bool) {
+        shelf.settings.showsMenuBarIcon = visible
+        statusItem.setVisible(visible)
     }
 }

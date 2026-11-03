@@ -283,13 +283,13 @@ struct TrayContentView: View {
     /// in that corner.
     private var header: some View {
         HStack(spacing: 6) {
-            Image(nsImage: TrayIcon.menuBarImage())
+            Image(nsImage: MenuBarIcon.menuBarImage())
                 .renderingMode(.template)
                 .interpolation(.high)
                 .foregroundStyle(palette.ink(0.9))
                 .accessibilityHidden(true)
 
-            Text("Tray")
+            Text("Cue")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(palette.primaryInk)
                 .lineLimit(1)
@@ -451,7 +451,7 @@ struct TrayContentView: View {
 
     private var accessibilityLabel: String {
         store.isEmpty
-            ? "Tray, empty"
-            : "Tray containing \(store.count) item\(store.count == 1 ? "" : "s")"
+            ? "Shelf, empty"
+            : "Shelf containing \(store.count) item\(store.count == 1 ? "" : "s")"
     }
 }

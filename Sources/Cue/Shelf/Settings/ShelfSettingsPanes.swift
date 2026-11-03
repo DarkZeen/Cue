@@ -1,107 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// The four pages of the settings window.
-enum SettingsPane: String, CaseIterable, Identifiable {
-    case general
-    case tray
-    case privacy
-    case about
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .tray: "Tray"
-        case .privacy: "Privacy"
-        case .about: "About"
-        }
-    }
-
-    /// Which page opens first. Always General, unless a debug build was asked
-    /// to open somewhere else.
-    static var initialSelection: SettingsPane {
-        guard let requested = Diagnostics.debugSettingsPane,
-              let pane = SettingsPane(rawValue: requested)
-        else { return .general }
-        return pane
-    }
-
-    var icon: String {
-        switch self {
-        case .general: "gearshape"
-        case .tray: "tray"
-        case .privacy: "hand.raised"
-        case .about: "info.circle"
-        }
-    }
-}
-
-// MARK: - General
-
-struct ShelfGeneralPane: View {
-    let settings: ShelfSettingsStore
-    let launchAtLogin: LaunchAtLoginService
-    let onLaunchAtLoginChanged: (Bool) -> Void
-    let onMenuBarIconChanged: (Bool) -> Void
-    let onOpenLoginItems: () -> Void
-
-    var body: some View {
-        SettingsPaneLayout(lead: "How Tray behaves when your Mac starts, and where you can reach it.") {
-            SettingsCard(
-                footnote: "With the icon hidden, the tray at the top of the screen still works exactly the same."
-            ) {
-                SettingsRow(
-                    icon: "power",
-                    title: "Launch at login",
-                    description: "Start Tray automatically when you log in."
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { launchAtLogin.state.isEffectivelyEnabled },
-                        set: { onLaunchAtLoginChanged($0) }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-
-                // Registration fails for three specific reasons, and each one
-                // has something the user can actually do about it. Saying which
-                // one beats a toggle that quietly disagrees with the system
-                // (§34).
-                if let explanation = launchAtLogin.state.explanation {
-                    SettingsCallout(
-                        icon: "exclamationmark.triangle.fill",
-                        tint: .orange,
-                        text: explanation,
-                        actionTitle: launchAtLogin.state == .requiresApproval
-                            ? "Open Login Items"
-                            : nil,
-                        action: launchAtLogin.state == .requiresApproval
-                            ? onOpenLoginItems
-                            : nil
-                    )
-                }
-
-                SettingsRowDivider()
-
-                SettingsRow(
-                    icon: "menubar.arrow.up.rectangle",
-                    title: "Show menu bar icon",
-                    description: "The menu bar is how you reach Settings and Quit."
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { settings.showsMenuBarIcon },
-                        set: { onMenuBarIconChanged($0) }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Tray
 
 struct TrayPane: View {
@@ -260,7 +159,7 @@ SettingsRow(
 
             SettingsCard(
                 title: "Behaviour",
-                footnote: "The shelf holds up to \(TrayStore.capacity) items and always empties when Tray quits."
+                footnote: "The shelf holds up to \(TrayStore.capacity) items and always empties when Cue quits."
             ) {
 SettingsRow(
                     icon: "clock.arrow.circlepath",
@@ -328,7 +227,7 @@ SettingsRow(
 
             SettingsCard(
                 title: "Appearance",
-                footnote: "Tray keeps its own look rather than following the system between light and dark. Island is the Dynamic Island's own opaque black."
+                footnote: "The shelf keeps its own look rather than following the system between light and dark. Island is the Dynamic Island's own opaque black."
             ) {
 SettingsRow(
                     icon: "circle.lefthalf.filled",
@@ -514,18 +413,20 @@ SettingsRow(
 
 // MARK: - Privacy
 
-/// Modelled on the transparency page every good menu bar app now has — except
-/// that Tray's version is a list of permissions it does *not* want.
+/// What Cue asks of macOS, what it talks to, and what it keeps.
 ///
-/// It is worth a page rather than a sentence: an app that lives at the top of
-/// your screen and touches your files has to answer the question, and the
-/// answer here is unusually short (§58).
+/// Tray's page was a list of permissions it did not want, and most of that
+/// list is still true of Cue — the shortcut is a registered hotkey, not a
+/// keyboard tap, and the shelf only ever sees files dragged onto it. What
+/// changed is the network: Cue finds and plays music through Google, and
+/// checks GitHub for updates. Said plainly here, because the page exists to
+/// answer the question honestly (§58; docs/PRIVACY.md has the long form).
 struct PrivacyPane: View {
     var body: some View {
-        SettingsPaneLayout(lead: "Tray knows about the files you drag onto it, and nothing else.") {
+        SettingsPaneLayout(lead: "Cue talks to Google to find and play your music, and to nobody else about it.") {
             SettingsCard(
                 title: "Permissions",
-                footnote: "The only thing Tray asks macOS for is a login item, and only if you switch that on."
+                footnote: "Cue asks macOS for a login item if you switch that on, and to hear its own audio if you let the mark move with the music."
             ) {
                 ForEach(Array(Self.permissions.enumerated()), id: \.offset) { index, permission in
                     if index > 0 { SettingsRowDivider() }
@@ -535,19 +436,19 @@ struct PrivacyPane: View {
                         description: permission.note,
                         tint: .secondary
                     ) {
-                        SettingsStatus(text: "Not needed", colour: .green)
+                        SettingsStatus(text: permission.status, colour: permission.colour)
                     }
                 }
             }
 
             SettingsCard(title: "Data") {
                 SettingsRow(
-                    icon: "network.slash",
+                    icon: "network",
                     title: "Network",
-                    description: "Tray opens no connections. No account, no analytics, no update check.",
+                    description: "Google's own hosts, to sign in, search and play. GitHub's release page, to check for updates, which you can switch off.",
                     tint: .secondary
                 ) {
-                    SettingsStatus(text: "Never used", colour: .green)
+                    SettingsStatus(text: "Google, GitHub", colour: .secondary)
                 }
 
                 SettingsRowDivider()
@@ -555,10 +456,10 @@ struct PrivacyPane: View {
                 SettingsRow(
                     icon: "internaldrive",
                     title: "What gets stored",
-                    description: "Only the settings on these pages. Which files you stashed is never written down.",
+                    description: "Settings and pinned tiles, and your sign-in in the keychain. Which files you stashed is never written down.",
                     tint: .secondary
                 ) {
-                    SettingsStatus(text: "Settings only", colour: .secondary)
+                    SettingsStatus(text: "On this Mac", colour: .green)
                 }
 
                 SettingsRowDivider()
@@ -579,23 +480,32 @@ struct PrivacyPane: View {
         let name: String
         let icon: String
         let note: String
+        var status = "Not needed"
+        var colour: Color = .green
     }
 
     private static let permissions: [Permission] = [
         .init(
-            name: "Accessibility",
+            name: "Accessibility and Input Monitoring",
             icon: "accessibility",
-            note: "Tray never reads your input or controls other windows."
+            note: "The shortcut is registered with macOS; Cue never sees any other keystroke."
         ),
         .init(
             name: "Screen Recording",
             icon: "rectangle.dashed.badge.record",
-            note: "Tray never looks at what is on your screen."
+            note: "Cue never looks at what is on your screen."
         ),
         .init(
             name: "Full Disk Access",
             icon: "externaldrive",
-            note: "Tray only ever sees files you drag onto it."
+            note: "The shelf only ever sees files you drag onto it."
+        ),
+        .init(
+            name: "Audio",
+            icon: "waveform",
+            note: "Only Cue's own sound, only to move the mark, and only if you switch it on. Never recorded.",
+            status: "Optional",
+            colour: .secondary
         ),
         .init(
             name: "Camera and Microphone",
@@ -609,16 +519,16 @@ struct PrivacyPane: View {
 
 struct AboutPane: View {
     var body: some View {
-        SettingsPaneLayout(lead: "A shelf at the top of your screen. Drag files in, drag them back out.") {
+        SettingsPaneLayout(lead: "A speed dial for YouTube Music, and a shelf at the top of your screen.") {
             SettingsCard {
                 HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage ?? TrayIcon.menuBarImage())
+                    Image(nsImage: NSApp.applicationIconImage ?? MenuBarIcon.menuBarImage())
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 56, height: 56)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Tray")
+                        Text("Cue")
                             .font(.system(size: 17, weight: .semibold))
                         Text(Self.versionString)
                             .font(.system(size: 11))
@@ -653,7 +563,7 @@ struct AboutPane: View {
         let url: URL
     }
 
-    private static let repository = "https://github.com/DarkZeen/Tray"
+    private static let repository = "https://github.com/DarkZeen/Cue"
 
     private static let links: [Link] = [
         .init(
@@ -664,9 +574,9 @@ struct AboutPane: View {
         ),
         .init(
             title: "What changed",
-            note: "The changelog for every release.",
+            note: "The notes for every release.",
             icon: "list.bullet.rectangle",
-            url: URL(string: "\(repository)/blob/main/CHANGELOG.md")!
+            url: URL(string: "\(repository)/releases")!
         ),
         .init(
             title: "Report a problem",
