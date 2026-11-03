@@ -173,6 +173,23 @@ struct TrayAppearanceTests {
             }
             try png.write(to: output.appendingPathComponent("\(name).png"))
         }
+
+        // Opened, the header carries the cover and its buttons beside the
+        // housing — on a notched display, where that strip is tightest.
+        for (name, items) in [("27-shelf-open-playing", 3), ("28-shelf-open-playing-empty", 0)] {
+            let view = trayView(
+                geometry: notched,
+                items: items,
+                state: .expanded,
+                nowPlaying: .fixed(playing, artwork: cover)
+            )
+            guard let png = await Self.rasterize(view, size: CGSize(width: 820, height: 220), settle: 1.0)
+            else {
+                Issue.record("could not render \(name)")
+                continue
+            }
+            try png.write(to: output.appendingPathComponent("\(name).png"))
+        }
     }
 
     /// The same source, drawing another of the marks in its right wing.

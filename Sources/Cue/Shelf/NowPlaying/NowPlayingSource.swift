@@ -40,6 +40,7 @@ struct NowPlayingSource {
     var prefetchArtwork: @MainActor (URL) -> Void
     var togglePlayPause: @MainActor () -> Void
     var next: @MainActor () -> Void
+    var previous: @MainActor () -> Void = {}
     /// Video ID in, whether the page took it out.
     var like: @MainActor (String) async -> Bool
     /// Which mark the right wing draws — the one chosen in Settings.

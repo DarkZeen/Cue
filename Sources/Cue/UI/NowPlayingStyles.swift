@@ -429,6 +429,8 @@ struct BarsIndicator: View {
     /// case the bars move to a rhythm of their own.
     var bands: [Double] = []
     let isAnimating: Bool
+    /// White everywhere but the notch, where the mark takes the cover's colour.
+    var tint: Color = .white
 
     /// Bands either side of the centre. Nine gives seventeen bars, which is
     /// enough to read as a spectrum and few enough that each stays visible at
@@ -448,7 +450,7 @@ struct BarsIndicator: View {
         HStack(alignment: .center, spacing: Self.spacing) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    .fill(.white.opacity(opacity(index)))
+                    .fill(tint.opacity(opacity(index)))
                     .frame(width: Self.barWidth, height: barHeight(index))
             }
         }
@@ -551,6 +553,8 @@ struct OrbitIndicator: View {
     var level: Double = 0
     var bands: [Double] = []
     let isAnimating: Bool
+    /// White everywhere but the notch, where the mark takes the cover's colour.
+    var tint: Color = .white
 
     /// Radius from centre, size, angular speed, where it starts.
     ///
@@ -571,7 +575,7 @@ struct OrbitIndicator: View {
             // The threshold has to sit where a lone blob still clears it after
             // the blur has spread it out. Too high and the small blobs vanish;
             // too low and everything is one puddle.
-            context.addFilter(.alphaThreshold(min: 0.42, color: .white))
+            context.addFilter(.alphaThreshold(min: 0.42, color: tint))
 
             context.drawLayer { layer in
                 layer.addFilter(.blur(radius: 2.4))

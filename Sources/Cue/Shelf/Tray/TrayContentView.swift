@@ -151,7 +151,7 @@ struct TrayContentView: View {
 
     private var shape: TrayShape {
         if isOpen {
-            return .expanded(
+            var open = TrayShape.expanded(
                 screenWidth: geometry.frame.width,
                 screenHeight: geometry.usableHeight,
                 cutout: cutout,
@@ -160,6 +160,17 @@ struct TrayContentView: View {
                 customHeight: settings.customHeight,
                 item: contentMetrics
             )
+            // While Cue plays, the header carries the cover and its buttons
+            // beside the housing, so the shelf is never narrower than they
+            // need — whatever size it was set to. Never past the display.
+            if headerTrack != nil {
+                let needed = cutout.width
+                    + 2 * (settings.headerInset
+                        + ShelfPlayerControls.width(band: cutout.height, buttonSize: headerButton)
+                        + TrayMetrics.headerGap)
+                open.width = min(max(open.width, needed), geometry.frame.width - 24)
+            }
+            return open
         }
         if pillTrack != nil {
             return .nowPlaying(cutout: cutout)
@@ -172,6 +183,13 @@ struct TrayContentView: View {
     /// Reads the player through the source, which is a dependency SwiftUI
     /// tracks — so music starting or stopping reshapes the shelf. Only the
     /// track: the audio level is read further down, in the mark itself.
+    /// The track the open shelf's header plays, on the display that shows
+    /// what is playing.
+    private var headerTrack: NowPlayingSource.Track? {
+        guard showsNowPlaying, let nowPlaying else { return nil }
+        return nowPlaying.track()
+    }
+
     private var pillTrack: NowPlayingSource.Track? {
         guard !isOpen, showsNowPlaying, let nowPlaying else { return nil }
         return nowPlaying.track()
@@ -273,29 +291,24 @@ struct TrayContentView: View {
         .padding(.bottom, TrayMetrics.bottomInset)
     }
 
-    /// The name in one corner, the way out in the other, both on the menu
-    /// bar's own line.
+    /// What is playing in one corner, the way out in the other, both on the
+    /// menu bar's own line.
     ///
-    /// The app's own glyph rather than an SF Symbol of a tray: it is the mark
-    /// in the menu bar, and a shelf that introduces itself with someone else's
-    /// picture of a shelf is a shelf with no face. The chevron closes, and the
-    /// gear sits outermost because Settings is the thing people go looking for
-    /// in that corner.
+    /// No name and no logo: the shelf is the top of the screen, and what it
+    /// says first is the music — the cover and its three buttons, the closed
+    /// shelf's wings opened out. With nothing playing, the corner holds only
+    /// how many files there are. The chevron closes, and the gear sits
+    /// outermost because Settings is the thing people go looking for there.
     private var header: some View {
         HStack(spacing: 6) {
-            Image(nsImage: MenuBarIcon.menuBarImage())
-                .renderingMode(.template)
-                .interpolation(.high)
-                .foregroundStyle(palette.ink(0.9))
-                .accessibilityHidden(true)
-
-            Text("Cue")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(palette.primaryInk)
-                .lineLimit(1)
-                .padding(.leading, 1)
-
-            if !store.isEmpty {
+            if let nowPlaying, let track = headerTrack {
+                ShelfPlayerControls(
+                    source: nowPlaying,
+                    track: track,
+                    band: cutout.height,
+                    buttonSize: headerButton
+                )
+            } else if !store.isEmpty {
                 Text("\(store.count)")
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()

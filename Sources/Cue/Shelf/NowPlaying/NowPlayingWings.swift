@@ -155,7 +155,12 @@ struct NowPlayingWings<Centre: View>: View {
     // MARK: - The mark
 
     private var waveWing: some View {
-        PillWave(source: source, isPlaying: track.isPlaying, tint: markColour)
+        PillWave(
+            source: source,
+            isPlaying: track.isPlaying,
+            tint: markColour,
+            slot: CGSize(width: artSize, height: cutout.height)
+        )
             .frame(width: artSize, height: cutout.height)
             .padding(.horizontal, padding)
             .contentShape(.rect)
@@ -277,6 +282,96 @@ private struct PillActions: ViewModifier {
     }
 }
 
+// MARK: - The open shelf
+
+/// What is playing, in the open shelf's header: the cover and three buttons,
+/// on the menu bar's line to the left of the housing.
+///
+/// The closed shelf's wings, opened out. The music lives in the shelf rather
+/// than in a page or a panel of its own — a tile and the three things people
+/// reach for — and the cover still likes the song on a double click.
+struct ShelfPlayerControls: View {
+    let source: NowPlayingSource
+    let track: NowPlayingSource.Track
+    /// The header's band, which sets the cover's size.
+    let band: CGFloat
+    let buttonSize: CGFloat
+
+    private static var logger: Logger { Diagnostics.logger("now-playing") }
+
+    /// Wide enough for the cover and the three buttons, so the shelf can make
+    /// room for them beside the housing.
+    static func width(band: CGFloat, buttonSize: CGFloat) -> CGFloat {
+        leadingClearance + artSize(forBand: band) + spacing + buttonSize * 3 + buttonSpacing * 2
+    }
+
+    /// In from the corner, so the cover clears the curve where the shelf
+    /// meets the bezel — the header's own padding is sized for a button's
+    /// empty margin, and a cover has none.
+    private static let leadingClearance: CGFloat = 6
+
+    private static let spacing: CGFloat = 8
+    private static let buttonSpacing: CGFloat = 2
+
+    private static func artSize(forBand band: CGFloat) -> CGFloat {
+        (band * 0.625).rounded()
+    }
+
+    var body: some View {
+        let artSize = Self.artSize(forBand: band)
+        let image = source.artwork(track.artworkURL)
+
+        HStack(spacing: Self.spacing) {
+            PillArt(
+                image: image,
+                size: artSize,
+                cornerRadius: (artSize * 0.27).rounded()
+            )
+            .overlay {
+                PillClickTarget(onSingle: nil, onDouble: like, toolTip: toolTip)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(track.artist.map { "Album art, \(track.title) by \($0)" } ?? "Album art, \(track.title)")
+            .accessibilityAction(named: "Like") { like() }
+            .task(id: track.artworkURL) {
+                if image == nil, let url = track.artworkURL { source.prefetchArtwork(url) }
+            }
+
+            HStack(spacing: Self.buttonSpacing) {
+                TrayIconButton(symbol: "backward.fill", title: "Previous", size: buttonSize) {
+                    source.previous()
+                }
+                TrayIconButton(
+                    symbol: track.isPlaying ? "pause.fill" : "play.fill",
+                    title: track.isPlaying ? "Pause" : "Play",
+                    size: buttonSize
+                ) {
+                    source.togglePlayPause()
+                }
+                TrayIconButton(symbol: "forward.fill", title: "Next", size: buttonSize) {
+                    source.next()
+                }
+            }
+        }
+        .padding(.leading, Self.leadingClearance)
+        .fixedSize()
+    }
+
+    private var toolTip: String {
+        track.artist.map { "\(track.title) — \($0)" } ?? track.title
+    }
+
+    private func like() {
+        let videoID = track.videoID
+        let like = source.like
+        Task {
+            if !(await like(videoID)) {
+                Self.logger.notice("Like for \(videoID, privacy: .public) did not reach the page.")
+            }
+        }
+    }
+}
+
 // MARK: - The cover
 
 /// The cover, a small rounded tile. A quiet placeholder until it arrives —
@@ -330,6 +425,10 @@ private struct PillWave: View {
     let source: NowPlayingSource
     let isPlaying: Bool
     let tint: Color
+    /// The room the wing gives the mark: the cover's width, the housing's
+    /// height. Handed in rather than measured — measured from inside, a mark
+    /// drawn at its own size reports its own size, and the wide ones overflow.
+    let slot: CGSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -363,39 +462,37 @@ private struct PillWave: View {
                 )
             default:
                 // The other marks are drawn at a fixed size of their own, so
-                // they are drawn at it and shrunk to the wing. Only the wave
-                // takes the cover's colour; the others keep their own.
+                // they are drawn at it and shrunk to the wing.
                 Group {
                     switch style {
                     case .disc:
+                        // Keeps its own colours: the label is the record's.
                         DiscIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                     case .bars:
-                        BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                        BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, tint: tint)
                     default:
-                        OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                        OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, tint: tint)
                     }
                 }
                 .frame(width: style.markWidth, height: Self.markHeight)
                 .scaleEffect(scale(for: style))
+                .frame(width: slot.width, height: slot.height)
             }
         }
         // Paused is dimmed rather than hidden, the way the plaque does it: the
         // wings stay, the mark stops being lit.
         .opacity(isPlaying ? 1 : 0.42)
         .animation(.easeOut(duration: 0.25), value: isPlaying)
-        .onGeometryChange(for: CGSize.self, of: \.size) { slot = $0 }
     }
 
     /// The height every non-wave mark is drawn at (`NowPlayingIndicator`).
     private static let markHeight: CGFloat = 26
 
-    /// The wing's slot, measured, so a mark drawn at its own size can be
-    /// shrunk to fit it — wide marks by their width, tall ones by their height.
-    @State private var slot: CGSize = .zero
-
+    /// Shrinks a mark drawn at its own size to the wing — wide marks by their
+    /// width, tall ones by their height, with a little air above and below.
     private func scale(for style: PlaqueAnimation) -> CGFloat {
         guard slot.width > 0, slot.height > 0 else { return 1 }
-        return min(1, slot.width / style.markWidth, (slot.height - 6) / Self.markHeight)
+        return min(1, slot.width / style.markWidth, (slot.height - 10) / Self.markHeight)
     }
 }
 

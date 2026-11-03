@@ -65,6 +65,10 @@ nonisolated enum TrayMetrics {
         max(18, min(28, band - 4))
     }
 
+    /// Clear space between the header's left corner and the housing, so what
+    /// is playing never runs under the camera.
+    static let headerGap: CGFloat = 8
+
 
     /// What "Spacious" buys over "Compact": the island's own 40pt.
     static let spaciousExtra: CGFloat = 40
