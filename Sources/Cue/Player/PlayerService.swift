@@ -894,12 +894,26 @@ final class PlayerService: NSObject {
               return true;
             },
 
+            // The video the player has loaded, whatever page it is on.
+            // The address only carries one on a watch page: a track restored
+            // into the player bar at launch, or played from there, plays on
+            // the home page with no "v" in sight. The player knows anyway.
+            currentVideoId() {
+              const player = document.getElementById('movie_player');
+              const data = player && typeof player.getVideoData === 'function'
+                ? player.getVideoData()
+                : null;
+              return (data && data.video_id)
+                || new URLSearchParams(location.search).get('v')
+                || '';
+            },
+
             async rate(videoId, rating) {
               // The track that is playing goes through the player bar's own
               // thumbs, so the bar shows it and a dislike skips the song the
               // way it does when pressed there. The buttons toggle, hence the
               // check: pressing Like on a liked song would un-like it.
-              const current = new URLSearchParams(location.search).get('v');
+              const current = this.currentVideoId();
               const thumbs = deep('ytmusic-player-bar ytmusic-like-button-renderer');
               if (videoId === current && thumbs) {
                 if (thumbs.getAttribute('like-status') === rating) { return true; }
@@ -941,11 +955,11 @@ final class PlayerService: NSObject {
                 signedIn: !!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN')),
                 isPlaying: playing,
                 muted: !!media && media.muted,
-                // Read from the address rather than from what Cue asked to
-                // play. A playlist advances on its own, and the station should
+                // Read from the page rather than from what Cue asked to play.
+                // A playlist advances on its own, and the station should
                 // follow the track actually sounding — not the one clicked
                 // twenty minutes ago.
-                videoId: new URLSearchParams(location.search).get('v') || ''
+                videoId: this.currentVideoId()
               };
             }
           };
