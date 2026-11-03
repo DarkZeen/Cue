@@ -102,34 +102,81 @@ final class HeadphonesWatcher {
     static let showFor: Duration = .seconds(4)
 
     private var lastDevice: AudioObjectID = 0
+    /// The devices the system had at the last look, so ones that reappear —
+    /// AirPods coming back from a phone — can be told apart.
+    private var knownDevices: Set<AudioObjectID> = []
+    /// When each set of headphones was last announced, by name, so the two
+    /// signals for one arrival announce it once.
+    private var lastAnnounced: [String: ContinuousClock.Instant] = [:]
     private var clearTask: Task<Void, Never>?
     private let logger = Diagnostics.logger("headphones")
 
+    /// Two signals, because an arrival is not always a change of output.
+    ///
+    /// AirPods that leave for a phone can stay the Mac's chosen output while
+    /// they are away, so when they come back the output has not "changed" —
+    /// but they had dropped out of the system's device list, and they come
+    /// back into it. So: the output switching to headphones, or headphones
+    /// reappearing and being the output. Whichever comes first announces it.
     func start() {
         // Whatever is playing at launch is not an arrival.
         lastDevice = Self.defaultOutputDevice() ?? 0
+        knownDevices = Set(Self.allDevices())
 
-        var address = Self.defaultOutputAddress
+        listen(to: Self.defaultOutputAddress) { $0.outputChanged() }
+        listen(to: Self.devicesAddress) { $0.devicesChanged() }
+    }
+
+    private func listen(
+        to address: AudioObjectPropertyAddress,
+        _ handler: @escaping @MainActor (HeadphonesWatcher) -> Void
+    ) {
+        var address = address
         let status = AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
             &address,
             DispatchQueue.main
         ) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.outputChanged() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                handler(self)
+            }
         }
         if status != noErr {
-            logger.error("Could not watch the default output device: \(status, privacy: .public)")
+            logger.error("Could not watch audio devices: \(status, privacy: .public)")
         }
     }
 
     private func outputChanged() {
         guard let device = Self.defaultOutputDevice(), device != lastDevice else { return }
         lastDevice = device
+        announce(device)
+    }
 
+    private func devicesChanged() {
+        let now = Set(Self.allDevices())
+        let returned = now.subtracting(knownDevices)
+        knownDevices = now
+        guard !returned.isEmpty else { return }
+
+        // The output is re-chosen a beat after a device appears.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, let output = Self.defaultOutputDevice(), returned.contains(output) else { return }
+            self.lastDevice = output
+            self.announce(output)
+        }
+    }
+
+    private func announce(_ device: AudioObjectID) {
         guard isEnabled,
               Self.isBluetooth(device),
               let name = Self.name(of: device)
         else { return }
+
+        let clock = ContinuousClock()
+        if let last = lastAnnounced[name], clock.now - last < .seconds(5) { return }
+        lastAnnounced[name] = clock.now
 
         // A kind learned from an earlier report, so headphones named by their
         // owner show as what they are from the first frame.
@@ -179,6 +226,24 @@ final class HeadphonesWatcher {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
+    }
+
+    private static var devicesAddress: AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+    }
+
+    private static func allDevices() -> [AudioObjectID] {
+        var address = devicesAddress
+        var size = UInt32(0)
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr else { return [] }
+        var devices = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &address, 0, nil, &size, &devices) == noErr else { return [] }
+        return devices
     }
 
     private static func defaultOutputDevice() -> AudioObjectID? {

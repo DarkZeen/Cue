@@ -84,9 +84,9 @@ struct PartyBorder: View {
     }
 }
 
-/// The pill's shoulders, sides and bottom, `gap` outside its surface: an open
-/// line that starts at the screen's top edge beside one shoulder and ends at
-/// it beside the other, never running along the edge itself.
+/// The pill's sides and bottom, `gap` outside its surface, flaring out over
+/// the top edge at each end in the open shelf's own curve: an open line that
+/// comes in from above the screen, frames the pill, and leaves the same way.
 ///
 /// Traced from the same numbers `TraySurface` draws with — its shoulder and
 /// bottom-corner rules — so it follows the black at a constant distance.
@@ -109,39 +109,23 @@ struct PartyOutline: Shape {
         let radius = bottom + gap
         let top = rect.minY + shoulder
 
-        // The shoulders are concave quarter circles centred out beside the
-        // shape, at the wall's top; outside them is toward that centre, so the
-        // offset curve has the same centre and a radius `gap` smaller.
-        let shoulderRadius = shoulder - gap
-        let rightShoulder = CGPoint(x: rect.maxX, y: top)
-        let leftShoulder = CGPoint(x: rect.minX, y: top)
-
-        // Each end leaves the screen rather than stopping on it: halfway up
-        // the shoulder the curve is heading out at forty-five degrees, so the
-        // line carries straight on along that heading until it is past the
-        // top edge — under the bezel, where its end is never seen.
-        let diagonal = 0.5.squareRoot()
-        func exit(from point: CGPoint, outward: CGFloat) -> CGPoint {
-            let rise = point.y - (rect.minY - 8)
-            return CGPoint(x: point.x + outward * rise, y: point.y - rise)
-        }
-        let rightTurn = CGPoint(
-            x: rightShoulder.x - shoulderRadius * diagonal,
-            y: rightShoulder.y - shoulderRadius * diagonal
-        )
-        let leftTurn = CGPoint(
-            x: leftShoulder.x + shoulderRadius * diagonal,
-            y: leftShoulder.y - shoulderRadius * diagonal
-        )
+        // Each end flares out over the top edge the way the open shelf meets
+        // the bezel: a quarter circle the size of the shelf's own shoulder,
+        // rising from the wall and turning outward until it is level — just
+        // above the screen, so the line runs off it rather than stopping on
+        // it or running along it. Larger than the pill's own shoulder and
+        // centred further out, so it clears the black flare all the way up.
+        let margin = gap + 1
+        let flare = min(TrayMetrics.shoulder, max(0, floor - radius - (rect.minY - margin)))
+        let turn = rect.minY - margin + flare
 
         var path = Path()
-        if shoulderRadius > 0 {
-            path.move(to: exit(from: rightTurn, outward: 1))
-            path.addLine(to: rightTurn)
+        if flare > 0 {
+            path.move(to: CGPoint(x: right + flare, y: rect.minY - margin))
             path.addArc(
-                center: rightShoulder,
-                radius: shoulderRadius,
-                startAngle: .degrees(225),
+                center: CGPoint(x: right + flare, y: turn),
+                radius: flare,
+                startAngle: .degrees(270),
                 endAngle: .degrees(180),
                 clockwise: true
             )
@@ -164,16 +148,15 @@ struct PartyOutline: Shape {
             endAngle: .degrees(180),
             clockwise: false
         )
-        path.addLine(to: CGPoint(x: left, y: top))
-        if shoulderRadius > 0 {
+        path.addLine(to: CGPoint(x: left, y: flare > 0 ? turn : top))
+        if flare > 0 {
             path.addArc(
-                center: leftShoulder,
-                radius: shoulderRadius,
+                center: CGPoint(x: left - flare, y: turn),
+                radius: flare,
                 startAngle: .degrees(0),
-                endAngle: .degrees(315),
+                endAngle: .degrees(270),
                 clockwise: true
             )
-            path.addLine(to: exit(from: leftTurn, outward: -1))
         }
         return path
     }

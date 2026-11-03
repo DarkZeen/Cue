@@ -103,14 +103,14 @@ struct ArrivalBorder: View {
     let shoulder: CGFloat
 
     var body: some View {
-        let width: CGFloat = 2
+        let width: CGFloat = 1.3
         let outline = PartyOutline(cornerRadius: cornerRadius, shoulder: shoulder, gap: width / 2 + 1)
 
         ZStack {
             outline
                 .stroke(Color.green, style: StrokeStyle(lineWidth: width * 1.6, lineCap: .round))
-                .blur(radius: 4)
-                .opacity(0.6)
+                .blur(radius: 3)
+                .opacity(0.45)
             outline
                 .stroke(Color.green, style: StrokeStyle(lineWidth: width, lineCap: .round))
         }
