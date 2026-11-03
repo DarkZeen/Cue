@@ -86,7 +86,8 @@ final class AppState {
             prefetchArtwork: { url in thumbnails.prefetch(url, soon: true) },
             togglePlayPause: { player.togglePlayPause() },
             next: { player.next() },
-            like: { videoID in await player.rate(videoID: videoID, .like) }
+            like: { videoID in await player.rate(videoID: videoID, .like) },
+            markStyle: { settings.plaqueAnimation }
         )
     }
 

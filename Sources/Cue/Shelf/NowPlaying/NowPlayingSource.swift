@@ -42,6 +42,8 @@ struct NowPlayingSource {
     var next: @MainActor () -> Void
     /// Video ID in, whether the page took it out.
     var like: @MainActor (String) async -> Bool
+    /// Which mark the right wing draws — the one chosen in Settings.
+    var markStyle: @MainActor () -> PlaqueAnimation = { .wave }
     /// The covers' colours, kept for as long as the source is: the wings are
     /// rebuilt every time the shelf opens and closes, and a colour that had
     /// to be worked out again each time would flash white first.

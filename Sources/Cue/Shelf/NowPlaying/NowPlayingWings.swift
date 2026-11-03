@@ -336,28 +336,66 @@ private struct PillWave: View {
     private var isAnimating: Bool { isPlaying && !reduceMotion }
 
     var body: some View {
+        let style = source.markStyle()
+
         // Capped at 60: this is permanently on screen while anything plays,
         // and a 12pt mark gains nothing from a 120Hz display.
         TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !isAnimating)) { context in
-            WaveIndicator(
-                elapsed: context.date.timeIntervalSinceReferenceDate,
-                // Not read at all while the mark is still — paused, or under
-                // Reduce Motion — so sixty audio updates a second do not
-                // redraw a mark that is not moving.
-                level: isAnimating ? source.level() : 0,
-                bands: isAnimating ? source.bands() : [],
-                isAnimating: isAnimating,
-                height: 12,
-                tint: tint,
-                // Kept inside the housing: at full excursion the centre shape
-                // would reach past a 32pt menu bar.
-                excursion: 0.6
-            )
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            // Not read at all while the mark is still — paused, or under
+            // Reduce Motion — so sixty audio updates a second do not redraw a
+            // mark that is not moving.
+            let level = isAnimating ? source.level() : 0
+            let bands = isAnimating ? source.bands() : []
+
+            switch style {
+            case .wave:
+                WaveIndicator(
+                    elapsed: elapsed,
+                    level: level,
+                    bands: bands,
+                    isAnimating: isAnimating,
+                    height: 12,
+                    tint: tint,
+                    // Kept inside the housing: at full excursion the centre
+                    // shape would reach past a 32pt menu bar.
+                    excursion: 0.6
+                )
+            default:
+                // The other marks are drawn at a fixed size of their own, so
+                // they are drawn at it and shrunk to the wing. Only the wave
+                // takes the cover's colour; the others keep their own.
+                Group {
+                    switch style {
+                    case .disc:
+                        DiscIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                    case .bars:
+                        BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                    default:
+                        OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                    }
+                }
+                .frame(width: style.markWidth, height: Self.markHeight)
+                .scaleEffect(scale(for: style))
+            }
         }
         // Paused is dimmed rather than hidden, the way the plaque does it: the
         // wings stay, the mark stops being lit.
         .opacity(isPlaying ? 1 : 0.42)
         .animation(.easeOut(duration: 0.25), value: isPlaying)
+        .onGeometryChange(for: CGSize.self, of: \.size) { slot = $0 }
+    }
+
+    /// The height every non-wave mark is drawn at (`NowPlayingIndicator`).
+    private static let markHeight: CGFloat = 26
+
+    /// The wing's slot, measured, so a mark drawn at its own size can be
+    /// shrunk to fit it — wide marks by their width, tall ones by their height.
+    @State private var slot: CGSize = .zero
+
+    private func scale(for style: PlaqueAnimation) -> CGFloat {
+        guard slot.width > 0, slot.height > 0 else { return 1 }
+        return min(1, slot.width / style.markWidth, (slot.height - 6) / Self.markHeight)
     }
 }
 

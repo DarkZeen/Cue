@@ -134,6 +134,9 @@ struct TrayAppearanceTests {
             ("21-pill-no-cover", notchless, 0, .fixed(bare), .black),
             ("22-pill-light", notchless, 3, .fixed(playing, artwork: cover), .light),
             ("23-pill-graphite-paused", notched, 3, .fixed(paused, artwork: cover), .graphite),
+            ("24-pill-bars", notched, 3, Self.styled(.fixed(playing, artwork: cover), .bars), .black),
+            ("25-pill-disc", notched, 3, Self.styled(.fixed(playing, artwork: cover), .disc), .black),
+            ("26-pill-orbit", notched, 3, Self.styled(.fixed(playing, artwork: cover), .orbit), .black),
         ]
 
         // Thrown away. The first pill a test process hosts comes out with a
@@ -170,6 +173,13 @@ struct TrayAppearanceTests {
             }
             try png.write(to: output.appendingPathComponent("\(name).png"))
         }
+    }
+
+    /// The same source, drawing another of the marks in its right wing.
+    private static func styled(_ source: NowPlayingSource, _ style: PlaqueAnimation) -> NowPlayingSource {
+        var source = source
+        source.markStyle = { style }
+        return source
     }
 
     /// A cover with a clear colour and some structure: a deep blue ground,
