@@ -47,6 +47,8 @@ func row(_ style: PlaqueAnimation, listening: Bool) -> some View {
                         BarsIndicator(elapsed: moment, level: heard.level, bands: heard.bands, isAnimating: true)
                     case .orbit:
                         OrbitIndicator(elapsed: moment, level: heard.level, bands: heard.bands, isAnimating: true)
+                    case .island:
+                        IslandIndicator(elapsed: moment, level: heard.level, bands: heard.bands, isAnimating: true)
                     }
                 }
                 .frame(width: style.markWidth, height: 26)
@@ -61,6 +63,7 @@ func row(_ style: PlaqueAnimation, listening: Bool) -> some View {
                 case .disc: DiscIndicator(elapsed: 0, isAnimating: false)
                 case .bars: BarsIndicator(elapsed: 0, isAnimating: false)
                 case .orbit: OrbitIndicator(elapsed: 0, isAnimating: false)
+                case .island: IslandIndicator(elapsed: 0, isAnimating: false)
                 }
             }
             .frame(width: style.markWidth, height: 26)

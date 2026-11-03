@@ -11,6 +11,11 @@ first bar starts.
 Cue is the thirty seconds between *wanting* music and *having* music, and
 nothing else.
 
+It lives in the notch, too. While Cue plays, the notch grows a wing either side
+— the cover, and Cue's mark moving with the music — and the top of the screen is
+a shelf for files: throw one at it, go find the window you wanted, pull it back
+out. The shelf was a separate app called Tray; it is part of Cue now.
+
 ## What it needs
 
 macOS 26, and the Xcode Command Line Tools to build it. No Xcode, no Apple
@@ -63,10 +68,9 @@ and all but invisible, so picking a song starts the music and leaves you exactly
 where you were. Premium applies as it does on the web — no ads, background
 playback, higher bitrate — because it is the same player and the same account.
 
-What you get instead of a window is a small plaque in the top-right corner of
-the screen, over every app including full-screen ones: the record, previous,
-play/pause, next and mute. Scroll the speaker for volume. Click the record and
-the full player appears, on whatever is playing.
+What you get instead of a window is the notch: the cover on one side, the mark
+on the other, and the open shelf's header carries previous, play/pause and next.
+See [The notch](#the-notch).
 
 The full player is a real window when you want one — back, forward and Home in
 its toolbar, because a search result that is not in YouTube Music's catalogue
@@ -77,13 +81,16 @@ hides it; the music keeps going.
 The panel shows the same thing in miniature: while something is playing, Cue's
 mark moves in the corner of the search bar, and clicking it opens the player.
 
-That mark is the logo itself — the shapes from `Resources/CueLogo.svg`, used
-exactly as drawn. `Scripts/generate-logo.py` flattens the group transforms and
-normalises them into geometry the app and the icon both draw from, so the two
-can never drift apart. Edit the artwork and re-run the script; do not edit the
-generated files. Settings → Playback picks between four forms of it: the wave, a record under
-its arm with notes coming off it, a mirrored meter, and a ring of blobs that
-run together as they pass.
+That mark is the wave from `Resources/CueWave.svg`, used exactly as drawn.
+`Scripts/generate-logo.py` flattens the group transforms and normalises the
+artwork into geometry the app draws from, so the two can never drift apart.
+Edit the artwork and re-run the script; do not edit the generated files.
+Settings → Notch picks between five forms of it: the wave, a record under its
+arm with notes coming off it, a mirrored meter, a ring of blobs that run
+together as they pass, and Island — five thick bars, the way an iPhone shows
+music. "Reacts to" sets what the wave and Island answer to: each line its own
+part of the spectrum, the beat (the bass jumping past its recent level), or a
+slow swell with the volume.
 
 By default the motion is invented rather than measured — a swell underneath the
 individual movement, rates that share no common factor so the pattern has no
@@ -293,6 +300,47 @@ app — it is 26 pixels wide, it only appears while music is playing, and it has
 moved again by the time you have looked at it. It compiles the real views, not a
 copy, which is why the style structs are internal rather than file-private.
 
+## The notch
+
+While Cue's own player has a track, the closed shelf widens into a wing on each
+side of the camera housing — the same black shape growing, not a second one
+beside it. The cover sits in the left wing; the mark, tinted from the cover, in
+the right. Paused, the mark dims and stops; the wings stay.
+
+- **One click on the mark** plays or pauses. **Two** skip.
+- **Two clicks on the cover** like the song, and a heart springs out of it.
+- Pointing at a wing never opens the shelf, and clicking one never takes the
+  keyboard from the app you were typing in.
+
+**Party mode** (Settings → Notch) runs a line round the pill in the cover's two
+colours, flaring off the top edge the way the open shelf meets the bezel. It
+surges on the beat — there is no tempo detection; each frame it moves on by the
+music's energy and its kicks — and the mark's long lines take one colour, the
+short ones the other.
+
+**Headphones arriving** — AirPods connecting, or coming back from an iPhone —
+take the wings for four seconds: the device turning (AirPods Pro and Sony's
+WH-1000XM5 have pre-rendered models; others get the system's symbol), a battery
+ring for the emptier ear, and a green outline, which is optional. Then they sink
+into the notch and the music comes back out of it. The battery comes from the
+system's own Bluetooth report; nothing here needs a permission. AirPods coming
+back from a phone change neither the Mac's output nor its device list, so that
+case is recognised by what does happen — macOS re-announcing the output as the
+AirPods start playing after a silence — and is replayed from a real handover in
+`HandoverDetectorTests`.
+
+The pill shows on one display: the built-in notched one, otherwise the one with
+the menu bar. On displays without a notch the shelf draws a housing of its own.
+
+## The shelf
+
+Drag files at the top of the screen and the shelf opens to catch them; drag
+them back out into anything — Finder, a Save dialog, an upload field. Nothing
+moves on disk: the shelf holds a reference. Space Quick Looks, Delete removes,
+⌘C/⌘V copy and paste. Every display gets one. Settings → Shelf has its size,
+surface, and behaviour; the original design notes, specification and changelog
+are in [`docs/tray`](docs/tray/README.md).
+
 ## What it does not do
 
 It does not decode or download audio, hold a queue of its own, reimplement a
@@ -302,8 +350,11 @@ YouTube Music's job and it is already better at it.
 
 ## Privacy
 
-Cue talks to Google's own hosts and nowhere else. There is no analytics, no
-crash reporting, no server of its own. Tokens and the Music session cookie live
+Cue talks to Google's own hosts to sign in, search and play, and to GitHub's
+release page to check for updates (which you can switch off) — nowhere else.
+There is no analytics, no crash reporting, no server of its own. The shelf holds
+references to the files you drop on it and never writes down which they were;
+headphone batteries are read from the system's own Bluetooth report. Tokens and the Music session cookie live
 in the keychain; pinned tiles and preferences live in `UserDefaults`. Nothing
 logs a search query, a title, or any part of a credential unless you turn on
 `CUE_DEBUG_NETWORK` yourself in a debug build.

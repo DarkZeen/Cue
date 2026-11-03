@@ -19,7 +19,10 @@ struct NowPlayingIndicator: View {
     /// The spectrum, low to high. Empty unless the tap is running.
     var bands: [Double] = []
     var style: PlaqueAnimation = .wave
+    var reaction: MarkReaction = .frequencies
     let onOpen: () -> Void
+
+    @State private var beat = BeatFollower()
 
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -29,17 +32,20 @@ struct NowPlayingIndicator: View {
     var body: some View {
         TimelineView(.animation(paused: !isAnimating)) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
+            let kick = reaction == .beat ? beat.update(level: level, bands: bands, at: context.date) : 0
 
             Group {
                 switch style {
                 case .wave:
-                    WaveIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                    WaveIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, reaction: reaction, kick: kick)
                 case .disc:
                     DiscIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .bars:
                     BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .orbit:
                     OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                case .island:
+                    IslandIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, reaction: reaction, kick: kick)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so

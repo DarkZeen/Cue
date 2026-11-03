@@ -1,65 +1,120 @@
 import AppKit
 import SwiftUI
 
-/// The settings window.
+/// The settings window — Cue's, and since Tray moved in, the shelf's too.
 ///
-/// Three tabs, and the middle one is the only one that matters: without an
-/// OAuth client Cue cannot do anything at all, so Accounts is where a first
-/// run ends up and it is written as instructions rather than as a form.
+/// A sidebar and a detail pane, the shape macOS itself uses for settings, so
+/// nobody has to learn where anything is (§33, §55). Cue's three pages come
+/// first, then the shelf's, then the two pages that are about the whole app.
+/// Accounts still matters most: without an OAuth client Cue cannot do anything
+/// at all, so it is where a first run ends up, and it is written as
+/// instructions rather than as a form.
 struct SettingsView: View {
     @Bindable var settings: SettingsStore
+    let shelfSettings: ShelfSettingsStore
     let coordinator: LibraryCoordinator
     @Bindable var launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
     let player: PlayerService
-    let onResetMiniPlayer: () -> Void
     let onEditLayout: () -> Void
     let updates: UpdateService
     let onShowPlayer: () -> Void
+    /// Through the shelf, which records the wish as well as making the
+    /// registration — see `ShelfState.setLaunchAtLogin`.
+    let onLaunchAtLoginChanged: (Bool) -> Void
+    let onMenuBarIconChanged: (Bool) -> Void
 
-    @State private var selection: Pane = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
+    @State private var selection: Pane? = Pane(rawValue: Diagnostics.debugSettingsPane ?? "") ?? .general
 
-    /// Not named `Tab`: SwiftUI has its own, and it is the one being used below.
-    enum Pane: String {
+    /// Not named `Tab` or `Page`: SwiftUI has both.
+    enum Pane: String, CaseIterable, Identifiable {
         case general
         case accounts
         case tiles
+        case notch
+        case shelf
+        case privacy
+        case about
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .general: "General"
+            case .accounts: "Accounts"
+            case .tiles: "Grid"
+            case .notch: "Notch"
+            case .shelf: "Shelf"
+            case .privacy: "Privacy"
+            case .about: "About"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .general: "gearshape"
+            case .accounts: "person.crop.circle"
+            case .tiles: "square.grid.3x3"
+            case .notch: "waveform"
+            case .shelf: "tray"
+            case .privacy: "hand.raised"
+            case .about: "info.circle"
+            }
+        }
     }
 
     var body: some View {
-        TabView(selection: $selection) {
-            Tab(value: .general) {
-                GeneralPane(
-                    settings: settings,
-                    launchAtLogin: launchAtLogin,
-                    hotKey: hotKey,
-                    player: player,
-                    onResetMiniPlayer: onResetMiniPlayer,
-                    onEditLayout: onEditLayout,
-                    updates: updates
-                )
-            } label: {
-                Label("General", systemImage: "gearshape")
+        NavigationSplitView {
+            // The explicit ForEach form, not `List(data, selection:)` — the
+            // latter selects by element id, which does not match a binding of
+            // the element type itself.
+            List(selection: $selection) {
+                ForEach(Pane.allCases) { pane in
+                    Label(pane.title, systemImage: pane.icon)
+                        .tag(pane)
+                }
             }
-
-            Tab(value: .accounts) {
-                AccountsPane(
-                    settings: settings,
-                    coordinator: coordinator,
-                    onShowPlayer: onShowPlayer
-                )
-            } label: {
-                Label("Accounts", systemImage: "person.crop.circle")
-            }
-
-            Tab(value: .tiles) {
-                TilesPane(settings: settings, coordinator: coordinator)
-            } label: {
-                Label("Grid", systemImage: "square.grid.3x3")
-            }
+            .navigationSplitViewColumnWidth(SettingsMetrics.sidebarWidth)
+        } detail: {
+            detail
+                .frame(minWidth: SettingsMetrics.detailWidth)
+                .navigationTitle(selection?.title ?? "Settings")
         }
-        .tabViewStyle(.tabBarOnly)
-        .frame(width: 560, height: 520)
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection ?? .general {
+        case .general:
+            GeneralPane(
+                settings: settings,
+                shelfSettings: shelfSettings,
+                launchAtLogin: launchAtLogin,
+                hotKey: hotKey,
+                player: player,
+                onEditLayout: onEditLayout,
+                updates: updates,
+                onLaunchAtLoginChanged: onLaunchAtLoginChanged,
+                onMenuBarIconChanged: onMenuBarIconChanged
+            )
+        case .accounts:
+            AccountsPane(
+                settings: settings,
+                coordinator: coordinator,
+                onShowPlayer: onShowPlayer
+            )
+        case .tiles:
+            TilesPane(settings: settings, coordinator: coordinator)
+        case .notch:
+            NotchPane(settings: settings)
+        case .shelf:
+            TrayPane(settings: shelfSettings)
+        case .privacy:
+            PrivacyPane()
+        case .about:
+            AboutPane()
+        }
     }
 }
 
@@ -67,26 +122,51 @@ struct SettingsView: View {
 
 private struct GeneralPane: View {
     @Bindable var settings: SettingsStore
-    @Bindable var launchAtLogin: LaunchAtLoginService
+    let shelfSettings: ShelfSettingsStore
+    let launchAtLogin: LaunchAtLoginService
     let hotKey: HotKeyService
     let player: PlayerService
-    let onResetMiniPlayer: () -> Void
     let onEditLayout: () -> Void
     let updates: UpdateService
+    let onLaunchAtLoginChanged: (Bool) -> Void
+    let onMenuBarIconChanged: (Bool) -> Void
 
     @State private var didCopyCommand = false
 
     var body: some View {
         Form {
             Section {
-                Toggle("Launch at login", isOn: $launchAtLogin.isEnabled)
+                Toggle("Launch at login", isOn: Binding(
+                    get: { launchAtLogin.isEnabled },
+                    set: { onLaunchAtLoginChanged($0) }
+                ))
+                // Registration fails for specific reasons, each with something
+                // to do about it. Saying which beats a toggle that quietly
+                // disagrees with the system (§34).
+                if let explanation = launchAtLogin.state.explanation {
+                    HStack {
+                        Text(explanation)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        if launchAtLogin.state == .requiresApproval {
+                            Spacer()
+                            Button("Open Login Items") { launchAtLogin.openLoginItemsSettings() }
+                        }
+                    }
+                }
+
+                Toggle("Show in the menu bar", isOn: Binding(
+                    get: { shelfSettings.showsMenuBarIcon },
+                    set: { onMenuBarIconChanged($0) }
+                ))
+                Text("""
+                    With it hidden, the shortcut, the shelf and the notch all \
+                    work the same; opening Cue from Applications brings this \
+                    window back.
+                    """)
+                    .hint(settings.showsHints)
 
                 Toggle("Explain each setting", isOn: $settings.showsHints)
-                if launchAtLogin.requiresApproval {
-                    Text("macOS is waiting for you to allow this in System Settings → General → Login Items.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section("Playback") {
@@ -136,26 +216,6 @@ private struct GeneralPane: View {
                         .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Show the mini player while playing", isOn: $settings.showsMiniPlayer)
-
-                    Picker("Animation", selection: $settings.plaqueAnimation) {
-                        ForEach(PlaqueAnimation.allCases, id: \.self) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(settings.plaqueAnimation.summary)
-                        .hint(settings.showsHints)
-
-                    Text("""
-                        A small plaque in the top-right corner of the screen, \
-                        over every app: play, pause, skip and mute without \
-                        opening anything. Click the record to see the full \
-                        player.
-                        """)
-                        .hint(settings.showsHints)
-
                     Text("""
                         Cue plays it in its own window, signed in as you. Closing \
                         that window hides it — the music keeps going — and \
@@ -163,17 +223,10 @@ private struct GeneralPane: View {
                         """)
                         .hint(settings.showsHints)
 
-                    Text("Hold ⌘ and drag the plaque to move it. It stays where you leave it.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
                     HStack {
                         Button(player.isWindowVisible ? "Hide Player" : "Show Player") {
                             player.isWindowVisible ? player.hide() : player.showHome()
                         }
-
-                        Button("Reset Plaque Position") { onResetMiniPlayer() }
-                            .disabled(settings.miniPlayerOrigin == nil)
 
                         if let nowPlaying = player.nowPlaying {
                             Text(nowPlaying.artist.map { "\(nowPlaying.title) — \($0)" } ?? nowPlaying.title)
@@ -490,6 +543,104 @@ private struct AccountsPane: View {
 }
 
 // MARK: - Grid
+
+// MARK: - Notch
+
+/// How the notch looks while Cue plays: which mark the right wing draws, and
+/// party mode. The mark chosen here is the search bar's too — one mark for
+/// the app.
+private struct NotchPane: View {
+    @Bindable var settings: SettingsStore
+
+    var body: some View {
+        Form {
+            Section("Waveform") {
+                Picker("Style", selection: $settings.plaqueAnimation) {
+                    ForEach(PlaqueAnimation.allCases, id: \.self) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(settings.plaqueAnimation.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Picker("Reacts to", selection: $settings.markReaction) {
+                    ForEach(MarkReaction.allCases, id: \.self) { reaction in
+                        Text(reaction.title).tag(reaction)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!settings.plaqueAnimation.reacts)
+
+                Text(settings.plaqueAnimation.reacts
+                    ? settings.markReaction.summary
+                    : "\(settings.plaqueAnimation.title) moves the way it always has; Wave and Island follow this.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Text("""
+                    Drawn in the notch beside the cover, in the cover's colour, \
+                    and in the search bar. The Record keeps its own colours.
+                    """)
+                    .hint(settings.showsHints)
+            }
+
+            Section("Headphones") {
+                Toggle("Show AirPods when they connect", isOn: $settings.showsHeadphones)
+                Toggle("Green outline while they connect", isOn: $settings.showsArrivalOutline)
+                    .disabled(!settings.showsHeadphones)
+                Text("""
+                    When AirPods or other Bluetooth headphones connect, or move \
+                    over to this Mac, the notch shows them for a few seconds \
+                    with their battery and a green outline.
+                    """)
+                    .hint(settings.showsHints)
+            }
+
+            Section("Party mode") {
+                LabeledContent("Strength") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.partyIntensity, in: 0...1) {
+                            Text("Strength")
+                        } minimumValueLabel: {
+                            Text("Off")
+                        } maximumValueLabel: {
+                            Text("Full")
+                        }
+                        Text(partyReadout)
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+
+                Text("""
+                    A border in the cover's colours runs round the notch while \
+                    music plays, surging on the beat, and the waveform's long \
+                    and short lines take the cover's two colours. Further right \
+                    is brighter, thicker and quicker.
+                    """)
+                    .hint(settings.showsHints)
+
+                if settings.partyIntensity > 0, !settings.analysesAudio {
+                    Label(
+                        "Turn on “Make the mark move with the music” in General for the border to follow the real beat.",
+                        systemImage: "waveform.badge.exclamationmark"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var partyReadout: String {
+        settings.partyIntensity <= 0 ? "Off" : "\(Int((settings.partyIntensity * 100).rounded()))%"
+    }
+}
 
 private struct TilesPane: View {
     @Bindable var settings: SettingsStore

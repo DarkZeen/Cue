@@ -13,6 +13,7 @@ struct SearchBarView: View {
     var level: Double = 0
     var bands: [Double] = []
     var style: PlaqueAnimation = .wave
+    var reaction: MarkReaction = .frequencies
     let onOpenPlayer: () -> Void
 
     var body: some View {
@@ -52,7 +53,7 @@ struct SearchBarView: View {
             .frame(width: 16)
 
             if let nowPlaying {
-                NowPlayingIndicator(nowPlaying: nowPlaying, level: level, bands: bands, style: style, onOpen: onOpenPlayer)
+                NowPlayingIndicator(nowPlaying: nowPlaying, level: level, bands: bands, style: style, reaction: reaction, onOpen: onOpenPlayer)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 

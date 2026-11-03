@@ -99,23 +99,62 @@ struct WaveIndicator: View {
     var bands: [Double] = []
     let isAnimating: Bool
 
-    private var count: Int { CueWavePath.shapes.count }
-
     /// Small, and then smaller. The mark is a status light beside a search
     /// field, not a centrepiece; at this size the nine shapes read as one
     /// object that moves rather than nine that wobble, and the breath
     /// underneath them has room to show without the mark crowding the field.
-    private static let height: CGFloat = 14
+    ///
+    /// A parameter rather than a constant only so the shelf's now-playing
+    /// wing can draw it a little smaller still; 14 is the mark's own size and
+    /// what every other caller gets.
+    var height: CGFloat = 14
+
+    /// White, because the logo is white on black and stays that way
+    /// (`CuePalette`). The one caller that passes anything else is the
+    /// shelf's now-playing wing, which takes its colour from the cover — a
+    /// deliberate exception confined to that wing.
+    var tint: Color = .white
+
+    /// How far the motion is allowed to travel, as a share of its designed
+    /// reach. 1 is the mark as designed. Less keeps it inside a small housing
+    /// — the shapes and the breath scale outward from rest by this much, and
+    /// nothing else about the motion changes.
+    var excursion: Double = 1
+
+    /// Party mode's second colour. Set, each shape is mixed between this and
+    /// `tint` by how long it is on screen at that moment — the long shapes
+    /// take `tint`, the short ones this — so the colours move with the music.
+    var shortTint: Color? = nil
+
+    /// What the shapes answer to. `frequencies` is the mark as it always was.
+    var reaction: MarkReaction = .frequencies
+    /// The kick envelope, from a `BeatFollower`, for `.beat`.
+    var kick: Double = 0
+
+    private var count: Int { CueWavePath.shapes.count }
+
+    /// Each shape's height as a share of the mark's, from the artwork.
+    private static let shapeHeights: [CGFloat] = (0..<CueWavePath.shapes.count).map { index in
+        CueWavePath.path(forShape: index, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            .boundingRect.height
+    }
+
+    private func colour(_ index: Int, displacement: CGFloat) -> Color {
+        guard let shortTint else { return tint }
+        let length = Self.shapeHeights[index] * displacement
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: length))
+    }
 
     var body: some View {
         ZStack {
             ForEach(0..<count, id: \.self) { index in
+                let stretch = displacement(index)
                 CueWaveShape(index: index)
-                    .fill(.white)
-                    .scaleEffect(y: displacement(index), anchor: .center)
+                    .fill(colour(index, displacement: stretch))
+                    .scaleEffect(y: stretch, anchor: .center)
             }
         }
-        .frame(width: Self.height * CueWavePath.aspect, height: Self.height)
+        .frame(width: height * CueWavePath.aspect, height: height)
         // The whole mark breathes underneath the individual shapes.
         //
         // Two motions at different rates, which is what stops it reading as a
@@ -140,10 +179,24 @@ struct WaveIndicator: View {
         let swell = ProceduralMotion.energy(level, at: elapsed)
         let kick = ProceduralMotion.beat(bands, at: elapsed)
 
-        return 1
-            + CGFloat(breath * 0.04)
-            + CGFloat(swell * 0.06)
-            + CGFloat(kick * 0.13)
+        switch reaction {
+        case .frequencies:
+            // Each term scaled on its own rather than summed first, so the
+            // default excursion of 1 is bit-for-bit the mark as it always was.
+            return 1
+                + CGFloat(breath * 0.04 * excursion)
+                + CGFloat(swell * 0.06 * excursion)
+                + CGFloat(kick * 0.13 * excursion)
+        case .beat:
+            // The whole mark punches on the kick and breathes in between.
+            return 1
+                + CGFloat(breath * 0.02 * excursion)
+                + CGFloat(self.kick * 0.2 * excursion)
+        case .smooth:
+            return 1
+                + CGFloat(breath * 0.04 * excursion)
+                + CGFloat(swell * 0.07 * excursion)
+        }
     }
 
     private func displacement(_ index: Int) -> CGFloat {
@@ -177,13 +230,24 @@ struct WaveIndicator: View {
         // look like one object. Enough travel to be read from the corner of an
         // eye — the earlier values were tuned looking straight at it, which is
         // the one way this is never actually seen.
-        let amplitude = 0.20
-            + 0.34 * ProceduralMotion.energy(level, at: elapsed)
-            + 0.18 * ProceduralMotion.beat(bands, at: elapsed) * distance
+        let amplitude: Double
+        switch reaction {
+        case .frequencies:
+            amplitude = 0.20
+                + 0.34 * ProceduralMotion.energy(level, at: elapsed)
+                + 0.18 * ProceduralMotion.beat(bands, at: elapsed) * distance
+        case .beat:
+            // Small between kicks, so the kick is what is seen.
+            amplitude = 0.08 + 0.62 * kick * (0.45 + 0.55 * distance)
+        case .smooth:
+            amplitude = 0.14 + 0.3 * ProceduralMotion.energy(level, at: elapsed)
+        }
 
         // Never collapses to nothing: a shape that reaches zero height leaves a
         // gap in the mark and reads as a rendering fault rather than as quiet.
-        return max(1 + CGFloat(wave * amplitude) * reach, 0.22)
+        // The floor holds whatever the excursion, which only scales the
+        // stretch away from rest.
+        return max(1 + CGFloat(wave * amplitude * excursion) * reach, 0.22)
     }
 }
 
@@ -409,6 +473,11 @@ struct BarsIndicator: View {
     /// case the bars move to a rhythm of their own.
     var bands: [Double] = []
     let isAnimating: Bool
+    /// White everywhere but the notch, where the mark takes the cover's colour.
+    var tint: Color = .white
+    /// Party mode's second colour: the short bars take it, the tall ones
+    /// `tint`, mixed by height.
+    var shortTint: Color? = nil
 
     /// Bands either side of the centre. Nine gives seventeen bars, which is
     /// enough to read as a spectrum and few enough that each stays visible at
@@ -428,7 +497,7 @@ struct BarsIndicator: View {
         HStack(alignment: .center, spacing: Self.spacing) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    .fill(.white.opacity(opacity(index)))
+                    .fill(barColour(index).opacity(opacity(index)))
                     .frame(width: Self.barWidth, height: barHeight(index))
             }
         }
@@ -436,6 +505,11 @@ struct BarsIndicator: View {
     }
 
     /// Which band a bar shows: 0 at the centre, rising outward on both sides.
+    private func barColour(_ index: Int) -> Color {
+        guard let shortTint else { return tint }
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: barHeight(index) / Self.height))
+    }
+
     private func band(_ index: Int) -> Int {
         abs(index - (Self.bandCount - 1))
     }
@@ -531,6 +605,8 @@ struct OrbitIndicator: View {
     var level: Double = 0
     var bands: [Double] = []
     let isAnimating: Bool
+    /// White everywhere but the notch, where the mark takes the cover's colour.
+    var tint: Color = .white
 
     /// Radius from centre, size, angular speed, where it starts.
     ///
@@ -551,7 +627,7 @@ struct OrbitIndicator: View {
             // The threshold has to sit where a lone blob still clears it after
             // the blur has spread it out. Too high and the small blobs vanish;
             // too low and everything is one puddle.
-            context.addFilter(.alphaThreshold(min: 0.42, color: .white))
+            context.addFilter(.alphaThreshold(min: 0.42, color: tint))
 
             context.drawLayer { layer in
                 layer.addFilter(.blur(radius: 2.4))
@@ -616,3 +692,173 @@ struct OrbitIndicator: View {
         .frame(width: 26, height: 26)
     }
 }
+
+// MARK: - Party colouring
+
+/// How a mark's lines take two colours in party mode: by length.
+enum MarkColouring {
+    /// 0 for the shortest lines, 1 for the longest, for a line `length` long
+    /// as a share of the mark's height. Eased, so most lines read as clearly
+    /// one colour or the other rather than as a muddy middle.
+    static func share(forLength length: CGFloat) -> Double {
+        let raw = min(max((Double(length) - 0.25) / 0.65, 0), 1)
+        return raw * raw * (3 - 2 * raw)
+    }
+}
+
+// MARK: - Island
+
+/// A few thick rounded bars, the way the iPhone's Dynamic Island shows music.
+///
+/// Five capsules standing on a common centre line, each rising and falling on
+/// its own sine. Fewer and fatter than `BarsIndicator`'s meter, so it reads
+/// at a glance in the notch: the iPhone's answer to "is something playing",
+/// not a spectrum. The same rule as the other marks holds — the music sets how
+/// far a bar reaches, never how fast it moves — so the bars stay one object
+/// however hard the beat hits.
+struct IslandIndicator: View {
+    let elapsed: TimeInterval
+    var level: Double = 0
+    /// The spectrum, low to high. Empty when nothing is listening, in which
+    /// case the bars move to a rhythm of their own.
+    var bands: [Double] = []
+    let isAnimating: Bool
+    var height: CGFloat = 14
+    var tint: Color = .white
+    /// Party mode's second colour: the short bars take it, the tall ones
+    /// `tint`, mixed by height.
+    var shortTint: Color? = nil
+    /// What the bars answer to.
+    var reaction: MarkReaction = .frequencies
+    /// The kick envelope, from a `BeatFollower`, for `.beat`.
+    var kick: Double = 0
+
+    static let barCount = 5
+
+    /// Thick for a meter, but not stubby: a seventh of the height, with gaps
+    /// a little wider than a bar so the five read as five.
+    private var barWidth: CGFloat { (height * 0.145).rounded(toPlaces: 1) }
+    private var spacing: CGFloat { barWidth * 1.15 }
+
+    /// Each bar's own pace, uneven so the row never lines up into a loop.
+    private static let rates: [Double] = [5.1, 6.7, 4.3, 7.4, 5.8]
+    private static let offsets: [Double] = [0.0, 1.9, 3.7, 0.8, 2.6]
+    /// Which band each bar listens to: low in the middle, rising outward,
+    /// so a kick lifts the centre and the hats the edges.
+    private static let bandFor: [Int] = [5, 2, 0, 1, 4]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: spacing) {
+            ForEach(0..<Self.barCount, id: \.self) { index in
+                Capsule()
+                    .fill(colour(index))
+                    .frame(width: barWidth, height: max(barWidth, height * share(index)))
+            }
+        }
+        .frame(height: height)
+    }
+
+    /// How much of the height a bar stands, a third to all of it.
+    private func share(_ index: Int) -> CGFloat {
+        guard isAnimating else { return Self.resting[index] }
+
+        let phase = ProceduralMotion.travel(elapsed, rate: Self.rates[index], surge: 0)
+            + Self.offsets[index]
+        let own = (sin(phase) + 1) / 2
+
+        let energy = ProceduralMotion.energy(level, at: elapsed)
+        let reach: Double
+        if reaction == .beat {
+            // All five on the kick, the middle highest — the shape of a hit —
+            // with a little of each bar's own motion so they are not a block.
+            reach = kick * Self.hitShape[index] * 0.92 + own * 0.12
+        } else if reaction == .smooth {
+            let slow = (sin(ProceduralMotion.travel(elapsed, rate: Self.rates[index] * 0.35, surge: 0)
+                + Self.offsets[index]) + 1) / 2
+            reach = energy * Self.hitShape[index] * 0.7 + slow * 0.25
+        } else if let heard = heard(index) {
+            // Listening: the music drives the bars, and their own motion is
+            // only a flicker underneath, so nothing reads as a loop.
+            reach = heard + own * 0.08
+        } else {
+            let kick = ProceduralMotion.beat(bands, at: elapsed)
+            let centre = 1 - abs(Double(index) - 2) / 2
+            reach = own * (0.5 + 0.4 * energy) + kick * 0.3 * centre
+        }
+        // A floor of a third, not a dot: the iPhone's bars dip, they never
+        // vanish into the row.
+        return CGFloat(min(max(0.33 + reach * 0.67, 0.33), 1))
+    }
+
+    /// What the music says about one bar, or `nil` when nothing is listening.
+    ///
+    /// Two readings mixed. The band itself, so a loud passage stands every
+    /// bar up; and the band against the other four this frame, so the bars
+    /// move *apart* — the spectrum's bands rise and fall together much of the
+    /// time, and on their raw values alone five bars move as one block, which
+    /// is what looked scripted. The beat lifts the middle on top.
+    private func heard(_ index: Int) -> Double? {
+        guard bands.count > Self.bandFor.max() ?? 0 else { return nil }
+        let picked = Self.bandFor.map { bands[$0] }
+        let own = picked[index]
+        let low = picked.min() ?? 0
+        let high = picked.max() ?? 1
+        let relative = (own - low) / max(high - low, 0.12)
+        let kick = ProceduralMotion.beat(bands, at: elapsed)
+        let centre = 1 - abs(Double(index) - 2) / 2
+        return pow(own, 1.4) * 0.45 + relative * 0.45 * (0.4 + 0.6 * level) + kick * 0.25 * centre
+    }
+
+    /// How a kick stands the bars up: the middle highest.
+    private static let hitShape: [Double] = [0.6, 0.85, 1, 0.85, 0.6]
+
+    /// Still, the bars sit as the iPhone draws them paused: a low, even
+    /// skyline with the middle a little taller.
+    private static let resting: [CGFloat] = [0.35, 0.55, 0.75, 0.55, 0.35]
+
+    private func colour(_ index: Int) -> Color {
+        guard let shortTint else { return tint }
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: share(index)))
+    }
+}
+
+private extension CGFloat {
+    func rounded(toPlaces places: Int) -> CGFloat {
+        let scale = pow(10, CGFloat(places))
+        return (self * scale).rounded() / scale
+    }
+}
+
+// MARK: - The beat
+
+/// Finds the kicks in the music: the bass jumping above where it has been.
+///
+/// The marks are otherwise pure functions of one instant, and one instant
+/// cannot tell a kick from a loud bass line — both are simply "a lot of
+/// bass". A kick is the bass *rising* past its recent level, so this keeps
+/// that level, a third of a second's worth, and answers with an envelope that
+/// jumps on each rise and dies away in about a seventh of a second. Held by the
+/// view that draws the mark and advanced once a frame. With nothing listening
+/// it passes on the invented beat the marks already fall back to.
+@MainActor
+final class BeatFollower {
+    private var average = 0.0
+    private var envelope = 0.0
+    private var last: Date?
+
+    func update(level: Double, bands: [Double], at now: Date) -> Double {
+        defer { last = now }
+        let elapsed = now.timeIntervalSinceReferenceDate
+        guard bands.count >= 2 else {
+            return ProceduralMotion.beat(bands, at: elapsed)
+        }
+        let step = last.map { min(max(now.timeIntervalSince($0), 0), 0.1) } ?? 0
+
+        let bass = bands[0] * 0.65 + bands[1] * 0.35
+        average += (bass - average) * min(1, step * 3)
+        let onset = min(max((bass - average - 0.02) * 5, 0), 1)
+        envelope = max(onset, envelope * exp(-step * 7))
+        return envelope
+    }
+}
+

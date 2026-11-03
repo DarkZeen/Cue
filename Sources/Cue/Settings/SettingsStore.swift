@@ -28,8 +28,10 @@ final class SettingsStore {
         pinnedTiles = Self.loadPinnedTiles(from: defaults)
         hotKey = Self.loadHotKey(from: defaults)
 
-        showsMiniPlayer = defaults.object(forKey: Key.showsMiniPlayer) as? Bool ?? true
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
+        partyIntensity = Self.clampedParty(defaults.double(forKey: Key.partyIntensity))
+        showsHeadphones = defaults.object(forKey: Key.showsHeadphones) as? Bool ?? true
+        showsArrivalOutline = defaults.object(forKey: Key.showsArrivalOutline) as? Bool ?? true
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
@@ -38,6 +40,8 @@ final class SettingsStore {
         showsHints = defaults.object(forKey: Key.showsHints) as? Bool ?? true
         plaqueAnimation = defaults.string(forKey: Key.plaqueAnimation)
             .flatMap(PlaqueAnimation.init(rawValue:)) ?? .wave
+        markReaction = defaults.string(forKey: Key.markReaction)
+            .flatMap(MarkReaction.init(rawValue:)) ?? .frequencies
 
         exploreGenre = {
             guard let data = defaults.data(forKey: Key.exploreGenre) else { return nil }
@@ -63,13 +67,6 @@ final class SettingsStore {
                   stored.count == 2
             else { return SettingsStore.defaultPanelPosition }
             return CGPoint(x: min(max(stored[0], 0), 1), y: min(max(stored[1], 0), 1))
-        }()
-
-        miniPlayerOrigin = {
-            guard let stored = defaults.array(forKey: Key.miniPlayerOrigin) as? [Double],
-                  stored.count == 2
-            else { return nil }
-            return CGPoint(x: stored[0], y: stored[1])
         }()
 
         let storedDesign = defaults.string(forKey: Key.panelDesign)
@@ -107,22 +104,6 @@ final class SettingsStore {
     func resetPanelLayout() {
         panelPosition = Self.defaultPanelPosition
         panelWidth = Double(CueLayout.defaultPanelWidth)
-    }
-
-    /// Where the plaque was last left, or `nil` for its default corner.
-    ///
-    /// Stored rather than derived because the plaque is draggable: it is a
-    /// permanent surface that has to get out of the way of whatever else lives
-    /// in that corner, and only the person looking at the screen knows where
-    /// that is.
-    var miniPlayerOrigin: CGPoint? {
-        didSet {
-            guard let miniPlayerOrigin else {
-                defaults.removeObject(forKey: Key.miniPlayerOrigin)
-                return
-            }
-            defaults.set([miniPlayerOrigin.x, miniPlayerOrigin.y], forKey: Key.miniPlayerOrigin)
-        }
     }
 
     /// Raised when the panel's size or position changed and the window has to
@@ -233,9 +214,15 @@ final class SettingsStore {
         defaults.set(data, forKey: Key.albumCollection)
     }
 
-    /// Which animation the mark in the corner uses.
+    /// Which mark moves while something plays — in the notch and the search
+    /// bar.
     var plaqueAnimation: PlaqueAnimation {
         didSet { defaults.set(plaqueAnimation.rawValue, forKey: Key.plaqueAnimation) }
+    }
+
+    /// What that mark answers to: the spectrum, the beat, or the volume.
+    var markReaction: MarkReaction {
+        didSet { defaults.set(markReaction.rawValue, forKey: Key.markReaction) }
     }
 
     /// Whether Settings explains itself.
@@ -265,20 +252,39 @@ final class SettingsStore {
         didSet { defaults.set(shufflesContainers, forKey: Key.shufflesContainers) }
     }
 
-    /// Whether the plaque appears in the corner of the screen while playing.
-    ///
-    /// On, because with the player window parked off screen it is the only
-    /// thing that says Cue is playing at all — and the only way to pause
-    /// without summoning something.
-    var showsMiniPlayer: Bool {
+    /// Party mode, 0 (off) to 1: a gradient in the cover's colours running
+    /// round the notch while it plays, and the mark's lines in two colours.
+    /// Off by default — it is a party, not a status light.
+    var partyIntensity: Double {
         didSet {
-            defaults.set(showsMiniPlayer, forKey: Key.showsMiniPlayer)
-            onMiniPlayerChange?()
+            let clamped = Self.clampedParty(partyIntensity)
+            guard clamped == partyIntensity else {
+                partyIntensity = clamped
+                return
+            }
+            defaults.set(partyIntensity, forKey: Key.partyIntensity)
         }
     }
 
-    /// Raised when the plaque should be reconsidered.
-    var onMiniPlayerChange: (() -> Void)?
+    /// Whether the notch shows headphones arriving — AirPods connecting, or
+    /// moving to this Mac — with their battery, for a few seconds.
+    var showsHeadphones: Bool {
+        didSet {
+            defaults.set(showsHeadphones, forKey: Key.showsHeadphones)
+            onHeadphonesChange?()
+        }
+    }
+
+    var onHeadphonesChange: (() -> Void)?
+
+    /// Whether headphones arriving draw a green line round the notch.
+    var showsArrivalOutline: Bool {
+        didSet { defaults.set(showsArrivalOutline, forKey: Key.showsArrivalOutline) }
+    }
+
+    static func clampedParty(_ value: Double) -> Double {
+        value.isFinite ? min(max(value, 0), 1) : 0
+    }
 
     /// Whether picking something plays it in Cue or hands it to the browser.
     ///
@@ -418,8 +424,10 @@ final class SettingsStore {
     private enum Key {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
-        static let showsMiniPlayer = "showsMiniPlayer"
         static let shufflesContainers = "shufflesContainers"
+        static let partyIntensity = "partyIntensity"
+        static let showsHeadphones = "showsHeadphones"
+        static let showsArrivalOutline = "showsArrivalOutline"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"
@@ -428,10 +436,10 @@ final class SettingsStore {
         static let checksForUpdates = "checksForUpdates"
         static let showsHints = "showsHints"
         static let plaqueAnimation = "plaqueAnimation"
+        static let markReaction = "markReaction"
         static let panelDesign = "panelDesign"
         static let panelWidth = "panelWidth"
         static let panelPosition = "panelPosition"
-        static let miniPlayerOrigin = "miniPlayerOrigin"
         static let unofficialProviderEnabled = "unofficialProviderEnabled"
         static let closesAfterOpening = "closesAfterOpening"
         static let autoFillsEmptyTiles = "autoFillsEmptyTiles"
