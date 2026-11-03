@@ -581,6 +581,16 @@ private struct NotchPane: View {
                     .hint(settings.showsHints)
             }
 
+            Section("Headphones") {
+                Toggle("Show AirPods when they connect", isOn: $settings.showsHeadphones)
+                Text("""
+                    When AirPods or other Bluetooth headphones connect, or move \
+                    over to this Mac, the notch shows them for a few seconds \
+                    with their battery and a green outline.
+                    """)
+                    .hint(settings.showsHints)
+            }
+
             Section("Party mode") {
                 LabeledContent("Strength") {
                     HStack(spacing: 10) {

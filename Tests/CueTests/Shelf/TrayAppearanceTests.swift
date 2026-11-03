@@ -140,6 +140,8 @@ struct TrayAppearanceTests {
             ("29-pill-island", notched, 3, Self.styled(.fixed(playing, artwork: cover), .island), .black),
             ("30-pill-party", notchless, 3, Self.party(Self.styled(.fixed(playing, artwork: cover), .island)), .black),
             ("31-pill-party-wave", notched, 3, Self.party(.fixed(playing, artwork: cover)), .black),
+            ("32-pill-airpods", notched, 3, Self.arriving(.fixed(playing, artwork: cover)), .black),
+            ("33-pill-airpods-alone", notchless, 0, Self.arriving(.fixed(nil)), .black),
         ]
 
         // Thrown away. The first pill a test process hosts comes out with a
@@ -193,6 +195,17 @@ struct TrayAppearanceTests {
             }
             try png.write(to: output.appendingPathComponent("\(name).png"))
         }
+    }
+
+    /// The same source, with AirPods Pro just connected.
+    private static func arriving(_ source: NowPlayingSource) -> NowPlayingSource {
+        var source = source
+        let arrival = HeadphonesWatcher.previewArrival(
+            .airPodsPro,
+            battery: .init(left: 99, right: 52, caseLevel: 6)
+        )
+        source.arrival = { arrival }
+        return source
     }
 
     /// The same source, at full party.

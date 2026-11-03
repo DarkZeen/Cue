@@ -49,6 +49,9 @@ struct NowPlayingSource {
     var markReaction: @MainActor () -> MarkReaction = { .frequencies }
     /// Party mode's strength, 0 (off) to 1.
     var party: @MainActor () -> Double = { 0 }
+    /// Headphones that have just arrived, for the few seconds the notch
+    /// shows them.
+    var arrival: @MainActor () -> HeadphonesWatcher.Arrival? = { nil }
     /// The covers' colours, kept for as long as the source is: the wings are
     /// rebuilt every time the shelf opens and closes, and a colour that had
     /// to be worked out again each time would flash white first.

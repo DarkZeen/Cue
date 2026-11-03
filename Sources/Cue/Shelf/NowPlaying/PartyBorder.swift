@@ -116,13 +116,32 @@ struct PartyOutline: Shape {
         let rightShoulder = CGPoint(x: rect.maxX, y: top)
         let leftShoulder = CGPoint(x: rect.minX, y: top)
 
+        // Each end leaves the screen rather than stopping on it: halfway up
+        // the shoulder the curve is heading out at forty-five degrees, so the
+        // line carries straight on along that heading until it is past the
+        // top edge — under the bezel, where its end is never seen.
+        let diagonal = 0.5.squareRoot()
+        func exit(from point: CGPoint, outward: CGFloat) -> CGPoint {
+            let rise = point.y - (rect.minY - 8)
+            return CGPoint(x: point.x + outward * rise, y: point.y - rise)
+        }
+        let rightTurn = CGPoint(
+            x: rightShoulder.x - shoulderRadius * diagonal,
+            y: rightShoulder.y - shoulderRadius * diagonal
+        )
+        let leftTurn = CGPoint(
+            x: leftShoulder.x + shoulderRadius * diagonal,
+            y: leftShoulder.y - shoulderRadius * diagonal
+        )
+
         var path = Path()
         if shoulderRadius > 0 {
-            path.move(to: CGPoint(x: rect.maxX, y: top - shoulderRadius))
+            path.move(to: exit(from: rightTurn, outward: 1))
+            path.addLine(to: rightTurn)
             path.addArc(
                 center: rightShoulder,
                 radius: shoulderRadius,
-                startAngle: .degrees(270),
+                startAngle: .degrees(225),
                 endAngle: .degrees(180),
                 clockwise: true
             )
@@ -151,9 +170,10 @@ struct PartyOutline: Shape {
                 center: leftShoulder,
                 radius: shoulderRadius,
                 startAngle: .degrees(0),
-                endAngle: .degrees(270),
+                endAngle: .degrees(315),
                 clockwise: true
             )
+            path.addLine(to: exit(from: leftTurn, outward: -1))
         }
         return path
     }

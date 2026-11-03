@@ -19,6 +19,8 @@ final class AppState {
     let otherAudio: OtherAudioWatcher
     let layoutEditor = LayoutEditor()
     let updates: UpdateService
+    /// AirPods connecting, or moving to this Mac, for the notch to show.
+    let headphones = HeadphonesWatcher()
     /// The shelf at the top of the screen — what was Tray.
     let shelf: ShelfState
 
@@ -44,7 +46,12 @@ final class AppState {
         self.updates = UpdateService(settings: settings)
         self.shelf = ShelfState(
             launchAtLogin: launchAtLogin,
-            nowPlaying: Self.nowPlayingSource(player: player, thumbnails: thumbnails, settings: settings)
+            nowPlaying: Self.nowPlayingSource(
+                player: player,
+                thumbnails: thumbnails,
+                settings: settings,
+                headphones: headphones
+            )
         )
     }
 
@@ -57,7 +64,8 @@ final class AppState {
     private static func nowPlayingSource(
         player: PlayerService,
         thumbnails: ThumbnailProvider,
-        settings: SettingsStore
+        settings: SettingsStore,
+        headphones: HeadphonesWatcher
     ) -> NowPlayingSource {
         NowPlayingSource(
             track: {
@@ -90,7 +98,8 @@ final class AppState {
             like: { videoID in await player.rate(videoID: videoID, .like) },
             markStyle: { settings.plaqueAnimation },
             markReaction: { settings.markReaction },
-            party: { settings.partyIntensity }
+            party: { settings.partyIntensity },
+            arrival: { headphones.arrival }
         )
     }
 
@@ -120,6 +129,12 @@ final class AppState {
 
     func start() {
         shelf.onOpenSettings = { [weak self] in self?.showSettings() }
+        headphones.isEnabled = settings.showsHeadphones
+        settings.onHeadphonesChange = { [weak self] in
+            guard let self else { return }
+            self.headphones.isEnabled = self.settings.showsHeadphones
+        }
+        headphones.start()
         shelf.start()
         configureStatusItem()
 

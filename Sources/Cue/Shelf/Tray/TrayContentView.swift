@@ -128,7 +128,11 @@ struct TrayContentView: View {
     /// Party mode, round the closed pill only — never the open shelf.
     @ViewBuilder
     private var partyBorder: some View {
-        if let nowPlaying, let track = pillTrack, nowPlaying.party() > 0 {
+        if arrival != nil {
+            // Headphones arriving: the outline in green, whatever the party.
+            ArrivalBorder(cornerRadius: shape.cornerRadius, shoulder: shape.shoulder)
+                .transition(.opacity)
+        } else if let nowPlaying, let track = pillTrack, nowPlaying.party() > 0 {
             PartyBorder(
                 source: nowPlaying,
                 cornerRadius: shape.cornerRadius,
@@ -190,7 +194,7 @@ struct TrayContentView: View {
             }
             return open
         }
-        if pillTrack != nil {
+        if pillTrack != nil || arrival != nil {
             return .nowPlaying(cutout: cutout)
         }
         return .collapsed(cutout: cutout, isEmpty: store.isEmpty)
@@ -213,6 +217,13 @@ struct TrayContentView: View {
         return nowPlaying.track()
     }
 
+    /// Headphones that just arrived, which the closed shelf's wings show for
+    /// a few seconds — in place of the music, if any is playing.
+    private var arrival: HeadphonesWatcher.Arrival? {
+        guard !isOpen, showsNowPlaying, let nowPlaying else { return nil }
+        return nowPlaying.arrival()
+    }
+
     /// Opening and closing get different springs: leaving should feel calmer
     /// than arriving (§45).
     private var containerAnimation: Animation {
@@ -226,7 +237,12 @@ struct TrayContentView: View {
     /// housing.
     @ViewBuilder
     private var collapsedContents: some View {
-        if let nowPlaying, let track = pillTrack {
+        if let arrival {
+            ArrivalWings(arrival: arrival, cutout: cutout) {
+                itemDots
+            }
+            .transition(.opacity)
+        } else if let nowPlaying, let track = pillTrack {
             NowPlayingWings(
                 source: nowPlaying,
                 track: track,
