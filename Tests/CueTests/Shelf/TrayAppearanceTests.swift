@@ -137,6 +137,9 @@ struct TrayAppearanceTests {
             ("24-pill-bars", notched, 3, Self.styled(.fixed(playing, artwork: cover), .bars), .black),
             ("25-pill-disc", notched, 3, Self.styled(.fixed(playing, artwork: cover), .disc), .black),
             ("26-pill-orbit", notched, 3, Self.styled(.fixed(playing, artwork: cover), .orbit), .black),
+            ("29-pill-island", notched, 3, Self.styled(.fixed(playing, artwork: cover), .island), .black),
+            ("30-pill-party", notchless, 3, Self.party(Self.styled(.fixed(playing, artwork: cover), .island)), .black),
+            ("31-pill-party-wave", notched, 3, Self.party(.fixed(playing, artwork: cover)), .black),
         ]
 
         // Thrown away. The first pill a test process hosts comes out with a
@@ -190,6 +193,13 @@ struct TrayAppearanceTests {
             }
             try png.write(to: output.appendingPathComponent("\(name).png"))
         }
+    }
+
+    /// The same source, at full party.
+    private static func party(_ source: NowPlayingSource) -> NowPlayingSource {
+        var source = source
+        source.party = { 1 }
+        return source
     }
 
     /// The same source, drawing another of the marks in its right wing.

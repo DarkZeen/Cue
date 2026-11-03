@@ -34,7 +34,7 @@ struct NowPlayingWings<Centre: View>: View {
     /// that have none — the mark is then the surface's own ink. Starts from
     /// whatever the wings showed last, so opening and closing the shelf, which
     /// rebuilds them, does not flash the mark white.
-    @State private var tint: Color?
+    @State private var colours: ArtworkTintMemory.CoverColours
 
     init(
         source: NowPlayingSource,
@@ -48,7 +48,7 @@ struct NowPlayingWings<Centre: View>: View {
         self.cutout = cutout
         self.onLike = onLike
         self.centre = centre
-        _tint = State(initialValue: source.tints.current)
+        _colours = State(initialValue: source.tints.current)
     }
 
     /// How long a track change holds the last cover's colour while the new
@@ -159,6 +159,7 @@ struct NowPlayingWings<Centre: View>: View {
             source: source,
             isPlaying: track.isPlaying,
             tint: markColour,
+            shortTint: source.party() > 0 ? colours.secondary : nil,
             slot: CGSize(width: artSize, height: cutout.height)
         )
             .frame(width: artSize, height: cutout.height)
@@ -188,7 +189,7 @@ struct NowPlayingWings<Centre: View>: View {
     /// cover's colour is what ties the two wings into one object. It applies
     /// to the mark only — never to the surface, which stays the housing.
     private var markColour: Color {
-        tint ?? palette.primaryInk
+        colours.primary ?? palette.primaryInk
     }
 
     private struct ArtworkRequest: Equatable {
@@ -206,46 +207,57 @@ struct NowPlayingWings<Centre: View>: View {
 
     private func updateTint(from image: NSImage?) async {
         let ground = palette.groundLuminance
-        let next: Color?
+        let next: ArtworkTintMemory.CoverColours
 
         if contrast == .increased {
             // Increase Contrast: the surface's own ink, always.
-            next = nil
+            next = .none
         } else if track.artworkURL != nil, image == nil {
             // A new track whose cover has not landed: keep the last colour
             // rather than flash white between two tinted ones. If the cover
             // never comes, let go of a colour that belongs to another song.
             try? await Task.sleep(for: Self.tintHold)
             guard !Task.isCancelled else { return }
-            next = nil
+            next = .none
         } else if let url = track.artworkURL, let image {
             let key = ArtworkTintMemory.Key(artworkURL: url, groundLuminance: ground)
-            if let known = source.tints.tint(for: key) {
+            if let known = source.tints.colours(for: key) {
                 next = known
             } else {
-                var worked: Color?
-                if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-                   let rgb = await ArtworkTint.tint(for: cgImage, groundLuminance: ground) {
-                    worked = Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue)
+                var rgbs: [ArtworkTint.RGB] = []
+                if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    rgbs = await ArtworkTint.tints(for: cgImage, groundLuminance: ground)
                 }
                 guard !Task.isCancelled else { return }
+                let primary = rgbs.first
+                let secondary = rgbs.count > 1
+                    ? rgbs[1]
+                    : primary.map { ArtworkTint.companion(of: $0, against: ground) }
+                let worked = ArtworkTintMemory.CoverColours(
+                    primary: primary.map(Self.colour),
+                    secondary: secondary.map(Self.colour)
+                )
                 source.tints.remember(worked, for: key)
                 next = worked
             }
         } else {
             // No cover at all.
-            next = nil
+            next = .none
         }
 
         guard !Task.isCancelled else { return }
-        source.tints.current = next
-        guard next != tint else { return }
+        guard next != colours else { return }
 
         // A change of colour, not a movement: under Reduce Motion it is still
         // a fade, just a shorter one.
         withAnimation(reduceMotion ? .easeOut(duration: 0.14) : .easeOut(duration: 0.35)) {
-            tint = next
+            colours = next
+            source.tints.current = next
         }
+    }
+
+    private static func colour(_ rgb: ArtworkTint.RGB) -> Color {
+        Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 
     // MARK: - Words
@@ -425,6 +437,8 @@ private struct PillWave: View {
     let source: NowPlayingSource
     let isPlaying: Bool
     let tint: Color
+    /// Party mode's second colour for the short lines; `nil` outside it.
+    let shortTint: Color?
     /// The room the wing gives the mark: the cover's width, the housing's
     /// height. Handed in rather than measured — measured from inside, a mark
     /// drawn at its own size reports its own size, and the wide ones overflow.
@@ -458,7 +472,20 @@ private struct PillWave: View {
                     tint: tint,
                     // Kept inside the housing: at full excursion the centre
                     // shape would reach past a 32pt menu bar.
-                    excursion: 0.6
+                    excursion: 0.6,
+                    shortTint: shortTint
+                )
+            case .island:
+                // Drawn at the wing's own size: five bars at fourteen points
+                // are exactly as wide as the cover.
+                IslandIndicator(
+                    elapsed: elapsed,
+                    level: level,
+                    bands: bands,
+                    isAnimating: isAnimating,
+                    height: min(14, slot.height - 10),
+                    tint: tint,
+                    shortTint: shortTint
                 )
             default:
                 // The other marks are drawn at a fixed size of their own, so
@@ -469,7 +496,7 @@ private struct PillWave: View {
                         // Keeps its own colours: the label is the record's.
                         DiscIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                     case .bars:
-                        BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, tint: tint)
+                        BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, tint: tint, shortTint: shortTint)
                     default:
                         OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating, tint: tint)
                     }

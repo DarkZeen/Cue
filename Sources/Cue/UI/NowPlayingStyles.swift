@@ -121,13 +121,30 @@ struct WaveIndicator: View {
     /// nothing else about the motion changes.
     var excursion: Double = 1
 
+    /// Party mode's second colour. Set, each shape is mixed between this and
+    /// `tint` by how long it is on screen at that moment — the long shapes
+    /// take `tint`, the short ones this — so the colours move with the music.
+    var shortTint: Color? = nil
+
     private var count: Int { CueWavePath.shapes.count }
+
+    /// Each shape's height as a share of the mark's, from the artwork.
+    private static let shapeHeights: [CGFloat] = (0..<CueWavePath.shapes.count).map { index in
+        CueWavePath.path(forShape: index, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            .boundingRect.height
+    }
+
+    private func colour(_ index: Int) -> Color {
+        guard let shortTint else { return tint }
+        let length = Self.shapeHeights[index] * displacement(index)
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: length))
+    }
 
     var body: some View {
         ZStack {
             ForEach(0..<count, id: \.self) { index in
                 CueWaveShape(index: index)
-                    .fill(tint)
+                    .fill(colour(index))
                     .scaleEffect(y: displacement(index), anchor: .center)
             }
         }
@@ -431,6 +448,9 @@ struct BarsIndicator: View {
     let isAnimating: Bool
     /// White everywhere but the notch, where the mark takes the cover's colour.
     var tint: Color = .white
+    /// Party mode's second colour: the short bars take it, the tall ones
+    /// `tint`, mixed by height.
+    var shortTint: Color? = nil
 
     /// Bands either side of the centre. Nine gives seventeen bars, which is
     /// enough to read as a spectrum and few enough that each stays visible at
@@ -450,7 +470,7 @@ struct BarsIndicator: View {
         HStack(alignment: .center, spacing: Self.spacing) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    .fill(tint.opacity(opacity(index)))
+                    .fill(barColour(index).opacity(opacity(index)))
                     .frame(width: Self.barWidth, height: barHeight(index))
             }
         }
@@ -458,6 +478,11 @@ struct BarsIndicator: View {
     }
 
     /// Which band a bar shows: 0 at the centre, rising outward on both sides.
+    private func barColour(_ index: Int) -> Color {
+        guard let shortTint else { return tint }
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: barHeight(index) / Self.height))
+    }
+
     private func band(_ index: Int) -> Int {
         abs(index - (Self.bandCount - 1))
     }
@@ -640,3 +665,105 @@ struct OrbitIndicator: View {
         .frame(width: 26, height: 26)
     }
 }
+
+// MARK: - Party colouring
+
+/// How a mark's lines take two colours in party mode: by length.
+enum MarkColouring {
+    /// 0 for the shortest lines, 1 for the longest, for a line `length` long
+    /// as a share of the mark's height. Eased, so most lines read as clearly
+    /// one colour or the other rather than as a muddy middle.
+    static func share(forLength length: CGFloat) -> Double {
+        let raw = min(max((Double(length) - 0.25) / 0.65, 0), 1)
+        return raw * raw * (3 - 2 * raw)
+    }
+}
+
+// MARK: - Island
+
+/// A few thick rounded bars, the way the iPhone's Dynamic Island shows music.
+///
+/// Five capsules standing on a common centre line, each rising and falling on
+/// its own sine. Fewer and fatter than `BarsIndicator`'s meter, so it reads
+/// at a glance in the notch: the iPhone's answer to "is something playing",
+/// not a spectrum. The same rule as the other marks holds — the music sets how
+/// far a bar reaches, never how fast it moves — so the bars stay one object
+/// however hard the beat hits.
+struct IslandIndicator: View {
+    let elapsed: TimeInterval
+    var level: Double = 0
+    /// The spectrum, low to high. Empty when nothing is listening, in which
+    /// case the bars move to a rhythm of their own.
+    var bands: [Double] = []
+    let isAnimating: Bool
+    var height: CGFloat = 14
+    var tint: Color = .white
+    /// Party mode's second colour: the short bars take it, the tall ones
+    /// `tint`, mixed by height.
+    var shortTint: Color? = nil
+
+    static let barCount = 5
+
+    /// Thick: a fifth of the height, with gaps a little narrower than a bar.
+    private var barWidth: CGFloat { (height * 0.2).rounded(toPlaces: 1) }
+    private var spacing: CGFloat { barWidth * 0.7 }
+
+    /// Each bar's own pace, uneven so the row never lines up into a loop.
+    private static let rates: [Double] = [5.1, 6.7, 4.3, 7.4, 5.8]
+    private static let offsets: [Double] = [0.0, 1.9, 3.7, 0.8, 2.6]
+    /// Which band each bar listens to: low in the middle, rising outward,
+    /// so a kick lifts the centre and the hats the edges.
+    private static let bandFor: [Int] = [5, 2, 0, 1, 4]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: spacing) {
+            ForEach(0..<Self.barCount, id: \.self) { index in
+                Capsule()
+                    .fill(colour(index))
+                    .frame(width: barWidth, height: max(barWidth, height * share(index)))
+            }
+        }
+        .frame(height: height)
+    }
+
+    /// How much of the height a bar stands, a third to all of it.
+    private func share(_ index: Int) -> CGFloat {
+        guard isAnimating else { return Self.resting[index] }
+
+        let phase = ProceduralMotion.travel(elapsed, rate: Self.rates[index], surge: 0)
+            + Self.offsets[index]
+        let own = (sin(phase) + 1) / 2
+
+        let energy = ProceduralMotion.energy(level, at: elapsed)
+        let reach: Double
+        if bands.count > Self.bandFor[index] {
+            // Listening: the bar's band leads, its own motion keeps it alive
+            // through a quiet passage.
+            reach = bands[Self.bandFor[index]] * 0.85 + own * (0.3 + 0.3 * energy)
+        } else {
+            let kick = ProceduralMotion.beat(bands, at: elapsed)
+            let centre = 1 - abs(Double(index) - 2) / 2
+            reach = own * (0.5 + 0.4 * energy) + kick * 0.3 * centre
+        }
+        // A floor of a third, not a dot: the iPhone's bars dip, they never
+        // vanish into the row.
+        return CGFloat(min(max(0.33 + reach * 0.67, 0.33), 1))
+    }
+
+    /// Still, the bars sit as the iPhone draws them paused: a low, even
+    /// skyline with the middle a little taller.
+    private static let resting: [CGFloat] = [0.35, 0.55, 0.75, 0.55, 0.35]
+
+    private func colour(_ index: Int) -> Color {
+        guard let shortTint else { return tint }
+        return shortTint.mix(with: tint, by: MarkColouring.share(forLength: share(index)))
+    }
+}
+
+private extension CGFloat {
+    func rounded(toPlaces places: Int) -> CGFloat {
+        let scale = pow(10, CGFloat(places))
+        return (self * scale).rounded() / scale
+    }
+}
+

@@ -10,6 +10,9 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
     case bars
     /// Blobs going round a ring, merging as they pass.
     case orbit
+    /// A few thick rounded bars, the way the iPhone's Dynamic Island shows
+    /// music.
+    case island
 
     var title: String {
         switch self {
@@ -17,6 +20,7 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
         case .disc: "Record"
         case .bars: "Bars"
         case .orbit: "Orbit"
+        case .island: "Island"
         }
     }
 
@@ -26,6 +30,7 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
         case .disc: "A record turning under its arm."
         case .bars: "Level bars, the way a meter has always looked."
         case .orbit: "Blobs going round, running together as they pass."
+        case .island: "Five thick bars, the way an iPhone shows music."
         }
     }
 
@@ -34,7 +39,7 @@ enum PlaqueAnimation: String, Codable, CaseIterable, Sendable {
     /// seventeen, the record because its arm reaches past the edge.
     var markWidth: CGFloat {
         switch self {
-        case .wave, .orbit: 26
+        case .wave, .orbit, .island: 26
         case .disc: 30
         case .bars: 38
         }

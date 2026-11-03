@@ -31,6 +31,7 @@ struct SettingsView: View {
         case general
         case accounts
         case tiles
+        case notch
         case shelf
         case privacy
         case about
@@ -42,6 +43,7 @@ struct SettingsView: View {
             case .general: "General"
             case .accounts: "Accounts"
             case .tiles: "Grid"
+            case .notch: "Notch"
             case .shelf: "Shelf"
             case .privacy: "Privacy"
             case .about: "About"
@@ -53,6 +55,7 @@ struct SettingsView: View {
             case .general: "gearshape"
             case .accounts: "person.crop.circle"
             case .tiles: "square.grid.3x3"
+            case .notch: "waveform"
             case .shelf: "tray"
             case .privacy: "hand.raised"
             case .about: "info.circle"
@@ -103,6 +106,8 @@ struct SettingsView: View {
             )
         case .tiles:
             TilesPane(settings: settings, coordinator: coordinator)
+        case .notch:
+            NotchPane(settings: settings)
         case .shelf:
             TrayPane(settings: shelfSettings)
         case .privacy:
@@ -204,16 +209,6 @@ private struct GeneralPane: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     }
-
-                    Picker("Animation", selection: $settings.plaqueAnimation) {
-                        ForEach(PlaqueAnimation.allCases, id: \.self) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(settings.plaqueAnimation.summary)
-                        .hint(settings.showsHints)
 
                     Text("""
                         Cue plays it in its own window, signed in as you. Closing \
@@ -542,6 +537,78 @@ private struct AccountsPane: View {
 }
 
 // MARK: - Grid
+
+// MARK: - Notch
+
+/// How the notch looks while Cue plays: which mark the right wing draws, and
+/// party mode. The mark chosen here is the search bar's too — one mark for
+/// the app.
+private struct NotchPane: View {
+    @Bindable var settings: SettingsStore
+
+    var body: some View {
+        Form {
+            Section("Waveform") {
+                Picker("Style", selection: $settings.plaqueAnimation) {
+                    ForEach(PlaqueAnimation.allCases, id: \.self) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(settings.plaqueAnimation.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Text("""
+                    Drawn in the notch beside the cover, in the cover's colour, \
+                    and in the search bar. The Record keeps its own colours.
+                    """)
+                    .hint(settings.showsHints)
+            }
+
+            Section("Party mode") {
+                LabeledContent("Strength") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.partyIntensity, in: 0...1) {
+                            Text("Strength")
+                        } minimumValueLabel: {
+                            Text("Off")
+                        } maximumValueLabel: {
+                            Text("Full")
+                        }
+                        Text(partyReadout)
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+
+                Text("""
+                    A border in the cover's colours runs round the notch while \
+                    music plays, surging on the beat, and the waveform's long \
+                    and short lines take the cover's two colours. Further right \
+                    is brighter, thicker and quicker.
+                    """)
+                    .hint(settings.showsHints)
+
+                if settings.partyIntensity > 0, !settings.analysesAudio {
+                    Label(
+                        "Turn on “Make the mark move with the music” in General for the border to follow the real beat.",
+                        systemImage: "waveform.badge.exclamationmark"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var partyReadout: String {
+        settings.partyIntensity <= 0 ? "Off" : "\(Int((settings.partyIntensity * 100).rounded()))%"
+    }
+}
 
 private struct TilesPane: View {
     @Bindable var settings: SettingsStore

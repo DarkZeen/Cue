@@ -45,6 +45,8 @@ struct NowPlayingSource {
     var like: @MainActor (String) async -> Bool
     /// Which mark the right wing draws — the one chosen in Settings.
     var markStyle: @MainActor () -> PlaqueAnimation = { .wave }
+    /// Party mode's strength, 0 (off) to 1.
+    var party: @MainActor () -> Double = { 0 }
     /// The covers' colours, kept for as long as the source is: the wings are
     /// rebuilt every time the shelf opens and closes, and a colour that had
     /// to be worked out again each time would flash white first.
@@ -84,27 +86,39 @@ struct NowPlayingSource {
 /// from the colour they were showing rather than from white. Keyed by the
 /// cover and the ground it was made legible against, and kept small — a
 /// session plays a few hundred tracks at most, and a colour is three numbers.
+///
+/// Observable, because party mode's border is drawn by the shelf rather than
+/// the wings and has to change colour when they do.
 @MainActor
+@Observable
 final class ArtworkTintMemory {
     struct Key: Hashable {
         var artworkURL: URL
         var groundLuminance: Double
     }
 
-    /// The colour last put on the mark, held while the next cover loads.
-    var current: Color?
+    /// A cover's two colours: the one the mark wears, and the one party mode
+    /// paints beside it. Both `nil` for a cover with no colour worth taking.
+    struct CoverColours: Equatable {
+        var primary: Color?
+        var secondary: Color?
 
-    private var known: [Key: Color?] = [:]
-    private var order: [Key] = []
-    private let capacity = 64
+        static let none = CoverColours(primary: nil, secondary: nil)
+    }
 
-    /// `.some(nil)` is an answer too: a cover with no colour worth taking.
-    func tint(for key: Key) -> Color?? {
+    /// The colours last put on the mark, held while the next cover loads.
+    var current: CoverColours = .none
+
+    @ObservationIgnored private var known: [Key: CoverColours] = [:]
+    @ObservationIgnored private var order: [Key] = []
+    @ObservationIgnored private let capacity = 64
+
+    func colours(for key: Key) -> CoverColours? {
         known[key]
     }
 
-    func remember(_ tint: Color?, for key: Key) {
-        if known.updateValue(tint, forKey: key) == nil {
+    func remember(_ colours: CoverColours, for key: Key) {
+        if known.updateValue(colours, forKey: key) == nil {
             order.append(key)
         }
         if order.count > capacity {

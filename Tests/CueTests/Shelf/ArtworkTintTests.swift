@@ -174,4 +174,44 @@ struct ArtworkTintTests {
         #expect(graphite > 0 && graphite < 0.01)
         #expect(light > 0.8 && light < 0.9)
     }
+
+    // MARK: - Two colours, for party mode
+
+    private func palette(of image: CGImage) -> [RGB] {
+        ArtworkTint.palette(ArtworkTint.samples(of: image))
+    }
+
+    @Test func `a two-colour cover gives both colours, the larger first`() {
+        let orange = RGB(red: 0.95, green: 0.55, blue: 0.15)
+        let blue = RGB(red: 0.15, green: 0.30, blue: 0.85)
+        let colours = palette(of: cover([(orange, 0.65), (blue, 0.35)]))
+
+        #expect(colours.count == 2)
+        #expect(hueDistance(colours[0], orange) < 0.05)
+        #expect(hueDistance(colours[1], blue) < 0.05)
+    }
+
+    @Test func `shades of one colour are one colour`() {
+        let red = RGB(red: 0.85, green: 0.15, blue: 0.12)
+        let darkRed = RGB(red: 0.45, green: 0.06, blue: 0.05)
+        let colours = palette(of: cover([(red, 0.5), (darkRed, 0.5)]))
+
+        #expect(colours.count == 1)
+    }
+
+    @Test func `a speck of a second colour is not a second colour`() {
+        let green = RGB(red: 0.2, green: 0.75, blue: 0.3)
+        let pink = RGB(red: 0.95, green: 0.3, blue: 0.7)
+        let colours = palette(of: cover([(green, 0.97), (pink, 0.03)]))
+
+        #expect(colours.count == 1)
+    }
+
+    @Test func `the first of the palette is the dominant colour`() {
+        let orange = RGB(red: 0.95, green: 0.55, blue: 0.15)
+        let blue = RGB(red: 0.15, green: 0.30, blue: 0.85)
+        let image = cover([(blue, 0.3), (orange, 0.7)])
+
+        #expect(palette(of: image).first == tint(of: image))
+    }
 }

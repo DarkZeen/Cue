@@ -40,6 +40,8 @@ struct NowPlayingIndicator: View {
                     BarsIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 case .orbit:
                     OrbitIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
+                case .island:
+                    IslandIndicator(elapsed: elapsed, level: level, bands: bands, isAnimating: isAnimating)
                 }
             }
             // Paused is dimmed rather than greyed: the mark keeps its colour so

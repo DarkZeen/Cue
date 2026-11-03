@@ -127,6 +127,14 @@ nonisolated enum ArtworkTint {
     /// red, coarse enough that one cover's reds land together.
     static let hueBins = 24
 
+    /// How far apart, in bins, a second colour has to be: three bins is
+    /// forty-five degrees — orange against red, not red against red.
+    static let secondHueSeparation = 3
+
+    /// How much of the first colour's weight a second has to carry to count:
+    /// enough to be part of the cover, not a speck in a corner of it.
+    static let secondHueShare = 0.15
+
     /// Neon reds and greens vibrate against black. Held just short of full.
     static let maximumSaturation = 0.85
 
@@ -188,7 +196,19 @@ nonisolated enum ArtworkTint {
     /// answer is the vote-weighted mean of the pixels behind it — a colour the
     /// cover actually contains, not a hue with an invented saturation.
     static func dominant(_ samples: [RGB]) -> RGB? {
-        guard !samples.isEmpty else { return nil }
+        palette(samples, maximum: 1).first
+    }
+
+    /// The cover's colours, most present first: its own hue, then — when the
+    /// cover has one — a second that is clearly a different colour rather
+    /// than a shade of the first. Party mode paints with both; everything else
+    /// uses only the first.
+    ///
+    /// The second hue has to sit `secondHueSeparation` bins away from the
+    /// first and carry at least `secondHueShare` of its weight, so a red
+    /// cover's darker reds do not come back as a "second" colour.
+    static func palette(_ samples: [RGB], maximum: Int = 2) -> [RGB] {
+        guard !samples.isEmpty, maximum > 0 else { return [] }
 
         var weights = [Double](repeating: 0, count: hueBins)
         var sums = [RGB](repeating: .black, count: hueBins)
@@ -209,33 +229,52 @@ nonisolated enum ArtworkTint {
             sums[bin].blue += sample.blue * weight
         }
 
-        guard Double(survivors) >= Double(samples.count) * survivorShare else { return nil }
+        guard Double(survivors) >= Double(samples.count) * survivorShare else { return [] }
 
         func neighbourhood(_ bin: Int) -> [Int] {
             [(bin + hueBins - 1) % hueBins, bin, (bin + 1) % hueBins]
         }
 
-        guard let best = weights.indices.max(by: { a, b in
-            neighbourhood(a).reduce(0) { $0 + weights[$1] }
-                < neighbourhood(b).reduce(0) { $0 + weights[$1] }
-        }) else { return nil }
-
-        var total = 0.0
-        var mean = RGB.black
-        for bin in neighbourhood(best) {
-            total += weights[bin]
-            mean.red += sums[bin].red
-            mean.green += sums[bin].green
-            mean.blue += sums[bin].blue
+        func weight(around bin: Int) -> Double {
+            neighbourhood(bin).reduce(0) { $0 + weights[$1] }
         }
-        guard total > 0 else { return nil }
 
-        let result = RGB(
-            red: mean.red / total,
-            green: mean.green / total,
-            blue: mean.blue / total
-        ).clamped
-        return result.chroma >= resultChromaFloor ? result : nil
+        func colour(around bin: Int) -> RGB? {
+            var total = 0.0
+            var mean = RGB.black
+            for neighbour in neighbourhood(bin) {
+                total += weights[neighbour]
+                mean.red += sums[neighbour].red
+                mean.green += sums[neighbour].green
+                mean.blue += sums[neighbour].blue
+            }
+            guard total > 0 else { return nil }
+            let result = RGB(
+                red: mean.red / total,
+                green: mean.green / total,
+                blue: mean.blue / total
+            ).clamped
+            return result.chroma >= resultChromaFloor ? result : nil
+        }
+
+        func distance(_ a: Int, _ b: Int) -> Int {
+            let raw = abs(a - b)
+            return min(raw, hueBins - raw)
+        }
+
+        let ranked = weights.indices.sorted { weight(around: $0) > weight(around: $1) }
+        guard let first = ranked.first, let firstColour = colour(around: first) else { return [] }
+
+        var colours = [firstColour]
+        let floor = weight(around: first) * secondHueShare
+        for bin in ranked.dropFirst() where colours.count < maximum {
+            guard weight(around: bin) >= floor, weight(around: bin) > 0 else { break }
+            guard distance(bin, first) >= secondHueSeparation,
+                  let second = colour(around: bin)
+            else { continue }
+            colours.append(second)
+        }
+        return colours
     }
 
     // MARK: Legibility
@@ -310,6 +349,23 @@ nonisolated enum ArtworkTint {
     @concurrent
     static func tint(for image: CGImage, groundLuminance: Double) async -> RGB? {
         dominant(samples(of: image)).map { legible($0, against: groundLuminance) }
+    }
+
+    /// A second colour for a cover that has only one: the same colour turned
+    /// a little round the wheel and moved in lightness, so a gradient between
+    /// the two moves visibly without leaving the cover's palette.
+    static func companion(of rgb: RGB, against groundLuminance: Double) -> RGB {
+        var hsl = HSL(rgb.clamped)
+        hsl.hue = (hsl.hue + 0.08).truncatingRemainder(dividingBy: 1)
+        hsl.lightness = hsl.lightness > 0.6 ? hsl.lightness - 0.22 : hsl.lightness + 0.22
+        return legible(hsl.rgb, against: groundLuminance, minimumContrast: 3)
+    }
+
+    /// Both of the cover's colours, made legible, for party mode. A cover with
+    /// one colour gets it back alone; the caller derives a second from it.
+    @concurrent
+    static func tints(for image: CGImage, groundLuminance: Double) async -> [RGB] {
+        palette(samples(of: image)).map { legible($0, against: groundLuminance) }
     }
 }
 

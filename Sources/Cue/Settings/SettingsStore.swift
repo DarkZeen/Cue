@@ -29,6 +29,7 @@ final class SettingsStore {
         hotKey = Self.loadHotKey(from: defaults)
 
         shufflesContainers = defaults.object(forKey: Key.shufflesContainers) as? Bool ?? true
+        partyIntensity = Self.clampedParty(defaults.double(forKey: Key.partyIntensity))
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
@@ -241,6 +242,24 @@ final class SettingsStore {
         didSet { defaults.set(shufflesContainers, forKey: Key.shufflesContainers) }
     }
 
+    /// Party mode, 0 (off) to 1: a gradient in the cover's colours running
+    /// round the notch while it plays, and the mark's lines in two colours.
+    /// Off by default — it is a party, not a status light.
+    var partyIntensity: Double {
+        didSet {
+            let clamped = Self.clampedParty(partyIntensity)
+            guard clamped == partyIntensity else {
+                partyIntensity = clamped
+                return
+            }
+            defaults.set(partyIntensity, forKey: Key.partyIntensity)
+        }
+    }
+
+    static func clampedParty(_ value: Double) -> Double {
+        value.isFinite ? min(max(value, 0), 1) : 0
+    }
+
     /// Whether picking something plays it in Cue or hands it to the browser.
     ///
     /// In Cue, because that is what the app is for: a panel that sends you to
@@ -380,6 +399,7 @@ final class SettingsStore {
         static let hotKey = "hotKey"
         static let playbackDestination = "playbackDestination"
         static let shufflesContainers = "shufflesContainers"
+        static let partyIntensity = "partyIntensity"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"

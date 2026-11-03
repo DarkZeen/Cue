@@ -103,6 +103,9 @@ struct TrayContentView: View {
             dropOutlineInset: settings.dropOutlineInset,
             contentTop: shape.contentTop
         )
+        // On the outline, after the clip: half the line falls outside the
+        // surface, which is what lets it frame the pill under the housing.
+        .overlay { partyBorder }
         // After the clip, so the heart can leave the cover — leaving it is the
         // whole gesture.
         .overlay(alignment: .topLeading) { likeHeart }
@@ -120,6 +123,21 @@ struct TrayContentView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
         .onChange(of: shape, initial: true) { _, new in onShapeChange(new) }
+    }
+
+    /// Party mode, round the closed pill only — never the open shelf.
+    @ViewBuilder
+    private var partyBorder: some View {
+        if let nowPlaying, let track = pillTrack, nowPlaying.party() > 0 {
+            PartyBorder(
+                source: nowPlaying,
+                cornerRadius: shape.cornerRadius,
+                shoulder: shape.shoulder,
+                isPlaying: track.isPlaying,
+                intensity: nowPlaying.party()
+            )
+            .transition(.opacity)
+        }
     }
 
     private var palette: TrayPalette { settings.appearance.palette }
