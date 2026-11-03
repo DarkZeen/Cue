@@ -20,9 +20,15 @@ struct ArrivalWings<Centre: View>: View {
         let shoulder = TrayMetrics.effectiveShoulder(forHeight: cutout.height)
 
         HStack(spacing: 0) {
-            Image(systemName: arrival.kind.symbol)
-                .font(.system(size: artSize * 0.72, weight: .regular))
-                .foregroundStyle(palette.primaryInk)
+            Group {
+                if arrival.kind == .airPodsPro, AirPodsTurn.frames != nil {
+                    AirPodsTurn(size: cutout.height - 4)
+                } else {
+                    Image(systemName: arrival.kind.symbol)
+                        .font(.system(size: artSize * 0.72, weight: .regular))
+                        .foregroundStyle(palette.primaryInk)
+                }
+            }
                 .frame(width: artSize, height: cutout.height)
                 .padding(.horizontal, padding)
                 .overlay { quietTarget }
@@ -112,3 +118,78 @@ struct ArrivalBorder: View {
         .accessibilityHidden(true)
     }
 }
+
+/// The AirPods Pro, turning: one revolution over an arrival, the way the
+/// iPhone shows them when they connect.
+///
+/// Pre-rendered rather than drawn in 3D here — forty-eight frames of the
+/// earbuds without their case, in one sheet (Resources/AirPodsTurn.png), so
+/// what runs in the notch is choosing a picture, not lighting a model. Drawn
+/// wider than the wing allows, centred on it: the pair is wider than it is
+/// tall, and the sheet's frames are square with room round the turn.
+struct AirPodsTurn: View {
+    let size: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// One revolution, matched to how long an arrival shows.
+    private static let period: TimeInterval = 4
+
+    var body: some View {
+        if let frames = Self.frames {
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                let index = reduceMotion
+                    ? 0
+                    : Int(context.date.timeIntervalSinceReferenceDate / Self.period * Double(frames.count))
+                        % frames.count
+                Image(decorative: frames[index], scale: 1)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: size, height: size)
+            }
+            .accessibilityHidden(true)
+        }
+    }
+
+    static let columns = 8
+    static let side = 96
+
+    /// The sheet cut into frames, once; `nil` when the sheet is missing —
+    /// the wing then shows the system's symbol instead.
+    static let frames: [CGImage]? = {
+        guard let url = sheetURL,
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let sheet = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else { return nil }
+        let rows = sheet.height / side
+        var frames: [CGImage] = []
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let rect = CGRect(x: column * side, y: row * side, width: side, height: side)
+                if let frame = sheet.cropping(to: rect) { frames.append(frame) }
+            }
+        }
+        return frames.isEmpty ? nil : frames
+    }()
+
+    private static var sheetURL: URL? {
+        if let bundled = Bundle.main.url(forResource: "AirPodsTurn", withExtension: "png") {
+            return bundled
+        }
+        #if DEBUG
+        // Tests and previews run outside the app bundle; the sheet is in the
+        // source tree beside the other resources.
+        let tree = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // NowPlaying
+            .deletingLastPathComponent()   // Shelf
+            .deletingLastPathComponent()   // Cue
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // repository
+            .appendingPathComponent("Resources/AirPodsTurn.png")
+        return FileManager.default.fileExists(atPath: tree.path) ? tree : nil
+        #else
+        return nil
+        #endif
+    }
+}
+

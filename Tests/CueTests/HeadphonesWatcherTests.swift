@@ -54,4 +54,10 @@ struct HeadphonesWatcherTests {
         #expect(HeadphonesWatcher.Kind(name: "Beats Studio Pro") == .beats)
         #expect(HeadphonesWatcher.Kind(name: "soundcore Select 3") == .headphones)
     }
+
+    @Test func `the AirPods turn is forty-eight frames of one revolution`() {
+        let frames = AirPodsTurn.frames
+        #expect(frames?.count == 48)
+        #expect(frames?.allSatisfy { $0.width == AirPodsTurn.side && $0.height == AirPodsTurn.side } == true)
+    }
 }
