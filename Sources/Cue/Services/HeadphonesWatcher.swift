@@ -109,6 +109,9 @@ final class HeadphonesWatcher {
     /// signals for one arrival announce it once.
     private var lastAnnounced: [String: ContinuousClock.Instant] = [:]
     private var clearTask: Task<Void, Never>?
+    private var handover = HandoverDetector()
+    private var watchedForRunning: Set<AudioObjectID> = []
+    private let clock = ContinuousClock()
     private let logger = Diagnostics.logger("headphones")
 
     /// Two signals, because an arrival is not always a change of output.
@@ -125,6 +128,44 @@ final class HeadphonesWatcher {
 
         listen(to: Self.defaultOutputAddress) { $0.outputChanged() }
         listen(to: Self.devicesAddress) { $0.devicesChanged() }
+        listen(to: Self.systemOutputAddress) { $0.systemOutputReasserted() }
+        watchRunning(knownDevices)
+    }
+
+    // MARK: - Handover from another device
+
+    /// Follows whether each device is playing, for `HandoverDetector`.
+    private func watchRunning(_ devices: some Sequence<AudioObjectID>) {
+        for device in devices where !watchedForRunning.contains(device) {
+            watchedForRunning.insert(device)
+            handover.running(device, Self.isRunning(device), at: clock.now)
+
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectAddPropertyListenerBlock(device, &address, DispatchQueue.main) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.handover.running(device, Self.isRunning(device), at: self.clock.now)
+                }
+            }
+        }
+    }
+
+    /// macOS says the system output again, unchanged — which is what a
+    /// handover from a phone looks like from here. Whether it was them
+    /// arriving or leaving is settled a moment later by whether they play.
+    private func systemOutputReasserted() {
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self, let output = Self.defaultOutputDevice() else { return }
+            self.handover.running(output, Self.isRunning(output), at: self.clock.now)
+            if self.handover.arrived(output, at: self.clock.now) {
+                self.announce(output)
+            }
+        }
     }
 
     private func listen(
@@ -157,6 +198,7 @@ final class HeadphonesWatcher {
         let now = Set(Self.allDevices())
         let returned = now.subtracting(knownDevices)
         knownDevices = now
+        watchRunning(returned)
         guard !returned.isEmpty else { return }
 
         // The output is re-chosen a beat after a device appears.
@@ -234,6 +276,25 @@ final class HeadphonesWatcher {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
+    }
+
+    private static var systemOutputAddress: AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultSystemOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+    }
+
+    private static func isRunning(_ device: AudioObjectID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var running = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &running) == noErr && running != 0
     }
 
     private static func allDevices() -> [AudioObjectID] {
@@ -373,3 +434,46 @@ final class HeadphonesWatcher {
     }
     #endif
 }
+
+/// Tells headphones coming back from a phone apart from everything else.
+///
+/// AirPods stay connected to every Apple device they know; only the right to
+/// play moves. So when they come back from an iPhone the Mac's output does not
+/// change and they never leave its device list — what does happen, recorded
+/// during a real handover, is that macOS announces the system output again,
+/// unchanged, and the AirPods, silent while they were away, start playing.
+/// Leaving also re-announces the output, but while the audio is still
+/// flowing; and ordinary playback starts after silence without any
+/// announcement. So an arrival is both together: the output re-announced,
+/// and the headphones starting to play after a real silence, a moment before.
+struct HandoverDetector {
+    /// How long they must have been quiet for a start to count as coming back.
+    static let silence: Duration = .seconds(3)
+    /// How close the start and the announcement have to be.
+    static let window: Duration = .milliseconds(2500)
+
+    private var quietSince: [AudioObjectID: ContinuousClock.Instant] = [:]
+    private var startedAfterSilence: [AudioObjectID: ContinuousClock.Instant] = [:]
+
+    mutating func running(_ device: AudioObjectID, _ running: Bool, at now: ContinuousClock.Instant) {
+        if running {
+            if let since = quietSince[device], now - since >= Self.silence {
+                startedAfterSilence[device] = now
+            }
+            quietSince[device] = nil
+        } else if quietSince[device] == nil {
+            quietSince[device] = now
+        }
+    }
+
+    /// Asked a moment after the output is re-announced. Answers once.
+    mutating func arrived(_ device: AudioObjectID, at now: ContinuousClock.Instant) -> Bool {
+        guard quietSince[device] == nil,
+              let started = startedAfterSilence[device],
+              now - started <= Self.window
+        else { return false }
+        startedAfterSilence[device] = nil
+        return true
+    }
+}
+
