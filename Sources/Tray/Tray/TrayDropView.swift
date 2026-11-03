@@ -17,6 +17,15 @@ import AppKit
 /// `hitTest`, so the window is genuinely transparent to the app underneath.
 /// The alternative — a permanently live strip across the top of the display —
 /// is the "giant invisible mouse trap" §74 forbids.
+///
+/// `hitTest` is only half of it. The panel is transparent, and the window
+/// server sends the mouse — and every drag — to a transparent window only
+/// over pixels it has actually painted; everywhere else it goes straight to
+/// whatever is underneath, and `hitTest` is never asked. So the region that
+/// applies is also *painted*, by `catchmentLayer`, too faintly to see.
+/// Without that, the tray's real target was whatever the surface happened to
+/// draw: a soft shadow once, and with the island's shadow gone, a 56 × 5
+/// handle tucked behind the camera housing — which no dragged file ever found.
 final class TrayDropView: NSView {
     /// The visible tray, in this view's coordinates. Set by the controller
     /// whenever the shape changes.
@@ -36,9 +45,39 @@ final class TrayDropView: NSView {
     var isOpen = false {
         didSet {
             guard isOpen != oldValue else { return }
+            needsLayout = true
             revalidatePointerRegion()
         }
     }
+
+    /// A drag is under way somewhere on the system, so the wider drag region
+    /// is painted and live as well as the hover one. Set by the controller
+    /// from `SystemDragMonitor`.
+    var isSystemDragActive = false {
+        didSet {
+            guard isSystemDragActive != oldValue else { return }
+            needsLayout = true
+        }
+    }
+
+    /// How opaque the catchment is: the least the window server will count as
+    /// "painted" once rounded to 8 bits, and well below anything visible —
+    /// 1% black over a white menu bar moves it by two levels out of 255.
+    static let catchmentAlpha: CGFloat = 0.01
+
+    /// The faint fill that makes the live region real to the window server.
+    private let catchmentLayer: CALayer = {
+        let layer = CALayer()
+        layer.backgroundColor = NSColor.black.withAlphaComponent(TrayDropView.catchmentAlpha).cgColor
+        // Moves with the regions, never animates between them: a catchment
+        // that lags the shape is a target that is somewhere else.
+        layer.actions = ["bounds": NSNull(), "position": NSNull(), "frame": NSNull()]
+        layer.zPosition = -1
+        return layer
+    }()
+
+    /// Where the catchment is currently painted, in this view's coordinates.
+    var catchmentFrame: CGRect { catchmentLayer.frame }
 
     /// Keyboard commands. The tray only has a keyboard while it is key, which
     /// only happens when the user clicks into it — hovering and dropping never
@@ -71,6 +110,9 @@ final class TrayDropView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         registerForDraggedTypes([.fileURL])
+        wantsLayer = true
+        layer?.addSublayer(catchmentLayer)
+        needsLayout = true
     }
 
     @available(*, unavailable)
@@ -83,15 +125,25 @@ final class TrayDropView: NSView {
     /// When open this is the shelf plus a few points of slop, so the tray does
     /// not collapse out from under a pointer that drifted a pixel past the
     /// edge. When closed it is a narrow strip at the top centre (§75).
+    ///
+    /// Open, it also keeps the closed strip. `isOpen` flips a beat before the
+    /// new shape is reported, and in that beat `contentRect` is still the
+    /// handle: without the strip, a pointer resting where it opened the tray
+    /// counted as having left, the tray closed, the strip came back and it
+    /// opened again — ten times a second. Once the shelf is out it covers the
+    /// strip anyway, so this costs nothing at rest.
     var hoverActivationRect: CGRect {
-        if isOpen {
-            return contentRect.insetBy(
-                dx: -TrayMetrics.hoverSlop,
-                dy: -TrayMetrics.hoverSlop
-            )
-        }
+        guard isOpen else { return closedActivationRect }
+        return contentRect
+            .insetBy(dx: -TrayMetrics.hoverSlop, dy: -TrayMetrics.hoverSlop)
+            .union(closedActivationRect)
+    }
+
+    /// The narrow strip at the top centre that a resting pointer opens the
+    /// tray from — or the closed shape, if that is bigger.
+    private var closedActivationRect: CGRect {
         let width = max(TrayMetrics.hoverActivationWidth, contentRect.width)
-        let height = max(TrayMetrics.collapsedHeight, contentRect.height)
+        let height = max(TrayMetrics.hoverActivationHeight, contentRect.height)
         return CGRect(
             x: bounds.midX - width / 2,
             y: bounds.maxY - height,
@@ -113,13 +165,24 @@ final class TrayDropView: NSView {
         )
     }
 
-    /// A drag is under way somewhere on the system.
+    /// The region that currently counts: the hover region, widened to the
+    /// drag region while a drag might be heading this way.
+    private func liveRegion(widened: Bool) -> CGRect {
+        widened ? dragActivationRect.union(hoverActivationRect) : hoverActivationRect
+    }
+
+    /// The button is held right now.
     ///
-    /// Reading the button state is a single cheap query at hit-test time, not
-    /// a monitor and not a poll (§26). Every file drag has the button down,
-    /// which is exactly the condition that should widen the target.
+    /// A single cheap query at hit-test time, not a monitor and not a poll
+    /// (§26). Every file drag has the button down, which is exactly the
+    /// condition that should widen the target.
     private var pointerButtonIsDown: Bool {
         NSEvent.pressedMouseButtons & 0x1 != 0
+    }
+
+    override func layout() {
+        super.layout()
+        catchmentLayer.frame = liveRegion(widened: isSystemDragActive)
     }
 
     // MARK: - Keyboard (§35, §36)
@@ -184,9 +247,7 @@ final class TrayDropView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let region = pointerButtonIsDown
-            ? dragActivationRect.union(hoverActivationRect)
-            : hoverActivationRect
+        let region = liveRegion(widened: isSystemDragActive || pointerButtonIsDown)
 
         guard region.contains(local) else { return nil }
         return super.hitTest(point) ?? self

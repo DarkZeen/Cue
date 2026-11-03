@@ -22,15 +22,22 @@ final class TrayWindowController {
 
     private let panel: TrayPanel
     private let dropView: TrayDropView
-    private var hostingView: NSHostingView<AnyView>!
+    private var hostingView: TrayHostingView<AnyView>!
 
     private var focusObserver: (any NSObjectProtocol)?
+
+    /// Widens the painted drop catchment while a drag is under way (§75).
+    private let systemDrags = SystemDragMonitor()
 
     private let logger = Diagnostics.logger("tray-window")
 
     /// Raised so the app can put a preview on screen without the tray needing
     /// to know what Quick Look is.
     var onQuickLookRequest: ((TrayItem) -> Void)?
+
+    /// Raised by the header menu, for the same reason: the tray does not know
+    /// there is a settings window.
+    var onOpenSettingsRequest: (() -> Void)?
 
     init(
         geometry: ScreenGeometry,
@@ -81,24 +88,44 @@ final class TrayWindowController {
     /// shadow, anchored to the top edge of this display (§9, §87).
     private static func panelFrame(for geometry: ScreenGeometry) -> NSRect {
         // Sized for the widest the shelf is ever allowed to be, plus room for
-        // its flares and its shadow. The window never resizes — the shelf
-        // animates inside it — so it has to be big enough for the largest
-        // setting, not for the current one.
-        let widest = TrayMetrics.expandedWidth(
-            forScreenWidth: geometry.frame.width,
-            fraction: SettingsStore.widthFractionRange.upperBound
+        // its shadow. The window never resizes — the shelf animates inside it —
+        // so it has to be big enough for the largest setting, not for the
+        // current one.
+        let cutout = TrayMetrics.cutout(
+            notchSize: geometry.notchSize,
+            menuBarHeight: geometry.menuBarHeight,
+            screenWidth: geometry.frame.width
+        )
+
+        let widest = TrayShape.expandedWidth(
+            screenWidth: geometry.frame.width,
+            cutoutWidth: cutout.width,
+            size: .custom,
+            customWidth: TraySize.widthRange(
+                screenWidth: geometry.frame.width,
+                cutoutWidth: cutout.width
+            ).upperBound
         )
         let width = min(
             geometry.frame.width,
-            widest + (TrayMetrics.panelPadding + TrayMetrics.topFlare) * 2
+            widest + TrayMetrics.panelPadding * 2
         )
 
+        // A custom height has no bracket any more, so the tallest the shelf can
+        // be is the display — and the window has to be able to hold it. Being
+        // large costs nothing: the panel is transparent, hit-tests to nothing
+        // outside the shelf, and never resizes while the shelf animates in it.
+        //
         // The debug overlay hangs below the tray and would otherwise be clipped
         // by the window it lives in — a diagnostic you cannot read is not one.
-        let height = TrayItemMetrics.maximumExpandedHeight
-            + (geometry.notchSize?.height ?? 0)
-            + TrayMetrics.panelPadding
-            + (Diagnostics.isDebugOverlayEnabled ? 140 : 0)
+        let height = min(
+            geometry.usableHeight,
+            TrayItemMetrics.maximumExpandedHeight(screenHeight: geometry.usableHeight)
+                + cutout.height
+                + TrayMetrics.spacing
+                + TrayMetrics.panelPadding
+                + (Diagnostics.isDebugOverlayEnabled ? 140 : 0)
+        )
 
         return NSRect(
             x: geometry.anchorCenterX - width / 2,
@@ -114,9 +141,11 @@ final class TrayWindowController {
         panel.setFrame(frame, display: true)
         dropView.frame = NSRect(origin: .zero, size: frame.size)
         hostingView.frame = dropView.bounds
+        dropView.needsLayout = true
     }
 
     func close() {
+        systemDrags.stop()
         panel.orderOut(nil)
     }
 
@@ -151,6 +180,8 @@ final class TrayWindowController {
             onItemDragEnded: { [weak self] items, didLand in
                 self?.finishItemDrag(items, didLand: didLand)
             },
+            onClearAll: { [weak self] in self?.clearAll() },
+            onOpenSettings: { [weak self] in self?.onOpenSettingsRequest?() },
             onShapeChange: { [weak self] shape in
                 self?.updateHitRegions(for: shape)
             }
@@ -165,7 +196,7 @@ final class TrayWindowController {
             }
         )
 
-        hostingView = NSHostingView(rootView: root)
+        hostingView = TrayHostingView(rootView: root)
         hostingView.frame = dropView.bounds
         hostingView.autoresizingMask = [.width, .height]
         // The window is mostly empty space; only the tray should ever paint.
@@ -215,8 +246,14 @@ final class TrayWindowController {
         }
 
         dropView.onDragSessionEnded = { [weak self] in
+            self?.systemDrags.update(false)
             self?.presenter.dragSessionEnded()
         }
+
+        systemDrags.onChange = { [weak self] dragging in
+            self?.dropView.isSystemDragActive = dragging
+        }
+        systemDrags.start()
 
         dropView.performDrop = { [weak self] info in
             guard let self else { return false }
@@ -374,6 +411,15 @@ final class TrayWindowController {
         }
     }
 
+    /// Everything off the shelf at once, from the header menu.
+    ///
+    /// The one bulk command the tray has. It goes through `remove` rather than
+    /// emptying the store directly, so the thumbnail cache and the selection
+    /// are cleaned up the same way a one-file removal cleans them up.
+    private func clearAll() {
+        remove(store.items)
+    }
+
     private func remove(_ items: [TrayItem]) {
         guard !items.isEmpty else { return }
         for item in items {
@@ -385,6 +431,15 @@ final class TrayWindowController {
     }
 
     // MARK: - Commands
+
+    /// Opens the shelf to show a setting the user is changing.
+    ///
+    /// Deliberately not `open()`: that re-checks every file on disk, which is
+    /// the right thing to do when someone asks to see the shelf and the wrong
+    /// thing to do sixty times a second while they drag a slider.
+    func showPreview() {
+        presenter.open()
+    }
 
     func open() {
         store.refreshAvailability()
@@ -399,4 +454,16 @@ final class TrayWindowController {
         if !presenter.state.isOpen { store.refreshAvailability() }
         presenter.toggle()
     }
+}
+
+/// The SwiftUI host, with one thing changed.
+///
+/// Tray's panel is non-activating and the user's own app stays frontmost, so
+/// *every* click on the shelf is a click into an inactive window — the one
+/// AppKit swallows by default to stop a stray click firing a control. The
+/// items already opt in through `FileDragSource`; the header's buttons live in
+/// SwiftUI, and without this the chevron and the menu would need a click to
+/// wake the panel and a second one to do anything.
+private final class TrayHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

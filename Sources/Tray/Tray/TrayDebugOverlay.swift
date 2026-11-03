@@ -30,7 +30,9 @@ struct TrayDebugOverlay: View {
         .padding(6)
         .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .foregroundStyle(.green)
-        .padding(.top, TrayItemMetrics.maximumExpandedHeight + 8)
+        .padding(.top, TrayItemMetrics.maximumExpandedHeight(
+            screenHeight: geometry.usableHeight
+        ) + 8)
         .allowsHitTesting(false)
     }
 

@@ -65,16 +65,16 @@ struct TrayAppearanceTests {
         try render("08-expanded-notched", geometry: notched, items: 4, state: .expanded)
         try render("09-selected", geometry: notchless, items: 4, state: .expanded, selecting: [1, 2])
 
-        // The two surfaces that are not the default. Light has to stay legible
-        // with its ink flipped; pitch black has to stay findable with almost no
-        // edge of its own.
+        // The two surfaces that are not the island. Light has to stay legible
+        // with its ink flipped; graphite has to stay findable against a
+        // wallpaper close to its own colour.
         try render("10-light", geometry: notchless, items: 4, state: .expanded, appearance: .light)
         try render("11-light-empty", geometry: notchless, items: 0, state: .expanded, appearance: .light)
-        try render("12-black", geometry: notchless, items: 4, state: .expanded, appearance: .black)
-        try render("13-black-notched", geometry: notched, items: 3, state: .collapsed, appearance: .black)
+        try render("12-graphite", geometry: notchless, items: 4, state: .expanded, appearance: .graphite)
+        try render("13-graphite-notched", geometry: notched, items: 3, state: .collapsed, appearance: .graphite)
 
-        // The flared top corners and the notch clearance only exist on a
-        // notched display, and the outline is off by default.
+        // The housing clearance only looks different on a notched display, and
+        // the outline is off by default.
         try render("14-notch-clearance", geometry: notched, items: 4, state: .expanded)
         try render("15-drop-outline", geometry: notchless, items: 0, state: .dragOver, outlined: true)
         try render("16-outline-with-items", geometry: notched, items: 3, state: .expanded, outlined: true)
@@ -114,7 +114,7 @@ struct TrayAppearanceTests {
                 items: 3,
                 state: .expanded,
                 appearance: appearance,
-                size: CGSize(width: 460, height: 150)
+                size: CGSize(width: 620, height: 260)
             )
         }
     }
@@ -125,8 +125,8 @@ struct TrayAppearanceTests {
         geometry: ScreenGeometry,
         items: Int,
         state: TrayPresentationState,
-        appearance: TrayAppearance = .graphite,
-        size: CGSize = CGSize(width: 900, height: 220)
+        appearance: TrayAppearance = .black,
+        size: CGSize = CGSize(width: 900, height: 300)
     ) throws {
         let store = TrayStore()
         store.add(Self.sampleURLs(count: items))
@@ -212,7 +212,7 @@ struct TrayAppearanceTests {
         items: Int,
         state: TrayPresentationState,
         selecting indices: [Int] = [],
-        appearance: TrayAppearance = .graphite,
+        appearance: TrayAppearance = .black,
         outlined: Bool = false
     ) throws {
         let store = TrayStore()
@@ -248,7 +248,7 @@ struct TrayAppearanceTests {
         // keep (§48, §49).
         .background(Self.wallpaper)
 
-        guard let png = Self.rasterize(view, size: CGSize(width: 820, height: 160)) else {
+        guard let png = Self.rasterize(view, size: CGSize(width: 820, height: 300)) else {
             Issue.record("could not render \(name)")
             return
         }

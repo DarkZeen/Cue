@@ -32,6 +32,12 @@ final class AppState {
             self.quickLook.preview(item, within: self.store.items)
         }
 
+        displays.onOpenSettingsRequest = { [weak self] in self?.showSettings() }
+
+        // Changing how the tray looks opens the tray. Set here rather than in
+        // the store's initialiser because the displays do not exist yet then.
+        settings.onPreviewRequested = { [weak self] in self?.displays.previewActive() }
+
         configureStatusItem()
 
         // The startup repair pass from §34: the stored wish and the system's

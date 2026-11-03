@@ -131,61 +131,66 @@ SettingsRow(
             // Size sits second rather than inside Appearance: it is the group
             // people come here to change, and burying it under a scroll is how
             // a setting goes unfound.
-            SettingsCard(
-                title: "Size",
-                footnote: "Height is a floor — icons large enough to need more room still get it."
-            ) {
-SettingsRow(
-                    icon: "arrow.left.and.right",
-                    title: "Width",
-                    description: "How wide the shelf opens, as a share of the screen."
+            SettingsCard(title: "Size", footnote: sizeFootnote) {
+                SettingsRow(
+                    icon: "rectangle.expand.vertical",
+                    title: "Shelf size",
+                    description: settings.traySize.note
                 ) {
-                    HStack(spacing: 8) {
-                        Slider(
-                            value: Binding(
-                                get: { settings.trayWidthFraction },
-                                set: { settings.trayWidthFraction = $0 }
-                            ),
-                            in: SettingsStore.widthFractionRange
-                        )
-                        .frame(width: 110)
+                    Picker("", selection: Binding(
+                        get: { settings.traySize },
+                        set: { settings.traySize = $0 }
+                    )) {
+                        ForEach(TraySize.allCases, id: \.self) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 148)
+                }
 
-                        Text("\(Int((settings.trayWidthFraction * 100).rounded()))%")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 34, alignment: .trailing)
+                // The two sliders only exist for the size that reads them. A
+                // width control that does nothing while a preset is chosen is
+                // a control that teaches people not to trust the page.
+                if settings.traySize == .custom {
+                    SettingsRowDivider()
+
+                    SettingsRow(
+                        icon: "arrow.left.and.right",
+                        title: "Width",
+                        description: "Anything from the camera housing to the width of this display."
+                    ) {
+                        sizeSlider(
+                            value: Binding(
+                                get: { settings.customWidth },
+                                set: { settings.customWidth = $0 }
+                            ),
+                            in: widthRange,
+                            showing: shape.width
+                        )
+                    }
+
+                    SettingsRowDivider()
+
+                    SettingsRow(
+                        icon: "arrow.up.and.down",
+                        title: "Height",
+                        description: "Measured under the housing. Anything down to what the icons need, and up to this display."
+                    ) {
+                        sizeSlider(
+                            value: Binding(
+                                get: { settings.customHeight },
+                                set: { settings.customHeight = $0 }
+                            ),
+                            in: heightRange,
+                            showing: shape.height - shape.contentTop
+                        )
                     }
                 }
 
                 SettingsRowDivider()
 
-SettingsRow(
-                    icon: "arrow.up.and.down",
-                    title: "Height",
-                    description: heightDescription
-                ) {
-                    HStack(spacing: 8) {
-                        Slider(
-                            value: Binding(
-                                get: { settings.trayHeight },
-                                set: { settings.trayHeight = $0 }
-                            ),
-                            in: TrayMetrics.trayHeightRange
-                        )
-                        .frame(width: 110)
-
-                        Text("\(Int(effectiveHeight.rounded()))pt")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 34, alignment: .trailing)
-                    }
-                }
-
-                SettingsRowDivider()
-
-SettingsRow(
+                SettingsRow(
                     icon: "square.resize",
                     title: "Icon size",
                     description: "How large each file is drawn on the shelf."
@@ -204,8 +209,52 @@ SettingsRow(
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                            .frame(width: 34, alignment: .trailing)
+                            .frame(width: 40, alignment: .trailing)
                     }
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    icon: "arrow.left.and.right.square",
+                    title: "Header padding",
+                    description: "How far the name and the buttons sit from the sides."
+                ) {
+                    HStack(spacing: 8) {
+                        Slider(
+                            value: Binding(
+                                get: { settings.headerInset },
+                                set: { settings.headerInset = $0 }
+                            ),
+                            in: TrayMetrics.headerInsetRange
+                        )
+                        .frame(width: 110)
+
+                        Text("\(Int(settings.headerInset.rounded()))pt")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    icon: "align.horizontal.center",
+                    title: "Position",
+                    description: settings.contentAlignment.note
+                ) {
+                    Picker("", selection: Binding(
+                        get: { settings.contentAlignment },
+                        set: { settings.contentAlignment = $0 }
+                    )) {
+                        ForEach(TrayAlignment.allCases, id: \.self) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 176)
                 }
             }
 
@@ -279,7 +328,7 @@ SettingsRow(
 
             SettingsCard(
                 title: "Appearance",
-                footnote: "Tray keeps its own look rather than following the system between light and dark."
+                footnote: "Tray keeps its own look rather than following the system between light and dark. Island is the Dynamic Island's own opaque black."
             ) {
 SettingsRow(
                     icon: "circle.lefthalf.filled",
@@ -358,19 +407,100 @@ SettingsRow(
         }
     }
 
-    /// What the shelf's height actually works out to.
+    /// A size slider, reading out what the shelf *becomes* rather than what was
+    /// asked for.
     ///
-    /// The setting is a floor, so icons large enough to need more room win.
-    /// Reporting the request rather than the result would make the slider look
-    /// broken at the bottom of its range.
-    private var effectiveHeight: CGFloat {
-        settings.itemMetrics.expandedHeight(requesting: settings.trayHeight)
+    /// The two differ whenever a physical limit bites — a width inside the
+    /// camera housing, a height shorter than the icons, either one larger than
+    /// the display — and a slider whose number kept climbing after the shelf
+    /// had stopped growing would look broken.
+    ///
+    /// The value is clamped on the way *in* as well, so a size carried over
+    /// from a larger display shows the thumb somewhere real without the slider
+    /// writing a smaller number that nobody chose.
+    private func sizeSlider(
+        value: Binding<Double>,
+        in range: ClosedRange<Double>,
+        showing effective: CGFloat
+    ) -> some View {
+        HStack(spacing: 8) {
+            Slider(
+                value: Binding(
+                    get: { min(max(value.wrappedValue, range.lowerBound), range.upperBound) },
+                    set: { value.wrappedValue = $0 }
+                ),
+                in: range
+            )
+            .frame(width: 110)
+
+            Text("\(Int(effective.rounded()))pt")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 40, alignment: .trailing)
+        }
     }
 
-    private var heightDescription: String {
-        effectiveHeight > settings.trayHeight
-            ? "How tall the shelf opens. Raised here to fit the current icon size."
-            : "How tall the shelf opens."
+    /// What the shelf works out to right now, on the display this window is on.
+    ///
+    /// Always visible, including for the two presets, because the presets are
+    /// the sizes most people will keep and "Spacious" on its own does not say
+    /// how much of the screen that is.
+    private var sizeFootnote: String {
+        let width = Int(shape.width.rounded())
+        let height = Int((shape.height - shape.contentTop).rounded())
+        return "The shelf opens \(width) × \(height) points on this display. "
+            + "Changing any of this opens the tray so you can watch it happen."
+    }
+
+    // MARK: - The display this window is on
+
+    /// The limits are the hardware, not a bracket chosen here: a custom shelf
+    /// runs from the camera housing to the edges of the display.
+    private var geometry: ScreenGeometry? {
+        NSScreen.main.flatMap(ScreenGeometryService.geometry(for:))
+    }
+
+    private var screenSize: CGSize {
+        geometry?.frame.size ?? CGSize(width: 1470, height: 956)
+    }
+
+    /// Down to the Dock, not to the bottom of the glass.
+    private var usableHeight: CGFloat {
+        geometry?.usableHeight ?? screenSize.height
+    }
+
+    private var cutout: CGSize {
+        TrayMetrics.cutout(
+            notchSize: geometry?.notchSize,
+            menuBarHeight: geometry?.menuBarHeight ?? 24,
+            screenWidth: screenSize.width
+        )
+    }
+
+    private var widthRange: ClosedRange<Double> {
+        TraySize.widthRange(screenWidth: screenSize.width, cutoutWidth: cutout.width)
+    }
+
+    private var heightRange: ClosedRange<Double> {
+        TraySize.heightRange(
+            screenHeight: usableHeight,
+            cutoutHeight: cutout.height,
+            item: settings.itemMetrics
+        )
+    }
+
+    /// The shelf these settings currently produce.
+    private var shape: TrayShape {
+        TrayShape.expanded(
+            screenWidth: screenSize.width,
+            screenHeight: usableHeight,
+            cutout: cutout,
+            size: settings.traySize,
+            customWidth: settings.customWidth,
+            customHeight: settings.customHeight,
+            item: settings.itemMetrics
+        )
     }
 
     private func description(for activation: SettingsStore.Activation) -> String {

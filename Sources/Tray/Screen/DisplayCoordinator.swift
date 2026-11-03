@@ -20,6 +20,7 @@ final class DisplayCoordinator {
     private let logger = Diagnostics.logger("displays")
 
     var onQuickLookRequest: ((TrayItem) -> Void)?
+    var onOpenSettingsRequest: (() -> Void)?
 
     init(store: TrayStore, thumbnails: ThumbnailProvider, settings: SettingsStore) {
         self.store = store
@@ -47,6 +48,13 @@ final class DisplayCoordinator {
 
     func toggleActive() {
         activeController?.toggle()
+    }
+
+    /// Shows the tray on the display the pointer is on, because a setting that
+    /// changes how it looks just changed. The pointer is over the Settings
+    /// window, so this is the screen the user is already looking at.
+    func previewActive() {
+        activeController?.showPreview()
     }
 
     func collapseAll() {
@@ -82,6 +90,9 @@ final class DisplayCoordinator {
                 )
                 controller.onQuickLookRequest = { [weak self] item in
                     self?.onQuickLookRequest?(item)
+                }
+                controller.onOpenSettingsRequest = { [weak self] in
+                    self?.onOpenSettingsRequest?()
                 }
                 controllers[geometry.id] = controller
             }

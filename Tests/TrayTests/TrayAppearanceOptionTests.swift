@@ -22,7 +22,7 @@ struct TrayAppearanceOptionTests {
         }
     }
 
-    @Test func `pitch black lets nothing through`() {
+    @Test func `the island lets nothing through`() {
         // The whole point of this option is that it matches the camera housing,
         // and the housing is not translucent.
         #expect(TrayAppearance.black.palette.usesMaterial == false)
@@ -50,30 +50,32 @@ struct TrayAppearanceOptionTests {
         return SettingsStore(defaults: defaults)
     }
 
-    @Test func `the tray starts on graphite and stays open after a click`() {
+    @Test func `the tray starts on the island's black and stays open after a click`() {
         let settings = freshSettings()
 
-        #expect(settings.appearance == .graphite)
+        #expect(settings.appearance == .black)
         #expect(settings.staysOpenAfterClick)
     }
 
     @Test func `both new settings survive a relaunch`() {
         let defaults = UserDefaults(suiteName: "TrayTests-\(UUID().uuidString)")!
 
+        // Not the island: that is the default, so storing it would prove
+        // nothing about whether the choice was written down.
         let first = SettingsStore(defaults: defaults)
-        first.appearance = .black
+        first.appearance = .graphite
         first.staysOpenAfterClick = false
 
         let second = SettingsStore(defaults: defaults)
-        #expect(second.appearance == .black)
+        #expect(second.appearance == .graphite)
         #expect(second.staysOpenAfterClick == false)
     }
 
-    @Test func `an unrecognised stored surface falls back to graphite`() {
+    @Test func `an unrecognised stored surface falls back to the island`() {
         let defaults = UserDefaults(suiteName: "TrayTests-\(UUID().uuidString)")!
         defaults.set("chartreuse", forKey: "appearance")
 
-        #expect(SettingsStore(defaults: defaults).appearance == .graphite)
+        #expect(SettingsStore(defaults: defaults).appearance == .black)
     }
 
     // MARK: - The click requirement

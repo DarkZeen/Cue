@@ -43,29 +43,31 @@ That is the entire product. There is no media player, no clipboard history, no w
 - **Nothing moves on disk.** The shelf holds a reference to the file, not a copy. Your photo stays on the Desktop the whole time it is sitting in the tray.
 - **Drag them back out into anything.** A Finder window, a Save dialog, an upload field, another app. It is a real macOS drag, so every destination that takes a file takes this one.
 - **Or use the keyboard.** Click an item and press Delete to take it off the shelf, Space to Quick Look it, ⌘C to copy it, ⌘V to paste files in from anywhere. ⌘-click picks out several, ⌘A takes the lot, arrow keys walk along, Escape closes.
-- **It fits around the notch.** Nothing the shelf shows sits under the camera housing — the housing is a hole in the display, not a dark rectangle, so anything drawn there is simply gone. The shelf's walls flare outwards where they meet the top edge, the same move the hardware makes where the notch meets the bezel.
-- **It knows about the notch.** On a MacBook with a camera housing the closed shelf *is* the housing — same width, same height, hanging off the same edge. On any other display it is a small capsule in the same place. Both are measured from the display, never hardcoded, so external monitors and scaling changes are just other numbers.
+- **It fits around the notch.** Nothing the shelf shows sits under the camera housing — the housing is a hole in the display, not a dark rectangle, so anything drawn there is simply gone. The shelf spans its full width where it meets the top edge and draws in over a shoulder on each side, the same move the hardware makes where the notch meets the bezel.
+- **It knows about the notch.** On a MacBook with a camera housing the closed shelf *is* the housing — same width, same height, hanging off the same edge. On any other display it recreates one, scaled to the menu bar that display has, so the shelf looks the same on a MacBook Pro and a 5K panel. Both are measured from the display, never hardcoded, so external monitors and scaling changes are just other numbers.
 - **Every display gets one.** Drag toward the top of your second monitor and that monitor's shelf answers. Connect or disconnect a screen and the shelves follow.
-- **Three surfaces.** Graphite by default. Light, if you would rather the shelf sat with a pale desktop than against it. Or pitch black — the same black as the camera housing, with nothing showing through, so on a MacBook the shelf reads as the notch itself growing.
+- **Three surfaces.** Island by default — the same opaque black as the camera housing, with nothing showing through, no shadow and no edge, so on a MacBook the shelf reads as the notch itself growing. Graphite, if you would rather it was dark and slightly translucent. Or light, if you would rather it sat with a pale desktop than against it.
 - **It stays out of the way.** Empty and idle, the tray is a faint line you can ignore. Holding something, it is a small pill with a dot per file. It opens as the pointer arrives and closes as the pointer leaves. Hovering and dropping never take focus, so throwing a file at it does not pull you out of whatever you were doing — only clicking into it does, and only so the keyboard has something to talk to.
 - **Secondary click for the rest.** Remove from Tray, Reveal in Finder, Quick Look. Three items, because it is a shelf and not a file manager.
 
 <p align="center">
-  <img src="docs/assets/readme/closed.png" width="380" alt="The closed tray: a small dark pill with three dots, one per file">
-  <img src="docs/assets/readme/drop.png" width="380" alt="The tray with a drag overhead, reading Release to stash">
+  <img src="docs/assets/readme/closed.png" width="380" alt="The closed tray: a black cutout in the menu bar with three dots, one per file">
+  <img src="docs/assets/readme/drop.png" width="380" alt="The tray with a drag overhead, its symbol lit to show a drop will land">
 </p>
 
 <p align="center">
+  <img src="docs/assets/readme/surface-black.png" width="250" alt="The tray in island black: fully opaque, the same black as the notch">
   <img src="docs/assets/readme/surface-graphite.png" width="250" alt="The tray in graphite: dark and slightly translucent">
   <img src="docs/assets/readme/surface-light.png" width="250" alt="The tray in light: a pale translucent surface with dark file names">
-  <img src="docs/assets/readme/surface-black.png" width="250" alt="The tray in pitch black: fully opaque, the same black as the notch">
 </p>
 
 ## Settings
 
 Four pages, and most of them you will open once. General has Launch at Login and the menu bar icon; Tray has what opens the shelf, how long it waits before closing, and whether file names show. Opening Tray while it is already running opens this window — an app with no Dock icon has to have a front door somewhere.
 
-By default the shelf closes the moment the pointer leaves, and a tray you have clicked into waits for a click elsewhere so that reaching for the keyboard does not close it. Both are settings: *Close after* goes up to three seconds, and *Stay open after a click* turns the second behaviour off entirely. *Surface* picks between the three looks, *Width* and *Height* set how big the shelf opens, *Icon size* sets how large each file is drawn, and *Outline the drop area* adds a dashed border showing where a dropped file will land, with a slider for how far inside the edge it sits. *Open after a drop* decides whether the shelf stays up for a moment to show what landed.
+By default the shelf closes the moment the pointer leaves, and a tray you have clicked into waits for a click elsewhere so that reaching for the keyboard does not close it. Both are settings: *Close after* goes up to three seconds, and *Stay open after a click* turns the second behaviour off entirely. *Surface* picks between the three looks, *Shelf size* opens it compact, spacious or at a width and height you set yourself — with no bracket beyond the camera housing, the edges of the display and whatever the icons need — *Icon size* sets how large each file is drawn, *Header padding* how far the name and buttons sit from the sides and *Position* whether the files sit left, centred or right, and *Outline the drop area* adds a dashed border showing where a dropped file will land, with a slider for how far inside the edge it sits. *Open after a drop* decides whether the shelf stays up for a moment to show what landed.
+
+Anything that changes how the tray looks opens the tray while you change it, so a size slider is something you watch rather than something you guess at. It closes on its own a couple of seconds after you stop.
 
 The Privacy page is the one worth a look. It is the same page other menu bar apps use to explain which permissions they need — except that Tray's version is a list of the ones it does not.
 

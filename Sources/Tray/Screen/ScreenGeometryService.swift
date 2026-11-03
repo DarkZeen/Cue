@@ -26,6 +26,26 @@ struct ScreenGeometry: Equatable, Identifiable, Sendable {
     /// Height of the menu bar on this display, notch or no notch.
     let menuBarHeight: CGFloat
 
+    /// What macOS says is usable on this display — everything except the menu
+    /// bar and the Dock.
+    ///
+    /// The tray hangs *over* the menu bar on purpose, so this is not where it
+    /// starts. It is where it has to stop: with no bracket on a custom height,
+    /// a shelf someone drags all the way out would otherwise end up covering
+    /// the Dock, and so would the window holding it.
+    var visibleFrame: CGRect = .zero
+
+    /// How far the tray may reach from the top edge of the display.
+    ///
+    /// Falls back to the whole display when nothing sensible was reported,
+    /// which is what a test that does not care about the Dock will hand us.
+    var usableHeight: CGFloat {
+        guard visibleFrame.height > 0, visibleFrame.minY >= frame.minY else {
+            return frame.height
+        }
+        return frame.maxY - visibleFrame.minY
+    }
+
     var hasNotch: Bool { notchSize != nil }
 
     /// The x the tray centres on: the middle of the display, which on a notched
@@ -116,7 +136,8 @@ final class ScreenGeometryService {
             frame: screen.frame,
             notchSize: notchSize,
             topInset: insets.top,
-            menuBarHeight: menuBarHeight
+            menuBarHeight: menuBarHeight,
+            visibleFrame: screen.visibleFrame
         )
     }
 

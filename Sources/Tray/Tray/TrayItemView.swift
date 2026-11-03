@@ -72,6 +72,16 @@ struct TrayItemView: View {
 
     // MARK: - Pieces
 
+    /// The island's artwork treatment: a squircle whose radius is a fixed share
+    /// of its size — 19%, so a 32pt icon and an 88pt one are the same shape at
+    /// two scales rather than one rounded tile and one nearly-square one — over
+    /// a hairline that keeps a pale thumbnail from dissolving into the black.
+    private var plateRadius: CGFloat { metrics.thumbnailSize * 0.19 }
+
+    private var plate: RoundedRectangle {
+        RoundedRectangle(cornerRadius: plateRadius, style: .continuous)
+    }
+
     private var thumbnail: some View {
         Image(nsImage: displayImage)
             .resizable()
@@ -82,22 +92,21 @@ struct TrayItemView: View {
             .background {
                 // Hover is a whisper; selection is a statement. Both live on
                 // the same shape so one becomes the other rather than a second
-                // thing appearing next to it.
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                // thing appearing next to it. The island's own two values:
+                // 9% under the pointer, 12% for what is chosen.
+                plate
                     .fill(selectionFill)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(
-                                Color.accentColor.opacity(isSelected ? 0.9 : 0),
-                                lineWidth: 1.5
-                            )
-                    }
                     .padding(-4)
+            }
+            .overlay {
+                plate.strokeBorder(
+                    isSelected ? palette.ink(0.5) : palette.artworkEdge,
+                    lineWidth: isSelected ? 1.5 : 0.5
+                )
             }
             .overlay(alignment: .bottomTrailing) {
                 if !item.isAvailable { unavailableBadge }
             }
-            .shadow(color: .black.opacity(isHovering ? 0.28 : 0.18), radius: isHovering ? 6 : 3, y: 2)
     }
 
     /// The file went away behind our back (§52). Say so quietly; do not remove
@@ -106,7 +115,7 @@ struct TrayItemView: View {
         Image(systemName: "exclamationmark.circle.fill")
             .font(.system(size: 11, weight: .semibold))
             .symbolRenderingMode(.palette)
-            .foregroundStyle(.white, Color(red: 0.85, green: 0.4, blue: 0.3))
+            .foregroundStyle(palette.primaryInk, Color(red: 0.85, green: 0.4, blue: 0.3))
             .offset(x: 2, y: 2)
     }
 
@@ -118,9 +127,10 @@ struct TrayItemView: View {
     }
 
     private var selectionFill: Color {
-        // The accent colour, because that is what "selected" means everywhere
-        // else on the system. Plain ink would read as pressed.
-        if isSelected { return .accentColor.opacity(0.30) }
+        // Ink rather than the accent colour: the island tints everything in it
+        // white, and one blue tile in a black cutout turns the whole thing
+        // back into a panel.
+        if isSelected { return palette.controlFill(selected: true) }
         return palette.hoverFill(isHovering)
     }
 

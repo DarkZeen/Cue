@@ -43,12 +43,15 @@ final class SettingsStore {
         static let showsFileNames = "showsFileNames"
         static let staysOpenAfterClick = "staysOpenAfterClick"
         static let appearance = "appearance"
-        static let trayWidthFraction = "trayWidthFraction"
+        static let traySize = "traySize"
         static let showsDropOutline = "showsDropOutline"
         static let thumbnailSize = "thumbnailSize"
         static let expandsAfterDrop = "expandsAfterDrop"
         static let dropOutlineInset = "dropOutlineInset"
-        static let trayHeight = "trayHeight"
+        static let customWidth = "customWidth"
+        static let customHeight = "customHeight"
+        static let headerInset = "headerInset"
+        static let contentAlignment = "contentAlignment"
     }
 
     private let defaults: UserDefaults
@@ -106,6 +109,7 @@ final class SettingsStore {
         didSet {
             guard showsFileNames != oldValue else { return }
             defaults.set(showsFileNames, forKey: Key.showsFileNames)
+            onPreviewRequested?()
         }
     }
 
@@ -127,17 +131,72 @@ final class SettingsStore {
         didSet {
             guard appearance != oldValue else { return }
             defaults.set(appearance.rawValue, forKey: Key.appearance)
+            onPreviewRequested?()
         }
     }
 
-    /// How wide the open shelf is, as a share of the display's width.
+    /// Raised when a setting changes that can only be judged by looking at the
+    /// tray — how big it is, how large the icons are, how it is painted.
     ///
-    /// Stored as a fraction rather than as points so that one setting means the
-    /// same thing on a laptop screen and on a 5K display.
-    var trayWidthFraction: Double {
+    /// The app answers by opening the shelf, so dragging a size slider shows
+    /// the shelf changing under your hand rather than asking you to close
+    /// Settings and go and check. A closure rather than a direct call into the
+    /// displays, because a settings store that knows about windows is a
+    /// settings store nothing can test.
+    var onPreviewRequested: (() -> Void)?
+
+    /// How big the open shelf is: the island's two presets, or a size of your
+    /// own.
+    var traySize: TraySize {
         didSet {
-            guard trayWidthFraction != oldValue else { return }
-            defaults.set(trayWidthFraction, forKey: Key.trayWidthFraction)
+            guard traySize != oldValue else { return }
+            defaults.set(traySize.rawValue, forKey: Key.traySize)
+            onPreviewRequested?()
+        }
+    }
+
+    /// The width the custom size asks for, in points. Only consulted while
+    /// `traySize` is `.custom`, but remembered either way, so switching to a
+    /// preset and back does not lose it.
+    ///
+    /// Unbracketed: what it can actually produce is decided against the
+    /// display the shelf is on, not here.
+    var customWidth: Double {
+        didSet {
+            guard customWidth != oldValue else { return }
+            defaults.set(customWidth, forKey: Key.customWidth)
+            onPreviewRequested?()
+        }
+    }
+
+    /// The height the custom size asks for, in points, measured under the
+    /// camera housing. A floor: content that needs more room still gets it.
+    var customHeight: Double {
+        didSet {
+            guard customHeight != oldValue else { return }
+            defaults.set(customHeight, forKey: Key.customHeight)
+            onPreviewRequested?()
+        }
+    }
+
+    /// How far the name and the buttons sit from the sides of the shelf, in
+    /// points. Sides only — the header shares the menu bar's line and has no
+    /// vertical room to give.
+    var headerInset: Double {
+        didSet {
+            guard headerInset != oldValue else { return }
+            defaults.set(headerInset, forKey: Key.headerInset)
+            onPreviewRequested?()
+        }
+    }
+
+    /// Where the files — and the prompt on an empty shelf — sit across the
+    /// shelf's width.
+    var contentAlignment: TrayAlignment {
+        didSet {
+            guard contentAlignment != oldValue else { return }
+            defaults.set(contentAlignment.rawValue, forKey: Key.contentAlignment)
+            onPreviewRequested?()
         }
     }
 
@@ -146,6 +205,7 @@ final class SettingsStore {
         didSet {
             guard showsDropOutline != oldValue else { return }
             defaults.set(showsDropOutline, forKey: Key.showsDropOutline)
+            onPreviewRequested?()
         }
     }
 
@@ -163,6 +223,7 @@ final class SettingsStore {
         didSet {
             guard dropOutlineInset != oldValue else { return }
             defaults.set(dropOutlineInset, forKey: Key.dropOutlineInset)
+            onPreviewRequested?()
         }
     }
 
@@ -171,19 +232,9 @@ final class SettingsStore {
         didSet {
             guard thumbnailSize != oldValue else { return }
             defaults.set(thumbnailSize, forKey: Key.thumbnailSize)
+            onPreviewRequested?()
         }
     }
-
-    /// How tall the open shelf is, in points. A floor: content that needs more
-    /// room still gets it.
-    var trayHeight: Double {
-        didSet {
-            guard trayHeight != oldValue else { return }
-            defaults.set(trayHeight, forKey: Key.trayHeight)
-        }
-    }
-
-    static let widthFractionRange: ClosedRange<Double> = 0.18...0.95
 
     /// The two settings that decide how big an item is, as one value.
     var itemMetrics: TrayItemMetrics {
@@ -204,13 +255,16 @@ final class SettingsStore {
             Key.activation: Activation.both.rawValue,
             Key.autoCollapseDelay: 0.0,
             Key.staysOpenAfterClick: true,
-            Key.appearance: TrayAppearance.graphite.rawValue,
-            Key.trayWidthFraction: 0.32,
+            Key.appearance: TrayAppearance.black.rawValue,
+            Key.traySize: TraySize.spacious.rawValue,
             Key.showsDropOutline: false,
             Key.thumbnailSize: TrayMetrics.defaultThumbnailSize,
             Key.expandsAfterDrop: true,
             Key.dropOutlineInset: TrayMetrics.defaultDropOutlineInset,
-            Key.trayHeight: TrayItemMetrics.default.expandedHeight,
+            Key.customWidth: TraySize.defaultWidth,
+            Key.customHeight: TraySize.defaultHeight,
+            Key.headerInset: TrayMetrics.defaultHeaderInset,
+            Key.contentAlignment: TrayAlignment.center.rawValue,
         ])
 
         // `object(forKey:)` rather than `bool(forKey:)`, so an absent key
@@ -225,26 +279,38 @@ final class SettingsStore {
         showsDropOutline = defaults.bool(forKey: Key.showsDropOutline)
         expandsAfterDrop = defaults.bool(forKey: Key.expandsAfterDrop)
         appearance = TrayAppearance(rawValue: defaults.string(forKey: Key.appearance) ?? "")
-            ?? .graphite
+            ?? .black
+        traySize = TraySize(rawValue: defaults.string(forKey: Key.traySize) ?? "")
+            ?? .spacious
 
         // Clamped on the way in: a stored value from an older build, or one
         // edited by hand, must not produce a shelf wider than the display.
-        let storedWidth = defaults.double(forKey: Key.trayWidthFraction)
-        trayWidthFraction = min(
-            max(storedWidth, Self.widthFractionRange.lowerBound),
-            Self.widthFractionRange.upperBound
+        // Sanity only. A custom size has no design bracket to be clamped to:
+        // what it produces is decided against the display it is drawn on, and
+        // a value stored on one Mac has to survive being read on another.
+        customWidth = TraySize.clamped(
+            defaults.double(forKey: Key.customWidth),
+            to: TraySize.storable,
+            fallback: TraySize.defaultWidth
+        )
+        headerInset = TraySize.clamped(
+            defaults.double(forKey: Key.headerInset),
+            to: TrayMetrics.headerInsetRange,
+            fallback: Double(TrayMetrics.defaultHeaderInset)
+        )
+        contentAlignment = TrayAlignment(rawValue: defaults.string(forKey: Key.contentAlignment) ?? "")
+            ?? .center
+
+        customHeight = TraySize.clamped(
+            defaults.double(forKey: Key.customHeight),
+            to: TraySize.storable,
+            fallback: TraySize.defaultHeight
         )
 
         let storedThumbnail = defaults.double(forKey: Key.thumbnailSize)
         thumbnailSize = min(
             max(storedThumbnail, TrayMetrics.thumbnailSizeRange.lowerBound),
             TrayMetrics.thumbnailSizeRange.upperBound
-        )
-
-        let storedHeight = defaults.double(forKey: Key.trayHeight)
-        trayHeight = min(
-            max(storedHeight, TrayMetrics.trayHeightRange.lowerBound),
-            TrayMetrics.trayHeightRange.upperBound
         )
 
         let storedInset = defaults.double(forKey: Key.dropOutlineInset)

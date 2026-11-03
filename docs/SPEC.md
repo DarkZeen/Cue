@@ -289,18 +289,28 @@ These should be implemented as constants/configuration values rather than scatte
 
 Use something approximately like:
 
+Tray now uses the Dynamic Island's own measurements, which is what the
+paragraph below asks for: they were arrived at by looking at a shipping
+implementation of exactly this shape rather than by guessing at brackets.
+
 ```text
-collapsedHeight ≈ 28–34
-expandedHeight ≈ 84–112
+shoulder            14        # how far the shape draws in from the top edge
+cornerRadius        28        # clamped to height / 2, so one expression fits both states
 
-minimumWidth ≈ 110
-collapsedWidth ≈ 90–120
+horizontalInset     28
+headerHeight        36
+spacing             18        # header to content
+bottomInset         22
+cutoutClearance     10        # below the camera housing, real or recreated
 
-thumbnailSize ≈ 48–56
-itemSpacing ≈ 8–10
-horizontalPadding ≈ 12–16
+closed width        the camera housing, or 180 × menuBarHeight / 32 without one
+closed height       the camera housing, or the menu bar's height
 
-cornerRadius ≈ 18–28
+open width          480 compact, 560 spacious, 360–600 custom
+open height         clearance + chrome + content, +40 spacious, 160–520 custom
+
+thumbnailSize       52 (32–88)
+itemSpacing         12
 ```
 
 Do not hardcode these exact values forever.

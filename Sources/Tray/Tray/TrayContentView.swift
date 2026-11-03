@@ -5,9 +5,14 @@ import SwiftUI
 ///
 /// One surface, hanging from the top edge of the display, changing shape.
 /// There is no branch here that swaps one view for another when the tray
-/// opens — the container's width, height and corner radius animate, and the
-/// contents cross-fade inside it. That is what makes the open and close read
-/// as a single object rather than two views trading places (§16).
+/// opens — the container's width, height, shoulder and corner radius animate,
+/// and the contents cross-fade inside it. That is what makes the open and
+/// close read as a single object rather than two views trading places (§16).
+///
+/// Open, it is laid out the way the Dynamic Island lays itself out: a 36pt
+/// header with the title on the left and its buttons on the right, 18pt of
+/// air, then the content, inset 28pt from the sides and 22pt from the bottom,
+/// all of it starting below the camera housing.
 struct TrayContentView: View {
     let store: TrayStore
     let presenter: TrayPresenter
@@ -23,6 +28,10 @@ struct TrayContentView: View {
     let onQuickLook: (TrayItem) -> Void
     let onItemDragBegan: ([TrayItem]) -> Void
     let onItemDragEnded: ([TrayItem], Bool) -> Void
+
+    /// The two commands the island keeps in its header menu.
+    var onClearAll: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
 
     /// Reported upward so the AppKit layer can keep its hit regions exactly on
     /// the pixels the user can see (§74).
@@ -43,6 +52,9 @@ struct TrayContentView: View {
         .environment(\.trayPalette, palette)
         .environment(\.trayMotion, motion)
         .environment(\.colorScheme, palette.colorScheme)
+        // The island tints everything in it white and leaves the accent colour
+        // out: a black cutout with a blue button in it is a panel again.
+        .tint(palette.primaryInk)
     }
 
     // MARK: - The surface
@@ -59,26 +71,21 @@ struct TrayContentView: View {
                 .opacity(isOpen ? 0 : 1)
 
             expandedContents
-                .frame(width: shape.width, height: shape.height - shape.notchInset)
-                // Everything the shelf shows sits below the camera housing.
-                // Nothing drawn under the notch is visible — it is a hole in
-                // the display, not a dark rectangle — so without this the top
-                // of every thumbnail in the middle of the shelf is missing.
-                .padding(.top, shape.notchInset)
+                .frame(width: shape.width, height: shape.height)
                 .opacity(isOpen ? 1 : 0)
         }
         .frame(width: shape.width, height: shape.height)
         // Nothing escapes the surface. As well as being correct at rest, this
         // is what makes the collapse read as the shelf closing over its
         // contents rather than the contents sliding out of a shrinking box.
-        .clipShape(TraySurface(cornerRadius: shape.cornerRadius))
+        .clipShape(TraySurface(cornerRadius: shape.cornerRadius, shoulder: shape.shoulder))
         .traySurface(
             cornerRadius: shape.cornerRadius,
-            topFlare: shape.topFlare,
+            shoulder: shape.shoulder,
             isEmphasised: presenter.state.isDropTargetActive,
             showsDropOutline: settings.showsDropOutline && isOpen,
             dropOutlineInset: settings.dropOutlineInset,
-            notchInset: shape.notchInset
+            contentTop: shape.contentTop
         )
         // Scaled from the top, because that is where the object is attached.
         // Scaling from the centre would lift it off the edge of the screen.
@@ -98,21 +105,44 @@ struct TrayContentView: View {
 
     private var palette: TrayPalette { settings.appearance.palette }
 
+    /// How large the files are drawn and how much room they get around them.
+    private var contentMetrics: TrayItemMetrics { settings.itemMetrics }
+
+    /// Where the contents sit across the shelf, vertically centred either way.
+    private var contentAlignment: Alignment {
+        switch settings.contentAlignment {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
+        }
+    }
+
     private var motion: TrayMotion { TrayMotion(reduceMotion: reduceMotion) }
 
     private var isOpen: Bool { presenter.state.isOpen }
+
+    /// The camera housing this display has, or the island's recreation of one.
+    private var cutout: CGSize {
+        TrayMetrics.cutout(
+            notchSize: geometry.notchSize,
+            menuBarHeight: geometry.menuBarHeight,
+            screenWidth: geometry.frame.width
+        )
+    }
 
     private var shape: TrayShape {
         if isOpen {
             return .expanded(
                 screenWidth: geometry.frame.width,
-                widthFraction: settings.trayWidthFraction,
-                notchHeight: geometry.notchSize?.height ?? 0,
-                item: settings.itemMetrics,
-                height: settings.trayHeight
+                screenHeight: geometry.usableHeight,
+                cutout: cutout,
+                size: settings.traySize,
+                customWidth: settings.customWidth,
+                customHeight: settings.customHeight,
+                item: contentMetrics
             )
         }
-        return .collapsed(notchSize: geometry.notchSize, isEmpty: store.isEmpty)
+        return .collapsed(cutout: cutout, isEmpty: store.isEmpty)
     }
 
     /// Opening and closing get different springs: leaving should feel calmer
@@ -147,8 +177,95 @@ struct TrayContentView: View {
 
     // MARK: - Open
 
-    @ViewBuilder
+    /// The header in the menu bar strip, the files under it.
+    ///
+    /// Two insets, not one: the header is pushed out to the walls so the name
+    /// and the buttons line up with the menu bar items either side of the
+    /// shelf, and the content stays on the island's 28 so the files sit inside
+    /// that frame rather than queueing up alongside it.
     private var expandedContents: some View {
+        VStack(spacing: 0) {
+            header
+                // Exactly the housing's own strip, so the header's contents
+                // land on the same line as the menu bar's.
+                .frame(height: cutout.height)
+                .padding(.horizontal, settings.headerInset)
+                .zIndex(1)
+
+            content
+                .padding(.horizontal, TrayMetrics.horizontalInset)
+                .padding(.top, TrayMetrics.spacing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .padding(.bottom, TrayMetrics.bottomInset)
+    }
+
+    /// The name in one corner, the way out in the other, both on the menu
+    /// bar's own line.
+    ///
+    /// The app's own glyph rather than an SF Symbol of a tray: it is the mark
+    /// in the menu bar, and a shelf that introduces itself with someone else's
+    /// picture of a shelf is a shelf with no face. The chevron closes, and the
+    /// gear sits outermost because Settings is the thing people go looking for
+    /// in that corner.
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(nsImage: TrayIcon.menuBarImage())
+                .renderingMode(.template)
+                .interpolation(.high)
+                .foregroundStyle(palette.ink(0.9))
+                .accessibilityHidden(true)
+
+            Text("Tray")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(palette.primaryInk)
+                .lineLimit(1)
+                .padding(.leading, 1)
+
+            if !store.isEmpty {
+                Text("\(store.count)")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(palette.ink(0.55))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .trayControlSurface(cornerRadius: 8)
+                    .accessibilityHidden(true)
+            }
+
+            Spacer(minLength: 8)
+
+            TrayIconButton(symbol: "chevron.up", title: "Close", size: headerButton) {
+                presenter.collapseNow()
+            }
+
+            Menu {
+                Button("Clear the Shelf", action: onClearAll)
+                    .disabled(store.isEmpty)
+                Divider()
+                Button("Settings…", action: onOpenSettings)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(palette.ink(0.55))
+                    .frame(width: headerButton, height: headerButton)
+                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Settings and shelf options")
+            .help("Settings and shelf options")
+        }
+    }
+
+    /// How big the header's buttons can be in this Mac's menu bar.
+    private var headerButton: CGFloat {
+        TrayMetrics.headerButtonSize(inBand: cutout.height)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if store.isEmpty {
             emptyPrompt
         } else {
@@ -160,18 +277,18 @@ struct TrayContentView: View {
     /// tray is open and empty, and it changes to an instruction only once a
     /// drag is actually overhead.
     private var emptyPrompt: some View {
-        VStack(spacing: 6) {
-            Image(systemName: presenter.state.isDropTargetActive
-                ? "arrow.down.circle.fill"
-                : "tray")
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(palette.ink(presenter.state.isDropTargetActive ? 0.85 : 0.4))
-                .contentTransition(.symbolEffect(.replace))
-
-            Text(presenter.state.isDropTargetActive ? "Release to stash" : "Drop files here")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(palette.ink(presenter.state.isDropTargetActive ? 0.8 : 0.42))
-        }
+        TrayEmptyState(
+            // The outline variant, not the filled one: filled, it reads as a
+            // small white button sitting in the shelf, which is the plate the
+            // empty state just lost.
+            symbol: presenter.state.isDropTargetActive
+                ? "arrow.down.circle"
+                : "tray.and.arrow.down",
+            isLit: presenter.state.isDropTargetActive,
+            // The prompt stands where the files will, so a left-aligned shelf
+            // does not point at the middle and then fill from the edge.
+            alignment: contentAlignment
+        )
         .animation(motion.hover, value: presenter.state)
     }
 
@@ -183,24 +300,31 @@ struct TrayContentView: View {
     /// of a stray trackpad gesture nudging the shelf sideways.
     @ViewBuilder
     private var shelf: some View {
-        if TrayShape.fits(
-            itemCount: store.count,
-            screenWidth: geometry.frame.width,
-            widthFraction: settings.trayWidthFraction,
-            item: settings.itemMetrics
-        ) {
-            itemRow
+        if fitsWithoutScrolling {
+            itemRow.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: contentAlignment)
         } else {
             ScrollView(.horizontal) {
                 itemRow
             }
             .scrollIndicators(.never)
             .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: .infinity)
             // Content dissolves at the edges instead of being cut off mid-icon.
             // A hard edge reads as a rendering mistake; a fade reads as "there
             // is more this way".
             .mask(scrollEdgeMask)
         }
+    }
+
+    private var fitsWithoutScrolling: Bool {
+        TrayShape.fits(
+            itemCount: store.count,
+            screenWidth: geometry.frame.width,
+            cutoutWidth: cutout.width,
+            size: settings.traySize,
+            customWidth: settings.customWidth,
+            item: contentMetrics
+        )
     }
 
     private var itemRow: some View {
@@ -209,7 +333,7 @@ struct TrayContentView: View {
                 TrayItemView(
                     item: item,
                     thumbnails: thumbnails,
-                    metrics: settings.itemMetrics,
+                    metrics: contentMetrics,
                     isBeingDragged: presenter.state.draggedItemIDs.contains(item.id),
                     isSelected: selection.contains(item.id),
                     dragTargets: { selectionTargets(for: item) },
@@ -224,8 +348,6 @@ struct TrayContentView: View {
                 .transition(motion.itemTransition)
             }
         }
-        .padding(.horizontal, TrayMetrics.horizontalPadding)
-        .padding(.vertical, TrayMetrics.verticalPadding)
         .animation(motion.itemShift, value: store.items.map(\.id))
     }
 
