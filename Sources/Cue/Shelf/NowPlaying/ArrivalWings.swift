@@ -21,8 +21,8 @@ struct ArrivalWings<Centre: View>: View {
 
         HStack(spacing: 0) {
             Group {
-                if arrival.kind == .airPodsPro, AirPodsTurn.frames != nil {
-                    AirPodsTurn(size: cutout.height - 4)
+                if let sheet = DeviceTurn.sheet(for: arrival.kind) {
+                    DeviceTurn(sheet: sheet, size: cutout.height - 4)
                 } else {
                     Image(systemName: arrival.kind.symbol)
                         .font(.system(size: artSize * 0.72, weight: .regular))
@@ -119,16 +119,32 @@ struct ArrivalBorder: View {
     }
 }
 
-/// The AirPods Pro, turning: one revolution over an arrival, the way the
-/// iPhone shows them when they connect.
+/// Headphones turning: one revolution over an arrival, the way the iPhone
+/// shows AirPods when they connect.
 ///
-/// Pre-rendered rather than drawn in 3D here — forty-eight frames of the
-/// earbuds without their case, in one sheet (Resources/AirPodsTurn.png), so
-/// what runs in the notch is choosing a picture, not lighting a model. Drawn
-/// wider than the wing allows, centred on it: the pair is wider than it is
-/// tall, and the sheet's frames are square with room round the turn.
-struct AirPodsTurn: View {
+/// Pre-rendered rather than drawn in 3D here — forty-eight studio-lit frames
+/// in one sheet per model (Resources/*Turn.png): the AirPods Pro without
+/// their case, and Sony's WH-1000XM5. What runs in the notch is choosing a
+/// picture, not lighting a model. Drawn a little wider than the wing, centred
+/// on it: the sheet's frames are square with room round the turn.
+struct DeviceTurn: View {
+    let frames: [CGImage]
     let size: CGFloat
+
+    init(sheet frames: [CGImage], size: CGFloat) {
+        self.frames = frames
+        self.size = size
+    }
+
+    /// The frames for a kind of headphones, or `nil` when there is no model
+    /// for it — the wing then shows the system's symbol.
+    static func sheet(for kind: HeadphonesWatcher.Kind) -> [CGImage]? {
+        switch kind {
+        case .airPodsPro: frames(named: "AirPodsTurn")
+        case .sonyXM5: frames(named: "HeadphonesXM5Turn")
+        default: nil
+        }
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -136,7 +152,7 @@ struct AirPodsTurn: View {
     private static let period: TimeInterval = 4
 
     var body: some View {
-        if let frames = Self.frames {
+        if !frames.isEmpty {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
                 let index = reduceMotion
                     ? 0
@@ -154,10 +170,12 @@ struct AirPodsTurn: View {
     static let columns = 8
     static let side = 96
 
-    /// The sheet cut into frames, once; `nil` when the sheet is missing —
-    /// the wing then shows the system's symbol instead.
-    static let frames: [CGImage]? = {
-        guard let url = sheetURL,
+    private static var cache: [String: [CGImage]] = [:]
+
+    /// A sheet cut into frames, once; `nil` when the sheet is missing.
+    static func frames(named name: String) -> [CGImage]? {
+        if let cached = cache[name] { return cached }
+        guard let url = sheetURL(name),
               let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let sheet = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else { return nil }
@@ -169,11 +187,13 @@ struct AirPodsTurn: View {
                 if let frame = sheet.cropping(to: rect) { frames.append(frame) }
             }
         }
-        return frames.isEmpty ? nil : frames
-    }()
+        guard !frames.isEmpty else { return nil }
+        cache[name] = frames
+        return frames
+    }
 
-    private static var sheetURL: URL? {
-        if let bundled = Bundle.main.url(forResource: "AirPodsTurn", withExtension: "png") {
+    private static func sheetURL(_ name: String) -> URL? {
+        if let bundled = Bundle.main.url(forResource: name, withExtension: "png") {
             return bundled
         }
         #if DEBUG
@@ -185,7 +205,7 @@ struct AirPodsTurn: View {
             .deletingLastPathComponent()   // Cue
             .deletingLastPathComponent()   // Sources
             .deletingLastPathComponent()   // repository
-            .appendingPathComponent("Resources/AirPodsTurn.png")
+            .appendingPathComponent("Resources/\(name).png")
         return FileManager.default.fileExists(atPath: tree.path) ? tree : nil
         #else
         return nil

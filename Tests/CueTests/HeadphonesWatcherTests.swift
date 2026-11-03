@@ -16,7 +16,9 @@ struct HeadphonesWatcherTests {
               "device_batteryLevelCase": "6%",
               "device_batteryLevelLeft": "99%",
               "device_batteryLevelRight": "52%",
-              "device_minorType": "Headphones"}}
+              "device_minorType": "Headphones",
+              "device_productID": "0x2014",
+              "device_vendorID": "0x004C"}}
           ],
           "device_not_connected": [
             {"MX Master 3S": {"device_minorType": "Mouse"}},
@@ -55,9 +57,25 @@ struct HeadphonesWatcherTests {
         #expect(HeadphonesWatcher.Kind(name: "soundcore Select 3") == .headphones)
     }
 
-    @Test func `the AirPods turn is forty-eight frames of one revolution`() {
-        let frames = AirPodsTurn.frames
-        #expect(frames?.count == 48)
-        #expect(frames?.allSatisfy { $0.width == AirPodsTurn.side && $0.height == AirPodsTurn.side } == true)
+    @Test func `each model turns in forty-eight frames`() {
+        for kind in [HeadphonesWatcher.Kind.airPodsPro, .sonyXM5] {
+            let frames = DeviceTurn.sheet(for: kind)
+            #expect(frames?.count == 48)
+            #expect(frames?.allSatisfy { $0.width == DeviceTurn.side && $0.height == DeviceTurn.side } == true)
+        }
+        #expect(DeviceTurn.sheet(for: .beats) == nil)
+    }
+
+    @Test func `Sony's XM5 is known by maker and model, whatever it is called`() {
+        let kind = HeadphonesWatcher.Kind(name: "Artemidius", vendorID: "0x054C", productID: "0x0DF0")
+        #expect(kind == .sonyXM5)
+        #expect(HeadphonesWatcher.Kind(name: "Artemidius", vendorID: "0x054C", productID: "0x0E00") == .headphones)
+        #expect(HeadphonesWatcher.Kind(name: "Alan’s AirPods Pro", vendorID: "0x004C", productID: "0x2014") == .airPodsPro)
+    }
+
+    @Test func `the report says who made the headphones`() {
+        let report = HeadphonesWatcher.report(fromReport: report, deviceName: "Alan’s AirPods Pro")
+        #expect(report?.vendorID == "0x004C")
+        #expect(report?.productID == "0x2014")
     }
 }

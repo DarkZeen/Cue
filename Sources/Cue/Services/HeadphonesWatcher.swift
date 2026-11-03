@@ -26,12 +26,23 @@ final class HeadphonesWatcher {
         var battery: Battery?
     }
 
-    nonisolated enum Kind: Equatable, Sendable {
+    nonisolated enum Kind: String, Equatable, Sendable {
         case airPods
         case airPodsPro
         case airPodsMax
         case beats
+        case sonyXM5
         case headphones
+
+        /// What the system's Bluetooth report says it is, when the name does
+        /// not: headphones named by their owner ("Artemidius") still report
+        /// their maker and model.
+        init(name: String, vendorID: String?, productID: String?) {
+            switch (vendorID?.lowercased(), productID?.lowercased()) {
+            case ("0x054c", "0x0df0"): self = .sonyXM5
+            default: self.init(name: name)
+            }
+        }
 
         /// What the device's name says it is. AirPods are named by their
         /// owner but keep the model in the name — "Alan's AirPods Pro".
@@ -50,7 +61,7 @@ final class HeadphonesWatcher {
             case .airPodsPro: "airpodspro"
             case .airPodsMax: "airpodsmax"
             case .beats: "beats.headphones"
-            case .headphones: "headphones"
+            case .sonyXM5, .headphones: "headphones"
             }
         }
     }
@@ -120,7 +131,10 @@ final class HeadphonesWatcher {
               let name = Self.name(of: device)
         else { return }
 
-        let arrival = Arrival(id: UUID(), name: name, kind: Kind(name: name), battery: nil)
+        // A kind learned from an earlier report, so headphones named by their
+        // owner show as what they are from the first frame.
+        let known = Self.rememberedKind(for: name)
+        let arrival = Arrival(id: UUID(), name: name, kind: known ?? Kind(name: name), battery: nil)
         logger.notice("Headphones arrived: \(arrival.kind.symbol, privacy: .public).")
         self.arrival = arrival
 
@@ -136,9 +150,14 @@ final class HeadphonesWatcher {
             // more look if the first comes back without levels.
             for wait in [Duration.zero, .milliseconds(1500)] {
                 try? await Task.sleep(for: wait)
-                let battery = await Self.battery(named: name)
+                let report = await Self.report(named: name)
                 guard let self, self.arrival?.id == arrival.id else { return }
-                if let battery {
+                if let report {
+                    let kind = Kind(name: name, vendorID: report.vendorID, productID: report.productID)
+                    if kind != self.arrival?.kind { self.arrival?.kind = kind }
+                    Self.remember(kind, for: name)
+                }
+                if let battery = report?.battery {
                     self.arrival?.battery = battery
                     return
                 }
@@ -205,7 +224,7 @@ final class HeadphonesWatcher {
 
     /// Asks the system's Bluetooth report for this device's levels.
     @concurrent
-    private static func battery(named name: String) async -> Battery? {
+    private static func report(named name: String) async -> DeviceReport? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         process.arguments = ["-json", "SPBluetoothDataType"]
@@ -219,12 +238,23 @@ final class HeadphonesWatcher {
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return battery(fromReport: data, deviceName: name)
+        return report(fromReport: data, deviceName: name)
     }
 
     /// The levels for `deviceName` in a `system_profiler -json
     /// SPBluetoothDataType` report, or `nil` when it lists none.
     nonisolated static func battery(fromReport data: Data, deviceName: String) -> Battery? {
+        report(fromReport: data, deviceName: deviceName)?.battery
+    }
+
+    /// One device's entry in the report: its levels, and who made it.
+    nonisolated struct DeviceReport: Equatable, Sendable {
+        var battery: Battery?
+        var vendorID: String?
+        var productID: String?
+    }
+
+    nonisolated static func report(fromReport data: Data, deviceName: String) -> DeviceReport? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let controllers = root["SPBluetoothDataType"] as? [[String: Any]]
         else { return nil }
@@ -245,11 +275,30 @@ final class HeadphonesWatcher {
                         single: percent(info["device_batteryLevelMain"]),
                         caseLevel: percent(info["device_batteryLevelCase"])
                     )
-                    return battery.shown == nil && battery.caseLevel == nil ? nil : battery
+                    return DeviceReport(
+                        battery: battery.shown == nil && battery.caseLevel == nil ? nil : battery,
+                        vendorID: info["device_vendorID"] as? String,
+                        productID: info["device_productID"] as? String
+                    )
                 }
             }
         }
         return nil
+    }
+
+    // MARK: - Remembered kinds
+
+    private static let kindsKey = "headphones.kinds"
+
+    private static func rememberedKind(for name: String) -> Kind? {
+        (UserDefaults.standard.dictionary(forKey: kindsKey)?[name] as? String).flatMap(Kind.init(rawValue:))
+    }
+
+    private static func remember(_ kind: Kind, for name: String) {
+        var kinds = UserDefaults.standard.dictionary(forKey: kindsKey) ?? [:]
+        guard kinds[name] as? String != kind.rawValue else { return }
+        kinds[name] = kind.rawValue
+        UserDefaults.standard.set(kinds, forKey: kindsKey)
     }
 
     #if DEBUG

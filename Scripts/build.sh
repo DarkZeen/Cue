@@ -93,8 +93,9 @@ cp "$BINARY" "$CONTENTS/MacOS/$APP_NAME"
 chmod +x "$CONTENTS/MacOS/$APP_NAME"
 
 cp Resources/Info.plist "$CONTENTS/Info.plist"
-# The AirPods turning in the notch: 48 frames of one revolution, pre-rendered.
-cp Resources/AirPodsTurn.png "$CONTENTS/Resources/AirPodsTurn.png"
+# Headphones turning in the notch: 48 pre-rendered frames of one revolution
+# per model.
+cp Resources/*Turn.png "$CONTENTS/Resources/"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID"                  "$CONTENTS/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME"                         "$CONTENTS/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME"              "$CONTENTS/Info.plist"

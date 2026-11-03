@@ -142,6 +142,7 @@ struct TrayAppearanceTests {
             ("31-pill-party-wave", notched, 3, Self.party(.fixed(playing, artwork: cover)), .black),
             ("32-pill-airpods", notched, 3, Self.arriving(.fixed(playing, artwork: cover)), .black),
             ("33-pill-airpods-alone", notchless, 0, Self.arriving(.fixed(nil)), .black),
+            ("34-pill-xm5", notched, 3, Self.arriving(.fixed(nil), .sonyXM5), .black),
         ]
 
         // Thrown away. The first pill a test process hosts comes out with a
@@ -198,11 +199,14 @@ struct TrayAppearanceTests {
     }
 
     /// The same source, with AirPods Pro just connected.
-    private static func arriving(_ source: NowPlayingSource) -> NowPlayingSource {
+    private static func arriving(
+        _ source: NowPlayingSource,
+        _ kind: HeadphonesWatcher.Kind = .airPodsPro
+    ) -> NowPlayingSource {
         var source = source
         let arrival = HeadphonesWatcher.previewArrival(
-            .airPodsPro,
-            battery: .init(left: 99, right: 52, caseLevel: 6)
+            kind,
+            battery: kind == .airPodsPro ? .init(left: 99, right: 52, caseLevel: 6) : .init(single: 70)
         )
         source.arrival = { arrival }
         return source
