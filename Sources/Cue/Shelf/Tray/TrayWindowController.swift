@@ -42,6 +42,7 @@ final class TrayWindowController {
     private var hostingView: TrayHostingView<AnyView>!
 
     private var focusObserver: (any NSObjectProtocol)?
+    private var spaceObserver: (any NSObjectProtocol)?
 
     /// Widens the painted drop catchment while a drag is under way (§75).
     private let systemDrags = SystemDragMonitor()
@@ -83,6 +84,7 @@ final class TrayWindowController {
         configureContent()
         configureMouseHandling()
         configureFocusHandling()
+        configureSpaceHandling()
 
         // Notch geometry is nearly impossible to reason about and trivial to
         // check, so the numbers this display actually produced go in the log
@@ -178,6 +180,9 @@ final class TrayWindowController {
     isolated deinit {
         if let focusObserver {
             NotificationCenter.default.removeObserver(focusObserver)
+        }
+        if let spaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
         }
     }
 
@@ -328,6 +333,23 @@ final class TrayWindowController {
     /// Without this, a tray the user clicked into stays open forever: the
     /// interaction gate is holding it, and the pointer leaving no longer
     /// closes it.
+    /// A Space switch hides the tray for the length of the system's
+    /// animation; the presenter makes its return a movement, not a pop.
+    private func configureSpaceHandling() {
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.presenter.spaceChanged(
+                    reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                )
+            }
+        }
+    }
+
     private func configureFocusHandling() {
         focusObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification,

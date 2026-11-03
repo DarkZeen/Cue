@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import Observation
 import OSLog
@@ -28,6 +29,44 @@ final class TrayPresenter {
     private(set) var isAbsorbingDrop = false
 
     private var dropImpactTask: Task<Void, Never>?
+
+    /// True for the moment after a Space switch, while the closed shelf
+    /// waits under the notch to grow back out.
+    ///
+    /// macOS hides every all-Spaces window while it animates a switch to or
+    /// from a full-screen app — tested at every window level, in every part
+    /// of the screen — and shows it again at full size when the animation
+    /// ends. There is no public way to stay up through it, so the pill does
+    /// not try: it drops to the bare housing the instant the switch begins,
+    /// and grows back out of the notch once it can be seen again, the same
+    /// motion the headphones use to hand back to the music.
+    private(set) var isReturningFromSpace = false
+    private var spaceReturnTask: Task<Void, Never>?
+
+    /// How long the pill waits under the notch: about as long as the
+    /// system's own switch takes to clear the screen.
+    static let spaceReturnDelay: Duration = .milliseconds(380)
+
+    func spaceChanged(reduceMotion: Bool) {
+        spaceReturnTask?.cancel()
+        // At once and unanimated: this happens while the window is hidden,
+        // and a shrink that ran visibly would be the pop it exists to hide.
+        var instant = Transaction(animation: nil)
+        instant.disablesAnimations = true
+        withTransaction(instant) { isReturningFromSpace = true }
+
+        spaceReturnTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.spaceReturnDelay)
+            guard !Task.isCancelled, let self else { return }
+            withAnimation(
+                reduceMotion
+                    ? .easeOut(duration: 0.2)
+                    : .spring(response: 0.7, dampingFraction: 0.82)
+            ) {
+                self.isReturningFromSpace = false
+            }
+        }
+    }
 
     /// The container's scale (§13, §46).
     ///

@@ -80,6 +80,9 @@ struct TrayContentView: View {
             // the item dots below the tray entirely.
             collapsedContents
                 .frame(width: shape.width, height: shape.height)
+                // Under the notch while the pill waits to grow back out
+                // after a Space switch (`TrayPresenter.isReturningFromSpace`).
+                .modifier(SinkIntoNotch(progress: presenter.isReturningFromSpace ? 1 : 0))
                 .opacity(isOpen ? 0 : 1)
                 // The faded layer stays in the hierarchy; it must not keep
                 // catching clicks meant for the one on show.
@@ -105,7 +108,7 @@ struct TrayContentView: View {
         )
         // On the outline, after the clip: half the line falls outside the
         // surface, which is what lets it frame the pill under the housing.
-        .overlay { partyBorder }
+        .overlay { partyBorder.opacity(presenter.isReturningFromSpace ? 0 : 1) }
         // After the clip, so the heart can leave the cover — leaving it is the
         // whole gesture.
         .overlay(alignment: .topLeading) { likeHeart }
@@ -195,6 +198,10 @@ struct TrayContentView: View {
             return open
         }
         if pillTrack != nil || arrival != nil {
+            // Just back from a Space switch: the bare housing, about to grow.
+            if presenter.isReturningFromSpace {
+                return .collapsed(cutout: cutout, isEmpty: false)
+            }
             return .nowPlaying(cutout: cutout)
         }
         return .collapsed(cutout: cutout, isEmpty: store.isEmpty)
