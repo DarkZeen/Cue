@@ -98,4 +98,46 @@ nonisolated enum Diagnostics {
         false
         #endif
     }()
+
+    // MARK: - The shelf
+
+    /// `TRAY_DEBUG_SEED=/path/one:/path/two` puts those files on the shelf and
+    /// opens it at launch.
+    ///
+    /// Debug builds only. It exists so a particular tray state can be put on
+    /// screen and *looked at* — with a real desktop behind it, real
+    /// translucency, real notch alignment — without a hand on the trackpad.
+    static var debugSeedURLs: [URL] {
+        #if DEBUG
+        guard let value = ProcessInfo.processInfo.environment["TRAY_DEBUG_SEED"],
+              !value.isEmpty
+        else { return [] }
+        return value.split(separator: ":").map { URL(fileURLWithPath: String($0)) }
+        #else
+        []
+        #endif
+    }
+
+    /// `TRAY_DEBUG_HOLD=1` stops the tray closing on its own.
+    ///
+    /// Debug builds only. Every interesting state of the shelf is one it
+    /// leaves after a second or two; this freezes whichever one you are in.
+    static let holdsTrayOpen: Bool = {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["TRAY_DEBUG_HOLD"] == "1"
+        #else
+        false
+        #endif
+    }()
+
+    /// `TRAY_DEBUG=1` turns on the shelf's geometry overlay. Guarded by
+    /// `#if DEBUG` as well, so the overlay cannot reach a release build even if
+    /// the variable is set (§71).
+    static let isDebugOverlayEnabled: Bool = {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["TRAY_DEBUG"] == "1"
+        #else
+        false
+        #endif
+    }()
 }

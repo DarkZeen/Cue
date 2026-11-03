@@ -1,4 +1,5 @@
 import AppKit
+import Quartz
 
 /// The application object's thin edge.
 ///
@@ -77,5 +78,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showSettingsFromMenu(_ sender: Any?) {
         state.showSettings()
+    }
+
+    // MARK: - Quick Look (§24)
+
+    // `QLPreviewPanel` finds its controller by walking the responder chain,
+    // which ends at the application delegate. The shelf's own panel is
+    // non-activating and deliberately not part of that chain, so the delegate
+    // answers on its behalf.
+
+    override nonisolated func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        true
+    }
+
+    override nonisolated func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { state.shelf.quickLook.attach(to: panel) }
+    }
+
+    override nonisolated func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { state.shelf.quickLook.detach(from: panel) }
     }
 }

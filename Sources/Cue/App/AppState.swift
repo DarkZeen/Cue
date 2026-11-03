@@ -20,6 +20,8 @@ final class AppState {
     let otherAudio: OtherAudioWatcher
     let layoutEditor = LayoutEditor()
     let updates: UpdateService
+    /// The shelf at the top of the screen — what was Tray.
+    let shelf: ShelfState
 
     private var panel: CueWindowController?
     private var settingsWindow: NSWindow?
@@ -39,6 +41,7 @@ final class AppState {
         self.miniPlayer = MiniPlayerController(player: player, settings: settings)
         self.otherAudio = OtherAudioWatcher(player: player)
         self.updates = UpdateService(settings: settings)
+        self.shelf = ShelfState(launchAtLogin: launchAtLogin)
     }
 
 
@@ -66,6 +69,7 @@ final class AppState {
     }
 
     func start() {
+        shelf.start()
 
         let panel = CueWindowController(
             coordinator: coordinator,
