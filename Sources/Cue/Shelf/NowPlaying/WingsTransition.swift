@@ -24,18 +24,34 @@ struct SinkIntoNotch: ViewModifier {
 }
 
 extension AnyTransition {
+    /// How a set of wings comes in.
+    enum WingsEntrance {
+        /// Out of the notch, a beat after the set it replaces has gone in.
+        case handover
+        /// Out of the notch at once — nothing was there to go first.
+        case fromNotch
+        /// A plain fade: the shelf closing over wings that were there all
+        /// along, or music simply starting.
+        case fade
+    }
+
     /// One set of wings sinking into the notch as the next comes out of it.
-    static func wings(reduceMotion: Bool) -> AnyTransition {
+    /// Going, a set always sinks; coming, it depends on what it replaces.
+    static func wings(reduceMotion: Bool, entrance: WingsEntrance) -> AnyTransition {
         guard !reduceMotion else { return .opacity.animation(.easeOut(duration: 0.2)) }
         let sink = AnyTransition.modifier(
             active: SinkIntoNotch(progress: 1),
             identity: SinkIntoNotch(progress: 0)
         )
+        let rise = Animation.spring(response: 0.75, dampingFraction: 0.82)
+        let insertion: AnyTransition = switch entrance {
+        case .handover: sink.animation(rise.delay(0.5))
+        case .fromNotch: sink.animation(rise)
+        case .fade: .opacity.animation(.easeOut(duration: 0.2))
+        }
         return .asymmetric(
-            // Out after the old ones have gone in, with a little spring as
-            // they reach the wings.
-            insertion: sink.animation(.spring(response: 0.75, dampingFraction: 0.82).delay(0.5)),
-            // In quickly, accelerating, the way something is pulled.
+            insertion: insertion,
+            // In, accelerating, the way something is pulled.
             removal: sink.animation(.easeIn(duration: 0.55))
         )
     }

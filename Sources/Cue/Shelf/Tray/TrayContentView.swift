@@ -251,7 +251,8 @@ struct TrayContentView: View {
             ArrivalWings(arrival: arrival, cutout: cutout) {
                 itemDots
             }
-            .transition(.wings(reduceMotion: reduceMotion))
+            // A beat after the music has gone in, if there was music.
+            .transition(.wings(reduceMotion: reduceMotion, entrance: pillTrack != nil ? .handover : .fromNotch))
         } else if let nowPlaying, let track = pillTrack {
             NowPlayingWings(
                 source: nowPlaying,
@@ -261,7 +262,12 @@ struct TrayContentView: View {
             ) {
                 itemDots
             }
-            .transition(.wings(reduceMotion: reduceMotion))
+            // Back out of the notch only when headphones just went into it;
+            // the shelf closing, or music starting, is a fade.
+            .transition(.wings(
+                reduceMotion: reduceMotion,
+                entrance: nowPlaying.arrivalJustEnded() ? .handover : .fade
+            ))
         } else {
             itemDots
         }

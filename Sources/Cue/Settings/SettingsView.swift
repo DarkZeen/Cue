@@ -144,9 +144,15 @@ private struct GeneralPane: View {
                 // to do about it. Saying which beats a toggle that quietly
                 // disagrees with the system (§34).
                 if let explanation = launchAtLogin.state.explanation {
-                    Text(explanation)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text(explanation)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        if launchAtLogin.state == .requiresApproval {
+                            Spacer()
+                            Button("Open Login Items") { launchAtLogin.openLoginItemsSettings() }
+                        }
+                    }
                 }
 
                 Toggle("Show in the menu bar", isOn: Binding(

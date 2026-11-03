@@ -55,10 +55,12 @@ final class ShelfSettingsStore {
         static let headerInset = "shelf.headerInset"
         static let contentAlignment = "shelf.contentAlignment"
 
-        /// Every key above, for the one-time import from Tray.
+        /// Every key above, for the one-time import from Tray — except the
+        /// menu bar icon. Tray's icon was one way into Tray; the item it
+        /// controls now is Cue's only menu, and hiding Tray's should not hide
+        /// that.
         static let all = [
             launchAtLogin,
-            showsMenuBarIcon,
             activation,
             autoCollapseDelay,
             showsFileNames,

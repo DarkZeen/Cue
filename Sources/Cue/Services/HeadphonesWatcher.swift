@@ -33,14 +33,22 @@ final class HeadphonesWatcher {
         case beats
         case sonyXM5
         case headphones
+        /// A Bluetooth speaker or the like: an output, but not headphones
+        /// arriving, so never announced.
+        case speaker
 
         /// What the system's Bluetooth report says it is, when the name does
         /// not: headphones named by their owner ("Artemidius") still report
-        /// their maker and model.
-        init(name: String, vendorID: String?, productID: String?) {
+        /// their maker and model, and speakers say they are speakers.
+        init(name: String, vendorID: String?, productID: String?, minorType: String? = nil) {
             switch (vendorID?.lowercased(), productID?.lowercased()) {
             case ("0x054c", "0x0df0"): self = .sonyXM5
-            default: self.init(name: name)
+            default:
+                if let minorType, ["speaker", "car audio", "hifi audio"].contains(minorType.lowercased()) {
+                    self = .speaker
+                } else {
+                    self.init(name: name)
+                }
             }
         }
 
@@ -62,6 +70,7 @@ final class HeadphonesWatcher {
             case .airPodsMax: "airpodsmax"
             case .beats: "beats.headphones"
             case .sonyXM5, .headphones: "headphones"
+            case .speaker: "hifispeaker"
             }
         }
     }
@@ -92,6 +101,15 @@ final class HeadphonesWatcher {
 
     /// The headphones that just arrived, for a few seconds; otherwise `nil`.
     private(set) var arrival: Arrival?
+
+    /// When the last arrival ended — set in the same change that clears it,
+    /// so the view that sees the arrival go also sees why.
+    private var endedAt: ContinuousClock.Instant?
+
+    /// Whether an arrival ended within the last second and a half.
+    var justEnded: Bool {
+        endedAt.map { clock.now - $0 < .milliseconds(1500) } ?? false
+    }
 
     /// Off in Settings, nothing is announced.
     var isEnabled = true {
@@ -197,6 +215,9 @@ final class HeadphonesWatcher {
     private func devicesChanged() {
         let now = Set(Self.allDevices())
         let returned = now.subtracting(knownDevices)
+        // Core Audio drops a listener with the device it was on; one that
+        // comes back — even under the same ID — has to be watched again.
+        watchedForRunning.subtract(knownDevices.subtracting(now))
         knownDevices = now
         watchRunning(returned)
         guard !returned.isEmpty else { return }
@@ -216,13 +237,14 @@ final class HeadphonesWatcher {
               let name = Self.name(of: device)
         else { return }
 
-        let clock = ContinuousClock()
         if let last = lastAnnounced[name], clock.now - last < .seconds(5) { return }
         lastAnnounced[name] = clock.now
 
         // A kind learned from an earlier report, so headphones named by their
-        // owner show as what they are from the first frame.
+        // owner show as what they are from the first frame — and speakers,
+        // once known, are not announced at all.
         let known = Self.rememberedKind(for: name)
+        guard known != .speaker else { return }
         let arrival = Arrival(id: UUID(), name: name, kind: known ?? Kind(name: name), battery: nil)
         logger.notice("Headphones arrived: \(arrival.kind.symbol, privacy: .public).")
         self.arrival = arrival
@@ -242,9 +264,19 @@ final class HeadphonesWatcher {
                 let report = await Self.report(named: name)
                 guard let self, self.arrival?.id == arrival.id else { return }
                 if let report {
-                    let kind = Kind(name: name, vendorID: report.vendorID, productID: report.productID)
-                    if kind != self.arrival?.kind { self.arrival?.kind = kind }
+                    let kind = Kind(
+                        name: name,
+                        vendorID: report.vendorID,
+                        productID: report.productID,
+                        minorType: report.minorType
+                    )
                     Self.remember(kind, for: name)
+                    // A speaker is not headphones arriving: take it back.
+                    if kind == .speaker {
+                        self.clear()
+                        return
+                    }
+                    if kind != self.arrival?.kind { self.arrival?.kind = kind }
                 }
                 if let battery = report?.battery {
                     self.arrival?.battery = battery
@@ -257,6 +289,7 @@ final class HeadphonesWatcher {
     private func clear() {
         clearTask?.cancel()
         clearTask = nil
+        if arrival != nil { endedAt = clock.now }
         arrival = nil
     }
 
@@ -378,6 +411,7 @@ final class HeadphonesWatcher {
         var battery: Battery?
         var vendorID: String?
         var productID: String?
+        var minorType: String?
     }
 
     nonisolated static func report(fromReport data: Data, deviceName: String) -> DeviceReport? {
@@ -404,7 +438,8 @@ final class HeadphonesWatcher {
                     return DeviceReport(
                         battery: battery.shown == nil && battery.caseLevel == nil ? nil : battery,
                         vendorID: info["device_vendorID"] as? String,
-                        productID: info["device_productID"] as? String
+                        productID: info["device_productID"] as? String,
+                        minorType: info["device_minorType"] as? String
                     )
                 }
             }

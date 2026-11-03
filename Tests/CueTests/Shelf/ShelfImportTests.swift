@@ -42,4 +42,13 @@ struct ShelfImportTests {
 
         #expect(defaults.persistentDomain(forName: cue)?["shelf.appearance"] == nil)
     }
+
+    @Test func `hiding Tray's menu bar icon does not hide Cue's`() {
+        let (cue, defaults, tray) = domains()
+        defaults.setPersistentDomain(["showsMenuBarIcon": false], forName: tray)
+
+        ShelfSettingsStore.importFromTray(into: defaults, domain: cue, trayDomain: tray)
+
+        #expect(ShelfSettingsStore(defaults: defaults).showsMenuBarIcon)
+    }
 }

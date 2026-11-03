@@ -139,18 +139,19 @@ struct WaveIndicator: View {
             .boundingRect.height
     }
 
-    private func colour(_ index: Int) -> Color {
+    private func colour(_ index: Int, displacement: CGFloat) -> Color {
         guard let shortTint else { return tint }
-        let length = Self.shapeHeights[index] * displacement(index)
+        let length = Self.shapeHeights[index] * displacement
         return shortTint.mix(with: tint, by: MarkColouring.share(forLength: length))
     }
 
     var body: some View {
         ZStack {
             ForEach(0..<count, id: \.self) { index in
+                let stretch = displacement(index)
                 CueWaveShape(index: index)
-                    .fill(colour(index))
-                    .scaleEffect(y: displacement(index), anchor: .center)
+                    .fill(colour(index, displacement: stretch))
+                    .scaleEffect(y: stretch, anchor: .center)
             }
         }
         .frame(width: height * CueWavePath.aspect, height: height)

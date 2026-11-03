@@ -86,4 +86,15 @@ struct HeadphonesWatcherTests {
         SettingsStore(defaults: defaults).showsArrivalOutline = false
         #expect(!SettingsStore(defaults: defaults).showsArrivalOutline)
     }
+
+    @Test func `a Bluetooth speaker is not headphones`() {
+        let kind = HeadphonesWatcher.Kind(
+            name: "soundcore Select 3",
+            vendorID: "0x03E0",
+            productID: "0x2835",
+            minorType: "Speaker"
+        )
+        #expect(kind == .speaker)
+        #expect(HeadphonesWatcher.Kind(name: "Studio", vendorID: nil, productID: nil, minorType: "Headphones") == .headphones)
+    }
 }

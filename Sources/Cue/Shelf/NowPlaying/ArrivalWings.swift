@@ -147,6 +147,8 @@ struct DeviceTurn: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// When this arrival's turn began.
+    @State private var start = Date()
 
     /// One revolution, matched to how long an arrival shows.
     private static let period: TimeInterval = 4
@@ -154,9 +156,11 @@ struct DeviceTurn: View {
     var body: some View {
         if !frames.isEmpty {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                // From the front, the moment it appears — the first frame is
+                // the device facing you — and round once over the arrival.
                 let index = reduceMotion
                     ? 0
-                    : Int(context.date.timeIntervalSinceReferenceDate / Self.period * Double(frames.count))
+                    : Int(max(0, context.date.timeIntervalSince(start)) / Self.period * Double(frames.count))
                         % frames.count
                 Image(decorative: frames[index], scale: 1)
                     .resizable()

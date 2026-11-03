@@ -52,6 +52,9 @@ struct NowPlayingSource {
     /// Headphones that have just arrived, for the few seconds the notch
     /// shows them.
     var arrival: @MainActor () -> HeadphonesWatcher.Arrival? = { nil }
+    /// Whether an arrival has only just ended — the music coming back is then
+    /// a hand-over out of the notch, not a fade.
+    var arrivalJustEnded: @MainActor () -> Bool = { false }
     /// Whether an arrival draws the green line round the pill.
     var arrivalOutline: @MainActor () -> Bool = { true }
     /// The covers' colours, kept for as long as the source is: the wings are

@@ -100,6 +100,7 @@ final class AppState {
             markReaction: { settings.markReaction },
             party: { settings.partyIntensity },
             arrival: { headphones.arrival },
+            arrivalJustEnded: { headphones.justEnded },
             arrivalOutline: { settings.showsArrivalOutline }
         )
     }
