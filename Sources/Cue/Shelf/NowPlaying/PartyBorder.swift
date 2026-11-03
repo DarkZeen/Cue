@@ -3,11 +3,11 @@ import SwiftUI
 /// Party mode: a gradient in the cover's two colours running round the
 /// closed pill, faster on the beat.
 ///
-/// Drawn by the shelf over its surface, on the surface's own outline, and
-/// only while the wings are out — the open shelf stays plain. The line sits
-/// on the edge rather than inside it, so half of it falls below the housing
-/// and the whole pill is framed, not just its two wings: on a notched Mac
-/// anything drawn inside the housing is under the camera and gone.
+/// Drawn by the shelf over its surface, only while the wings are out — the
+/// open shelf stays plain. The line runs down the sides and along the bottom,
+/// a little way outside the black, and stops below the shoulders: nothing
+/// along the top edge, which is the bezel, and nothing on the surface itself,
+/// where on a notched Mac the camera housing would cover it.
 ///
 /// The speed follows the music without a tempo of its own to read. Each frame
 /// the gradient moves on by an amount set by the music's energy and its beat,
@@ -32,7 +32,12 @@ struct PartyBorder: View {
     var body: some View {
         let colours = gradientColours
         let width = 1.2 + 1.8 * intensity
-        let outline = TraySurface(cornerRadius: cornerRadius, shoulder: shoulder)
+        let outline = PartyOutline(
+            cornerRadius: cornerRadius,
+            shoulder: shoulder,
+            // Clear of the black by a hair, so all of the line is seen.
+            gap: width / 2 + 1
+        )
 
         TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !isAnimating)) { context in
             let turn = isAnimating
@@ -47,11 +52,11 @@ struct PartyBorder: View {
             ZStack {
                 // The glow under the line, the stronger the party the wider.
                 outline
-                    .stroke(gradient, lineWidth: width * 2.5)
+                    .stroke(gradient, style: StrokeStyle(lineWidth: width * 1.6, lineCap: .round))
                     .blur(radius: 2 + 4 * intensity)
                     .opacity(0.35 + 0.45 * intensity)
                 outline
-                    .stroke(gradient, lineWidth: width * 2)
+                    .stroke(gradient, style: StrokeStyle(lineWidth: width, lineCap: .round))
             }
         }
         .opacity((isPlaying ? 1 : 0.42) * (0.55 + 0.45 * intensity))
@@ -76,6 +81,53 @@ struct PartyBorder: View {
         let first = current.primary ?? .white
         let second = current.secondary ?? Color.white.opacity(0.45)
         return [first, second, first, second, first]
+    }
+}
+
+/// The pill's sides and bottom, `gap` outside its surface: an open line that
+/// starts below one shoulder and ends below the other.
+///
+/// Traced from the same numbers `TraySurface` draws with — its shoulder and
+/// bottom-corner rules — so it follows the black at a constant distance.
+struct PartyOutline: Shape {
+    var cornerRadius: CGFloat
+    var shoulder: CGFloat
+    var gap: CGFloat
+
+    nonisolated func path(in rect: CGRect) -> Path {
+        guard rect.width > 0, rect.height > 0 else { return Path() }
+
+        // `TraySurface.path(in:)`'s own rules, on the surface's own rect.
+        let shoulder = max(0, min(self.shoulder, rect.height * 0.28, rect.width / 2))
+        let bottom = max(0, min(cornerRadius, rect.height / 2, (rect.width - shoulder * 2) / 2))
+
+        // Walls and bottom pushed out by `gap`; the corners grow by the same.
+        let left = rect.minX + shoulder - gap
+        let right = rect.maxX - shoulder + gap
+        let floor = rect.maxY + gap
+        let radius = bottom + gap
+        let top = rect.minY + shoulder
+
+        var path = Path()
+        path.move(to: CGPoint(x: right, y: top))
+        path.addLine(to: CGPoint(x: right, y: floor - radius))
+        path.addArc(
+            center: CGPoint(x: right - radius, y: floor - radius),
+            radius: radius,
+            startAngle: .degrees(0),
+            endAngle: .degrees(90),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: left + radius, y: floor))
+        path.addArc(
+            center: CGPoint(x: left + radius, y: floor - radius),
+            radius: radius,
+            startAngle: .degrees(90),
+            endAngle: .degrees(180),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: left, y: top))
+        return path
     }
 }
 

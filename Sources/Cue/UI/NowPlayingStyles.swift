@@ -704,9 +704,10 @@ struct IslandIndicator: View {
 
     static let barCount = 5
 
-    /// Thick: a fifth of the height, with gaps a little narrower than a bar.
-    private var barWidth: CGFloat { (height * 0.2).rounded(toPlaces: 1) }
-    private var spacing: CGFloat { barWidth * 0.7 }
+    /// Thick for a meter, but not stubby: a seventh of the height, with gaps
+    /// a little wider than a bar so the five read as five.
+    private var barWidth: CGFloat { (height * 0.145).rounded(toPlaces: 1) }
+    private var spacing: CGFloat { barWidth * 1.15 }
 
     /// Each bar's own pace, uneven so the row never lines up into a loop.
     private static let rates: [Double] = [5.1, 6.7, 4.3, 7.4, 5.8]
@@ -736,10 +737,10 @@ struct IslandIndicator: View {
 
         let energy = ProceduralMotion.energy(level, at: elapsed)
         let reach: Double
-        if bands.count > Self.bandFor[index] {
-            // Listening: the bar's band leads, its own motion keeps it alive
-            // through a quiet passage.
-            reach = bands[Self.bandFor[index]] * 0.85 + own * (0.3 + 0.3 * energy)
+        if let heard = heard(index) {
+            // Listening: the music drives the bars, and their own motion is
+            // only a flicker underneath, so nothing reads as a loop.
+            reach = heard + own * 0.08
         } else {
             let kick = ProceduralMotion.beat(bands, at: elapsed)
             let centre = 1 - abs(Double(index) - 2) / 2
@@ -748,6 +749,25 @@ struct IslandIndicator: View {
         // A floor of a third, not a dot: the iPhone's bars dip, they never
         // vanish into the row.
         return CGFloat(min(max(0.33 + reach * 0.67, 0.33), 1))
+    }
+
+    /// What the music says about one bar, or `nil` when nothing is listening.
+    ///
+    /// Two readings mixed. The band itself, so a loud passage stands every
+    /// bar up; and the band against the other four this frame, so the bars
+    /// move *apart* — the spectrum's bands rise and fall together much of the
+    /// time, and on their raw values alone five bars move as one block, which
+    /// is what looked scripted. The beat lifts the middle on top.
+    private func heard(_ index: Int) -> Double? {
+        guard bands.count > Self.bandFor.max() ?? 0 else { return nil }
+        let picked = Self.bandFor.map { bands[$0] }
+        let own = picked[index]
+        let low = picked.min() ?? 0
+        let high = picked.max() ?? 1
+        let relative = (own - low) / max(high - low, 0.12)
+        let kick = ProceduralMotion.beat(bands, at: elapsed)
+        let centre = 1 - abs(Double(index) - 2) / 2
+        return pow(own, 1.4) * 0.45 + relative * 0.45 * (0.4 + 0.6 * level) + kick * 0.25 * centre
     }
 
     /// Still, the bars sit as the iPhone draws them paused: a low, even
