@@ -242,7 +242,7 @@ struct TrayContentView: View {
         }
         // The hand-over between headphones and music: one set sinks into
         // the notch, the next comes out of it (`AnyTransition.wings`).
-        .animation(reduceMotion ? .easeOut(duration: 0.2) : .easeInOut(duration: 0.3), value: arrival?.id)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : .easeInOut(duration: 0.55), value: arrival?.id)
     }
 
     @ViewBuilder

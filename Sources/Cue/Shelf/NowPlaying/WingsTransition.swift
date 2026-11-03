@@ -7,7 +7,9 @@ import SwiftUI
 /// and a beat later the music grows back out of the same place into the
 /// wings. Scaled about the pill's centre, which is the housing's: everything
 /// in the wings travels inward as it shrinks, so on a notched Mac it reads as
-/// being drawn under the camera rather than switched off. Under Reduce Motion,
+/// being drawn under the camera rather than switched off. Unhurried — about
+/// half a second in, a beat, and half a second out — so it reads as a
+/// movement rather than a cut. Under Reduce Motion,
 /// a plain fade.
 struct SinkIntoNotch: ViewModifier {
     /// 0 is in place; 1 is gone under the notch.
@@ -32,9 +34,9 @@ extension AnyTransition {
         return .asymmetric(
             // Out after the old ones have gone in, with a little spring as
             // they reach the wings.
-            insertion: sink.animation(.spring(response: 0.42, dampingFraction: 0.8).delay(0.26)),
+            insertion: sink.animation(.spring(response: 0.75, dampingFraction: 0.82).delay(0.5)),
             // In quickly, accelerating, the way something is pulled.
-            removal: sink.animation(.easeIn(duration: 0.26))
+            removal: sink.animation(.easeIn(duration: 0.55))
         )
     }
 }
