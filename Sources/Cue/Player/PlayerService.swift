@@ -464,14 +464,7 @@ final class PlayerService: NSObject {
         // Sized first, then positioned from the frame that resulted: the
         // window's frame is its content plus a title bar and a toolbar, and
         // positioning from the content size alone leaves it tens of points off.
-        let size = window.frame.size
-        let visible = (concealmentScreen ?? NSScreen.screens.first)?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
-
-        window.setFrameOrigin(NSPoint(
-            x: visible.minX + Self.visibleSliver - size.width,
-            y: visible.minY + Self.visibleSliver - size.height
-        ))
+        window.setFrameOrigin(concealedOrigin(for: window.frame.size))
 
         window.orderFrontRegardless()
 
@@ -481,6 +474,65 @@ final class PlayerService: NSObject {
         logger.notice(
             "Player concealed at \(window.frame.debugDescription, privacy: .public); visible to the window server: \(window.occlusionState.contains(.visible), privacy: .public)"
         )
+    }
+
+    /// Where the concealed window's origin belongs: down and left until only
+    /// `visibleSliver` of its top-right corner is on the usable screen.
+    private func concealedOrigin(for size: NSSize) -> NSPoint {
+        let visible = (concealmentScreen ?? NSScreen.screens.first)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        return NSPoint(
+            x: visible.minX + Self.visibleSliver - size.width,
+            y: visible.minY + Self.visibleSliver - size.height
+        )
+    }
+
+    // MARK: - Staying concealed
+
+    private var displacementObservers: [any NSObjectProtocol] = []
+    private var reconcealTask: Task<Void, Never>?
+
+    /// Puts the concealed window back when something else moves it.
+    ///
+    /// `PlayerWindow` stops AppKit dragging it on screen, but not the window
+    /// server: when the displays are rearranged — waking from sleep, a monitor
+    /// plugged in or out, a resolution change — macOS moves windows it finds
+    /// off screen back into view itself. The player then sat in the
+    /// bottom-left corner at its concealed size, fully visible, and because a
+    /// concealed window ignores the mouse it could not even be dragged away or
+    /// closed. So any of those events, and any move of the window while it is
+    /// meant to be hidden, sends it back where it belongs.
+    private func watchForDisplacement(_ window: NSWindow) {
+        let centre = NotificationCenter.default
+        let workspace = NSWorkspace.shared.notificationCenter
+        let check: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconcealIfDisplaced() }
+        }
+        displacementObservers = [
+            centre.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main, using: check),
+            centre.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main, using: check),
+            centre.addObserver(forName: NSWindow.didChangeScreenNotification, object: window, queue: .main, using: check),
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: check),
+            workspace.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main, using: check),
+        ]
+    }
+
+    private func reconcealIfDisplaced() {
+        guard let window, !isWindowVisible else { return }
+        // A moment's grace: the system moves windows in several steps while
+        // displays settle, and concealing against a half-arranged screen puts
+        // the window somewhere just as wrong.
+        reconcealTask?.cancel()
+        reconcealTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self, !self.isWindowVisible else { return }
+            let target = self.concealedOrigin(for: window.frame.size)
+            let drift = hypot(window.frame.minX - target.x, window.frame.minY - target.y)
+            let sized = abs(window.frame.width - Self.hiddenSize.width) < 60
+            guard drift > 1 || !sized else { return }
+            self.logger.notice("Player window was moved on screen while concealed; hiding it again.")
+            self.conceal(window)
+        }
     }
 
     func toggleWindow() {
@@ -536,6 +588,7 @@ final class PlayerService: NSObject {
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         self.window = window
+        watchForDisplacement(window)
 
         // Born concealed, so the web view has a real, on-screen window from the
         // moment it exists and the first thing played starts on its own rather
