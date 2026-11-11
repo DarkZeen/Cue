@@ -48,13 +48,10 @@ struct TodayPage: View {
                     Spacer(minLength: 0)
                     buttons(for: focus)
                 }
-            } else if source.miaInstalled() {
-                placeholder(
-                    "Open Mia to use its focus timer here.",
-                    action: ("Open Mia", source.openMia)
-                )
             } else if let focus = source.focus(), !focus.enabled {
                 placeholder("Mia's focus timer is switched off in its Settings → Extensions.", action: nil)
+            } else if source.miaInstalled() {
+                startCard
             } else {
                 placeholder("The focus timer comes from Mia, which isn't on this Mac.", action: nil)
             }
@@ -76,9 +73,9 @@ struct TodayPage: View {
         HStack(spacing: 2) {
             switch focus.state {
             case .idle:
-                TrayIconButton(symbol: "play.fill", title: "Start focus", size: 26) { source.focusCommand(.start) }
+                TrayIconButton(symbol: "play.fill", title: "Start focus", size: 26) { source.startFocus() }
             case .done:
-                TrayIconButton(symbol: "play.fill", title: "Start the next period", size: 26) { source.focusCommand(.next) }
+                TrayIconButton(symbol: "play.fill", title: "Start the next period", size: 26) { source.startFocus() }
                 TrayIconButton(symbol: "stop.fill", title: "Stop", size: 26) { source.focusCommand(.stop) }
             case .running:
                 TrayIconButton(symbol: "pause.fill", title: "Pause", size: 26) { source.focusCommand(.pause) }
@@ -88,6 +85,47 @@ struct TodayPage: View {
                 TrayIconButton(symbol: "play.fill", title: "Resume", size: 26) { source.focusCommand(.resume) }
                 TrayIconButton(symbol: "forward.end.fill", title: "Skip", size: 26) { source.focusCommand(.skip) }
                 TrayIconButton(symbol: "stop.fill", title: "Stop", size: 26) { source.focusCommand(.stop) }
+            }
+        }
+    }
+
+    /// Mia isn't running (or hasn't said anything): Start opens it in the background and starts the timer.
+    @ViewBuilder
+    private var startCard: some View {
+        switch source.focusStarting() {
+        case .waiting:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Focus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.ink(0.55))
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Starting Mia…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.ink(0.7))
+                }
+                Spacer(minLength: 0)
+            }
+        case .noAnswer:
+            placeholder(
+                "Mia didn't answer. It needs its latest build to take orders from Cue.",
+                action: ("Open Mia", source.openMia)
+            )
+        case .none:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Focus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.ink(0.55))
+                Text("Ready")
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .foregroundStyle(palette.primaryInk)
+                Text("Mia runs the timer; it opens in the background.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.ink(0.7))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                TrayIconButton(symbol: "play.fill", title: "Start focus", size: 26) { source.startFocus() }
             }
         }
     }

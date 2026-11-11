@@ -109,6 +109,8 @@ final class AppState {
             focus: { miaFocus.focus },
             focusCommand: { miaFocus.send($0) },
             miaInstalled: { miaFocus.isMiaInstalled },
+            startFocus: { miaFocus.startFocus() },
+            focusStarting: { miaFocus.starting },
             openMia: { miaFocus.openMia() },
             workday: { settings.workday }
         )
@@ -367,6 +369,9 @@ final class AppState {
             guard let self else { return }
             self.shelf.setLaunchAtLogin(!self.launchAtLogin.isEnabled)
         }
+
+        statusItem.focusTitle = { [weak self] in self?.miaFocus.menuTitle }
+        statusItem.onFocus = { [weak self] in self?.miaFocus.performMenuAction() }
 
         statusItem.setVisible(shelf.settings.showsMenuBarIcon)
     }

@@ -65,6 +65,9 @@ struct NowPlayingSource {
     var focusCommand: @MainActor (MiaFocusLink.Command) -> Void = { _ in }
     /// Whether Mia is on this Mac, and opening it (in the background).
     var miaInstalled: @MainActor () -> Bool = { false }
+    /// Starts a focus period, opening Mia in the background first if it has to.
+    var startFocus: @MainActor () -> Void = {}
+    var focusStarting: @MainActor () -> MiaFocusLink.Starting = { .none }
     var openMia: @MainActor () -> Void = {}
     /// The working hours the Today page measures.
     var workday: @MainActor () -> Workday = { .standard }

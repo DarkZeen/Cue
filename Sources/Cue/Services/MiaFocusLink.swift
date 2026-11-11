@@ -148,7 +148,22 @@ final class MiaFocusLink {
         case start, pause, resume, skip, stop, next
     }
 
+    /// A start asked for before Mia could take it: Mia was not running, or had not said anything yet.
+    enum Starting: Equatable {
+        case none
+        /// Mia is opening (in the background) or was asked; the start goes once it answers.
+        case waiting
+        /// Mia never answered: it is a build without the bridge, or it could not open.
+        case noAnswer
+    }
+
+    private(set) var starting: Starting = .none
+
+    /// How long to wait for Mia to open and answer before saying it did not.
+    @ObservationIgnored var answerTimeout: Duration = .seconds(15)
+
     @ObservationIgnored private var observers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var startTimeout: Task<Void, Never>?
     @ObservationIgnored private let logger = Diagnostics.logger("mia-focus")
 
     func start() {
@@ -156,7 +171,7 @@ final class MiaFocusLink {
         let distributed = DistributedNotificationCenter.default()
         observers.append(distributed.addObserver(forName: Self.stateName, object: nil, queue: .main) { [weak self] note in
             let focus = MiaFocus(payload: note.userInfo)
-            MainActor.assumeIsolated { self?.focus = focus }
+            MainActor.assumeIsolated { self?.received(focus) }
         })
 
         let workspace = NSWorkspace.shared.notificationCenter
@@ -177,12 +192,80 @@ final class MiaFocusLink {
         request()
     }
 
+    /// What Mia said, and the start that was waiting for it.
+    func received(_ focus: MiaFocus?) {
+        self.focus = focus
+        guard starting != .none, let focus else { return }
+        startTimeout?.cancel()
+        starting = .none
+        if focus.enabled { begin(focus) }
+    }
+
+    /// Starts a focus period from Cue, whatever Mia is doing.
+    ///
+    /// With Mia running and answering, this is the timer's own Start (or Next, after a period ends, or
+    /// Resume while paused). Without it, Cue opens Mia hidden — its window stays put — and sends the start
+    /// once Mia has said its state; `starting` tells the shelf it is on its way, or that Mia never answered.
+    func startFocus() {
+        if let focus {
+            if focus.enabled { begin(focus) }
+            return
+        }
+        guard isMiaInstalled else { return }
+        starting = .waiting
+        if isMiaRunning {
+            request()
+        } else {
+            launchMia(hidden: true)
+        }
+        startTimeout?.cancel()
+        let timeout = answerTimeout
+        startTimeout = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, let self, self.starting == .waiting else { return }
+            self.starting = .noAnswer
+        }
+    }
+
+    private func begin(_ focus: MiaFocus) {
+        switch focus.state {
+        case .idle: send(.start)
+        case .done: send(.next)
+        case .paused: send(.resume)
+        case .running: break
+        }
+    }
+
+    /// The menu bar's focus item: what it says, or nil to leave it out.
+    var menuTitle: String? {
+        guard let focus else { return isMiaInstalled ? "Start Focus" : nil }
+        guard focus.enabled else { return nil }
+        switch focus.state {
+        case .idle: return "Start Focus"
+        case .done: return focus.phase == .focus ? "Start Break" : "Start Focus"
+        case .running: return "Pause Focus"
+        case .paused: return "Resume Focus"
+        }
+    }
+
+    func performMenuAction() {
+        if let focus, case .running = focus.state {
+            send(.pause)
+        } else {
+            startFocus()
+        }
+    }
+
     /// Asks Mia to say its state again.
     func request() {
         DistributedNotificationCenter.default().postNotificationName(Self.requestName, object: nil, userInfo: nil, deliverImmediately: true)
     }
 
+    /// Where commands go instead of Mia, for tests.
+    @ObservationIgnored var sendOverride: ((Command) -> Void)?
+
     func send(_ command: Command) {
+        if let sendOverride { return sendOverride(command) }
         logger.debug("Asking Mia to \(command.rawValue, privacy: .public).")
         DistributedNotificationCenter.default().postNotificationName(
             Self.commandName, object: nil, userInfo: ["action": command.rawValue], deliverImmediately: true
@@ -194,10 +277,19 @@ final class MiaFocusLink {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.miaBundleID) != nil
     }
 
+    var isMiaRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: Self.miaBundleID).isEmpty
+    }
+
     func openMia() {
+        launchMia(hidden: false)
+    }
+
+    private func launchMia(hidden: Bool) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.miaBundleID) else { return }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
+        configuration.hides = hidden
         NSWorkspace.shared.openApplication(at: url, configuration: configuration)
     }
 

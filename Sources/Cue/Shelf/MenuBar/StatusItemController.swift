@@ -20,6 +20,9 @@ final class StatusItemController: NSObject {
     var onToggleLaunchAtLogin: () -> Void = {}
     var isLaunchAtLoginEnabled: () -> Bool = { false }
     var launchAtLoginExplanation: () -> String? = { nil }
+    /// Mia's focus timer: the item's title, or nil to leave it out (no Mia, or its timer switched off).
+    var focusTitle: () -> String? = { nil }
+    var onFocus: () -> Void = {}
 
     func setVisible(_ visible: Bool) {
         if visible {
@@ -50,6 +53,8 @@ final class StatusItemController: NSObject {
         menu.addAction(title: "Open Shelf") { [weak self] in self?.onOpenShelf() }
         let player = menu.addAction(title: "Show Player") { [weak self] in self?.onTogglePlayer() }
         player.identifier = Self.playerItemIdentifier
+        let focus = menu.addAction(title: "Start Focus") { [weak self] in self?.onFocus() }
+        focus.identifier = Self.focusItemIdentifier
 
         menu.addItem(.separator())
 
@@ -77,6 +82,7 @@ final class StatusItemController: NSObject {
     private static let launchItemIdentifier = NSUserInterfaceItemIdentifier("launchAtLogin")
     private static let openItemIdentifier = NSUserInterfaceItemIdentifier("openPanel")
     private static let playerItemIdentifier = NSUserInterfaceItemIdentifier("player")
+    private static let focusItemIdentifier = NSUserInterfaceItemIdentifier("focus")
 }
 
 extension StatusItemController: NSMenuDelegate {
@@ -89,6 +95,10 @@ extension StatusItemController: NSMenuDelegate {
             case Self.launchItemIdentifier:
                 item.state = isLaunchAtLoginEnabled() ? .on : .off
                 item.toolTip = launchAtLoginExplanation()
+            case Self.focusItemIdentifier:
+                let title = focusTitle()
+                item.title = title ?? "Start Focus"
+                item.isHidden = title == nil
             case Self.playerItemIdentifier:
                 item.title = isPlayerVisible() ? "Hide Player" : "Show Player"
             case Self.openItemIdentifier:

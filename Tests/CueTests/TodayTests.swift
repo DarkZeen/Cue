@@ -80,3 +80,48 @@ struct WorkdayTests {
         #expect(Workday(start: 600, end: 600).progress(at: at(12, 0), calendar: calendar) == .after)
     }
 }
+
+/// Starting Mia's timer from Cue.
+@MainActor
+struct MiaFocusStartTests {
+    private func link(_ focus: MiaFocus?) -> (MiaFocusLink, () -> [MiaFocusLink.Command]) {
+        let link = MiaFocusLink()
+        var sent: [MiaFocusLink.Command] = []
+        link.sendOverride = { sent.append($0) }
+        link.received(focus)
+        return (link, { sent })
+    }
+
+    @Test func startIsTheTimersOwnStartNextOrResume() {
+        for (state, expected) in [
+            (MiaFocus.State.idle, [MiaFocusLink.Command.start]),
+            (.done, [.next]),
+            (.paused(left: 60), [.resume]),
+            (.running(endsAt: .distantFuture), []),
+        ] {
+            let (link, sent) = link(MiaFocus(phase: .focus, state: state, length: 25))
+            link.startFocus()
+            #expect(sent() == expected)
+        }
+    }
+
+    @Test func aSwitchedOffTimerIsLeftAlone() {
+        let (link, sent) = link(MiaFocus(enabled: false, phase: .idle, state: .idle, length: 25))
+        link.startFocus()
+        #expect(sent().isEmpty)
+        #expect(link.menuTitle == nil)
+    }
+
+    @Test func theMenuSaysWhatItWillDo() {
+        #expect(link(MiaFocus(phase: .idle, state: .idle, length: 25)).0.menuTitle == "Start Focus")
+        #expect(link(MiaFocus(phase: .focus, state: .running(endsAt: .distantFuture), length: 25)).0.menuTitle == "Pause Focus")
+        #expect(link(MiaFocus(phase: .focus, state: .paused(left: 5), length: 25)).0.menuTitle == "Resume Focus")
+        #expect(link(MiaFocus(phase: .focus, state: .done, length: 25)).0.menuTitle == "Start Break")
+    }
+
+    @Test func theMenuPausesARunningPeriod() {
+        let (link, sent) = link(MiaFocus(phase: .focus, state: .running(endsAt: .distantFuture), length: 25))
+        link.performMenuAction()
+        #expect(sent() == [.pause])
+    }
+}
