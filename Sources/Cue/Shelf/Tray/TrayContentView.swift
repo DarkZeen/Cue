@@ -65,7 +65,8 @@ struct TrayContentView: View {
         guard isOpen else { return }
         let pages = self.pages
         guard let index = pages.firstIndex(of: page) else { return }
-        let next = index + (direction < 0 ? 1 : -1)
+        // As the Mac's own pages turn: fingers moving left bring the next page in from the right.
+        let next = index + direction
         guard pages.indices.contains(next) else { return }
         withAnimation(motion.expand) { page = pages[next] }
     }

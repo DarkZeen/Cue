@@ -78,7 +78,7 @@ struct HorizontalSwipeModifier: ViewModifier {
 }
 
 extension View {
-    /// `-1` for a swipe left, `+1` for a swipe right.
+    /// `+1` for the next page (with natural scrolling, fingers moving left), `-1` for the previous one.
     func onHorizontalSwipe(_ onSwipe: @escaping (Int) -> Void) -> some View {
         modifier(HorizontalSwipeModifier(onSwipe: onSwipe))
     }
