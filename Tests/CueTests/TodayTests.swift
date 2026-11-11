@@ -161,7 +161,7 @@ struct TodayFaceTests {
         let now = at(15)
         let face = face(MiaFocus(phase: .shortBreak, state: .running(endsAt: now.addingTimeInterval(252)), length: 5,
                                  round: 2, today: 130), at: now)
-        #expect(face.bigTone == .rest)
+        #expect(face.bigTone == .plain)
         #expect(face.side == "2h 10m")
         #expect(face.sideCaption == "focused today")
         #expect(face.click == .command(.skip, title: "Skip the break"))

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The open shelf's second page, as numerals: the one number that matters now, large, and the day beside it.
 ///
-/// No buttons. The big number is the countdown while a period runs (amber for focus, green for a break),
+/// No buttons. The big number is the countdown while a period runs (white, as the Lock Screen's clock is),
 /// the period's length while the timer is ready, and the day's focused total once the working day is over.
 /// The small number on the right is the day: how much of it is gone, or what you have focused, or when it
 /// starts again. The whole page is the control — a click starts, pauses, resumes or skips, a hold stops —
@@ -51,9 +51,9 @@ struct TodayPage: View {
     private func content(_ face: TodayFace) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(face.big)
-                        .font(CueType.numerals(46))
+                        .font(CueType.numerals(32))
                         .foregroundStyle(colour(face.bigTone))
                         .contentTransition(.numericText(countsDown: true))
                         .scaleEffect(isPressing ? 0.96 : 1, anchor: .leading)
@@ -61,23 +61,23 @@ struct TodayPage: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text(face.caption)
-                        .font(CueType.body(12))
+                        .font(CueType.body(11))
                         .foregroundStyle(palette.ink(0.55))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 16)
-                VStack(alignment: .trailing, spacing: 8) {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text(face.side)
-                        .font(CueType.numerals(22))
+                        .font(CueType.numerals(17))
                         .foregroundStyle(colour(face.sideTone))
                         .lineLimit(1)
                     Text(face.sideCaption)
-                        .font(CueType.body(12))
+                        .font(CueType.body(11))
                         .foregroundStyle(palette.ink(0.55))
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 6)
             HStack(alignment: .bottom) {
                 footer(face)
                 Spacer(minLength: 16)
@@ -90,8 +90,7 @@ struct TodayPage: View {
             }
         }
         .padding(.horizontal, 6)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
+        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -102,7 +101,7 @@ struct TodayPage: View {
                 ForEach(dots.indices, id: \.self) { index in
                     Circle()
                         .fill(dotColour(dots[index]))
-                        .frame(width: 7, height: 7)
+                        .frame(width: 6, height: 6)
                 }
             }
             .accessibilityHidden(true)
@@ -124,9 +123,8 @@ struct TodayPage: View {
 
     private func colour(_ tone: TodayFace.Tone) -> Color {
         switch tone {
-        case .focus: .orange
+        case .focus, .plain: palette.primaryInk
         case .rest: .green
-        case .plain: palette.ink(0.88)
         case .dim: palette.ink(0.4)
         }
     }
@@ -225,7 +223,7 @@ struct TodayFace: Equatable {
         case .running:
             big = MiaFocus.clock(focus.left(at: now))
             if focus.phase.isBreak {
-                bigTone = .rest
+                bigTone = .plain
                 caption = focus.phase.title
                 // On a break the right-hand side turns to what you've done.
                 side = MiaFocus.hours(today); sideTone = .plain; sideCaption = "focused today"

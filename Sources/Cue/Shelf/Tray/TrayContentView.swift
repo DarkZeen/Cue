@@ -220,7 +220,7 @@ struct TrayContentView: View {
                         + TrayMetrics.headerGap)
                 open.width = min(max(open.width, needed), geometry.frame.width - 24)
             }
-            // Today's cards need more room than a row of files does.
+            // Today's numbers need a little more room than a row of files does.
             if page == .today, pages.contains(.today) {
                 open.height = max(open.height, cutout.height + TrayMetrics.spacing + Self.todayHeight + TrayMetrics.bottomInset)
                 open.width = min(max(open.width, Self.todayWidth), geometry.frame.width - 24)
@@ -436,8 +436,8 @@ struct TrayContentView: View {
     }
 
     /// The room the Today page's cards need under the header.
-    static let todayHeight: CGFloat = 168
-    static let todayWidth: CGFloat = 500
+    static let todayHeight: CGFloat = 92
+    static let todayWidth: CGFloat = 420
 
     /// What is playing in one corner, the way out in the other, both on the
     /// menu bar's own line.
