@@ -13,10 +13,10 @@ enum CueType {
         .system(size: size, weight: .bold, design: .serif)
     }
 
-    /// Numbers that are the point of the view — a countdown, a total. SF Rounded, semibold, the timer's own
-    /// face since the pill first showed it, with figures that don't jitter as they count.
-    static func numerals(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .rounded).monospacedDigit()
+    /// Numbers that are the point of the view — a countdown, a total. Mia's serif, light, with figures that
+    /// don't jitter as they count.
+    static func numerals(_ size: CGFloat, weight: Font.Weight = .light) -> Font {
+        .system(size: size, weight: weight, design: .serif).monospacedDigit()
     }
 
     /// Body text: SF Pro, as Mia's notes are.

@@ -53,7 +53,7 @@ struct TodayPage: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(face.big)
-                        .font(CueType.numerals(32))
+                        .font(CueType.numerals(36))
                         .foregroundStyle(colour(face.bigTone))
                         .contentTransition(.numericText(countsDown: true))
                         .scaleEffect(isPressing ? 0.96 : 1, anchor: .leading)
@@ -68,7 +68,7 @@ struct TodayPage: View {
                 Spacer(minLength: 16)
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(face.side)
-                        .font(CueType.numerals(17))
+                        .font(CueType.numerals(19))
                         .foregroundStyle(colour(face.sideTone))
                         .lineLimit(1)
                     Text(face.sideCaption)

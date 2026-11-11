@@ -32,9 +32,8 @@ struct FocusWings<Centre: View>: View {
                     .overlay { centre() }
 
                 Text(MiaFocus.clock(focus.left(at: context.date)))
-                    .font(CueType.numerals(12))
-                    // White, as the clock on the Lock Screen is; the ring carries the period's colour.
-                    .foregroundStyle(palette.primaryInk.opacity(focus.isPaused ? 0.55 : 1))
+                    .font(CueType.numerals(13, weight: .regular))
+                    .foregroundStyle(FocusRing.colour(focus).opacity(focus.isPaused ? 0.55 : 1))
                     .fixedSize()
                     .frame(width: artSize, height: cutout.height)
                     .padding(.horizontal, padding)
