@@ -137,6 +137,13 @@ if [[ -n "$DEVELOPER_ID" ]]; then
     codesign --force --strip-disallowed-xattrs --options runtime --timestamp \
         --entitlements "$ENTITLEMENTS" --sign "$DEVELOPER_ID" "$APP"
 elif [[ -n "$SELF_SIGNED" ]]; then
+    # setup-signing.sh's keychain locks again when the Mac sleeps or restarts,
+    # and codesign then asks for its password in a dialog. The password is the
+    # one setup-signing.sh generated and kept, so unlock it here instead.
+    SIGNING_SECRET="$HOME/.config/cue/signing-keychain-password"
+    if [[ -f "$SIGNING_SECRET" ]]; then
+        security unlock-keychain -p "$(cat "$SIGNING_SECRET")" cue-signing.keychain 2>/dev/null || true
+    fi
     echo "▸ Signing with the local identity: $SELF_SIGNED"
     codesign --force --strip-disallowed-xattrs \
         --entitlements "$ENTITLEMENTS" --sign "$SELF_SIGNED" "$APP"
