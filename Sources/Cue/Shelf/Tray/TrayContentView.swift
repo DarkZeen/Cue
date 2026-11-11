@@ -421,9 +421,10 @@ struct TrayContentView: View {
         if pages.count > 1 {
             HStack(spacing: 6) {
                 ForEach(pages, id: \.self) { each in
+                    // Small and faint: a hint of the other page, not a control competing with the shelf.
                     Circle()
-                        .fill(palette.ink(each == page ? 0.85 : 0.28))
-                        .frame(width: 5, height: 5)
+                        .fill(palette.ink(each == page ? 0.4 : 0.14))
+                        .frame(width: 4, height: 4)
                         .padding(3)
                         .contentShape(Circle())
                         .onTapGesture { withAnimation(motion.expand) { page = each } }
@@ -431,7 +432,7 @@ struct TrayContentView: View {
                         .accessibilityAddTraits(each == page ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.bottom, 4)
+            .padding(.bottom, 9)
         }
     }
 

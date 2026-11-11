@@ -2,18 +2,16 @@ import SwiftUI
 
 /// The open shelf's second page, as numerals: the one number that matters now, large, and the day beside it.
 ///
-/// No buttons. The big number is the countdown while a period runs (white, as the Lock Screen's clock is),
+/// The big number is the countdown while a period runs (white, as the Lock Screen's clock is),
 /// the period's length while the timer is ready, and the day's focused total once the working day is over.
 /// The small number on the right is the day: how much of it is gone, or what you have focused, or when it
-/// starts again. The whole page is the control — a click starts, pauses, resumes or skips, a hold stops —
-/// which keeps it as quiet as the pill it opens out of. Mia keeps the timer (`MiaFocusLink`); type is Mia's
+/// starts again. A click on the page does the obvious thing (start, pause, resume); the timer's own controls —
+/// skip and stop among them — sit small in the corner. Mia keeps the timer (`MiaFocusLink`); type is Mia's
 /// own (`CueType`).
 struct TodayPage: View {
     let source: NowPlayingSource
 
     @Environment(\.trayPalette) private var palette
-    @State private var isHovering = false
-    @State private var isPressing = false
 
     var body: some View {
         // Once a second for the countdown and the day; nothing else here moves.
@@ -28,22 +26,8 @@ struct TodayPage: View {
             content(face)
                 .contentShape(.rect)
                 .onTapGesture { perform(face.click) }
-                .onLongPressGesture(minimumDuration: 0.6) {
-                    perform(face.hold)
-                } onPressingChanged: { pressing in
-                    isPressing = pressing && face.hold != nil
-                }
-                .onHover { isHovering = $0 }
-                .accessibilityElement(children: .ignore)
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel(face.accessibilityLabel)
-                .accessibilityActions {
-                    if let click = face.click {
-                        Button(click.title) { perform(click) }
-                    }
-                    if let hold = face.hold {
-                        Button(hold.title) { perform(hold) }
-                    }
-                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -56,8 +40,6 @@ struct TodayPage: View {
                         .font(CueType.numerals(36))
                         .foregroundStyle(colour(face.bigTone))
                         .contentTransition(.numericText(countsDown: true))
-                        .scaleEffect(isPressing ? 0.96 : 1, anchor: .leading)
-                        .animation(.easeOut(duration: 0.6), value: isPressing)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text(face.caption)
@@ -81,12 +63,16 @@ struct TodayPage: View {
             HStack(alignment: .bottom) {
                 footer(face)
                 Spacer(minLength: 16)
-                if let hint = face.hint {
-                    Text(hint)
-                        .font(CueType.label(11))
-                        .foregroundStyle(palette.ink(isHovering ? 0.6 : 0.35))
-                        .animation(.easeOut(duration: 0.15), value: isHovering)
+                HStack(spacing: 0) {
+                    ForEach(face.controls, id: \.title) { control in
+                        TrayIconButton(symbol: control.symbol, title: control.title, size: 24) {
+                            perform(control)
+                        }
+                    }
                 }
+                // Level with the dots and the bars beside them, not a row of its own.
+                .padding(.bottom, -8)
+                .padding(.trailing, -6)
             }
         }
         .padding(.horizontal, 6)
@@ -139,7 +125,8 @@ struct TodayPage: View {
     }
 }
 
-/// What the page says at one moment: the numbers, their words and tones, and what a click and a hold do.
+/// What the page says at one moment: the numbers, their words and tones, what a click does and which
+/// controls show.
 ///
 /// Worked out here, away from the view, so every state can be tested without drawing anything.
 struct TodayFace: Equatable {
@@ -159,6 +146,16 @@ struct TodayFace: Equatable {
             case .openMia: "Open Mia"
             }
         }
+
+        var symbol: String {
+            switch self {
+            case .command(.pause, _): "pause.fill"
+            case .command(.skip, _): "forward.end.fill"
+            case .command(.stop, _): "stop.fill"
+            case .command(.start, _), .command(.resume, _), .command(.next, _), .start: "play.fill"
+            case .openMia: "arrow.up.forward.app"
+            }
+        }
     }
 
     var big: String
@@ -168,9 +165,10 @@ struct TodayFace: Equatable {
     var sideTone: Tone
     var sideCaption: String
     var footer: Footer
-    var hint: String?
+    /// What a click anywhere on the page does: the obvious next step.
     var click: Action?
-    var hold: Action?
+    /// The timer's controls, small in the corner.
+    var controls: [Action]
 
     var accessibilityLabel: String {
         "\(caption), \(big). \(sideCaption), \(side)."
@@ -192,9 +190,8 @@ struct TodayFace: Equatable {
         }
 
         footer = .none
-        hint = nil
         click = nil
-        hold = nil
+        controls = []
 
         guard let focus, focus.enabled else {
             // No timer to show: Mia isn't answering, is switched off, or isn't here.
@@ -209,10 +206,10 @@ struct TodayFace: Equatable {
                     big = "…"; caption = "Starting Mia"
                 case .noAnswer:
                     big = "—"; caption = "Mia didn't answer. It needs its latest build."
-                    hint = "click to open Mia"; click = .openMia
+                    click = .openMia; controls = [.openMia]
                 case .none:
                     big = "Focus"; bigTone = .plain; caption = "Mia opens in the background"
-                    hint = "click to start"; click = .start
+                    click = .start; controls = [.start]
                 }
             }
             return
@@ -227,44 +224,47 @@ struct TodayFace: Equatable {
                 caption = focus.phase.title
                 // On a break the right-hand side turns to what you've done.
                 side = MiaFocus.hours(today); sideTone = .plain; sideCaption = "focused today"
-                hint = "click to skip · hold to stop"
-                click = .command(.skip, title: "Skip the break")
             } else {
                 bigTone = .focus
                 caption = focus.task ?? "Focus · round \(focus.round) of \(focus.rounds)"
-                hint = "click to pause · hold to stop"
-                click = .command(.pause, title: "Pause")
             }
-            hold = .command(.stop, title: "Stop")
+            click = .command(.pause, title: "Pause")
+            controls = [
+                .command(.pause, title: "Pause"),
+                .command(.skip, title: focus.phase.isBreak ? "Skip the break" : "Skip to the break"),
+                .command(.stop, title: "Stop"),
+            ]
             footer = .rounds(rounds)
         case .paused:
             big = MiaFocus.clock(focus.left(at: now)); bigTone = .dim
             caption = "Paused" + (focus.task.map { " · \($0)" } ?? "")
-            hint = "click to resume · hold to stop"
             click = .command(.resume, title: "Resume")
-            hold = .command(.stop, title: "Stop")
+            controls = [
+                .command(.resume, title: "Resume"),
+                .command(.skip, title: focus.phase.isBreak ? "Skip the break" : "Skip to the break"),
+                .command(.stop, title: "Stop"),
+            ]
             footer = .rounds(rounds)
         case .done:
             big = "0:00"; bigTone = .dim
             caption = "\(focus.phase.title) done"
-            hint = focus.phase == .focus ? "click for a break · hold to stop" : "click to focus · hold to stop"
-            click = .command(.next, title: focus.phase == .focus ? "Start the break" : "Start focus")
-            hold = .command(.stop, title: "Stop")
+            let next = TodayFace.Action.command(.next, title: focus.phase == .focus ? "Start the break" : "Start focus")
+            click = next
+            controls = [next, .command(.stop, title: "Stop")]
             footer = .rounds(rounds)
         case .idle:
             if case .after = day {
                 // The working day is over: what it came to is the number now.
                 big = MiaFocus.hours(today); bigTone = .plain
                 caption = "focused today"
-                hint = "click to start anyway"
                 footer = .week(focus.week)
             } else {
                 big = MiaFocus.clock(focus.length * 60); bigTone = .dim
                 caption = focus.task ?? "Ready to focus"
-                hint = "click to start"
                 footer = .rounds(rounds)
             }
             click = .start
+            controls = [.start]
         }
     }
 

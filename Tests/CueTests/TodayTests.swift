@@ -126,7 +126,7 @@ struct MiaFocusStartTests {
     }
 }
 
-/// The Numerals page: what it says and what a click and a hold do, in every state.
+/// The Numerals page: what it says and what a click does and which controls show, in every state.
 struct TodayFaceTests {
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -153,7 +153,7 @@ struct TodayFaceTests {
         #expect(face.caption == "Write the README")
         #expect(face.side == "50%")
         #expect(face.click == .command(.pause, title: "Pause"))
-        #expect(face.hold == .command(.stop, title: "Stop"))
+        #expect(face.controls.map(\.symbol) == ["pause.fill", "forward.end.fill", "stop.fill"])
         #expect(face.footer == .rounds([.done, .current, .ahead, .ahead]))
     }
 
@@ -164,7 +164,7 @@ struct TodayFaceTests {
         #expect(face.bigTone == .plain)
         #expect(face.side == "2h 10m")
         #expect(face.sideCaption == "focused today")
-        #expect(face.click == .command(.skip, title: "Skip the break"))
+        #expect(face.controls.contains(.command(.skip, title: "Skip the break")))
         #expect(face.footer == .rounds([.done, .done, .rest, .ahead]))
     }
 
@@ -173,7 +173,7 @@ struct TodayFaceTests {
         #expect(face.big == "25:00")
         #expect(face.bigTone == .dim)
         #expect(face.click == .start)
-        #expect(face.hold == nil)
+        #expect(face.controls == [.start])
     }
 
     @Test func afterHoursTheTotalIsTheNumber() {
