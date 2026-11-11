@@ -49,6 +49,27 @@ struct TrayContentView: View {
     /// so a second like while one is still drifting starts it over.
     @State private var heartBurst: UUID?
 
+    /// The open shelf's pages: the files, and Today (the working day and Mia's focus timer).
+    enum Page: Int, CaseIterable {
+        case files, today
+    }
+
+    @State private var page: Page = .files
+
+    /// Today exists where the shelf knows about the rest of Cue.
+    private var pages: [Page] { nowPlaying == nil ? [.files] : Page.allCases }
+
+    /// A two-finger swipe: left goes on to Today, right comes back to the files.
+    private func turnPage(_ direction: Int) {
+        // The swipe areas stay in place while the shelf is closed; a page turned out of sight is a surprise.
+        guard isOpen else { return }
+        let pages = self.pages
+        guard let index = pages.firstIndex(of: page) else { return }
+        let next = index + (direction < 0 ? 1 : -1)
+        guard pages.indices.contains(next) else { return }
+        withAnimation(motion.expand) { page = pages[next] }
+    }
+
     /// The viewer's motion preference, read here rather than from a static, so
     /// that switching Reduce Motion takes effect immediately (§50).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -126,6 +147,10 @@ struct TrayContentView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
         .onChange(of: shape, initial: true) { _, new in onShapeChange(new) }
+        // A file on its way in: back to the files, so it lands where it can be seen.
+        .onChange(of: presenter.state.isDropTargetActive) { _, active in
+            if active, page != .files { withAnimation(motion.expand) { page = .files } }
+        }
     }
 
     /// Party mode, round the closed pill only — never the open shelf.
@@ -195,9 +220,14 @@ struct TrayContentView: View {
                         + TrayMetrics.headerGap)
                 open.width = min(max(open.width, needed), geometry.frame.width - 24)
             }
+            // Today's cards need more room than a row of files does.
+            if page == .today, pages.contains(.today) {
+                open.height = max(open.height, cutout.height + TrayMetrics.spacing + Self.todayHeight + TrayMetrics.bottomInset)
+                open.width = min(max(open.width, Self.todayWidth), geometry.frame.width - 24)
+            }
             return open
         }
-        if pillTrack != nil || arrival != nil {
+        if pillTrack != nil || arrival != nil || activeFocus != nil {
             // Just back from a Space switch: the bare housing, about to grow.
             if presenter.isReturningFromSpace {
                 return .collapsed(cutout: cutout, isEmpty: false)
@@ -222,6 +252,12 @@ struct TrayContentView: View {
     private var pillTrack: NowPlayingSource.Track? {
         guard !isOpen, showsNowPlaying, let nowPlaying else { return nil }
         return nowPlaying.track()
+    }
+
+    /// Mia's focus period, while one runs, for the closed pill.
+    private var activeFocus: MiaFocus? {
+        guard !isOpen, showsNowPlaying, let focus = nowPlaying?.focus(), focus.isActive else { return nil }
+        return focus
     }
 
     /// Headphones that just arrived, which the closed shelf's wings show for
@@ -260,6 +296,12 @@ struct TrayContentView: View {
             }
             // A beat after the music has gone in, if there was music.
             .transition(.wings(reduceMotion: reduceMotion, entrance: pillTrack != nil ? .handover : .fromNotch))
+        } else if let nowPlaying, pillTrack == nil, let focus = activeFocus {
+            // Nothing playing: the focus period has the wings.
+            FocusWings(source: nowPlaying, focus: focus, cutout: cutout) {
+                itemDots
+            }
+            .transition(.wings(reduceMotion: reduceMotion, entrance: .fade))
         } else if let nowPlaying, let track = pillTrack {
             NowPlayingWings(
                 source: nowPlaying,
@@ -339,14 +381,63 @@ struct TrayContentView: View {
                 .frame(height: cutout.height)
                 .padding(.horizontal, settings.headerInset)
                 .zIndex(1)
+                .onHorizontalSwipe(turnPage)
 
-            content
+            pageContent
                 .padding(.horizontal, TrayMetrics.horizontalInset)
                 .padding(.top, TrayMetrics.spacing)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .padding(.bottom, TrayMetrics.bottomInset)
+        .overlay(alignment: .bottom) { pageDots }
     }
+
+    /// The page on show, sliding in from the side it was swiped from.
+    ///
+    /// The swipe is caught over the header and the Today page always, and over the files only while they fit:
+    /// a row long enough to scroll keeps its own sideways scrolling, and the header or the dots turn the page.
+    @ViewBuilder
+    private var pageContent: some View {
+        ZStack(alignment: .top) {
+            if page == .today, let nowPlaying {
+                TodayPage(source: nowPlaying)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .onHorizontalSwipe(turnPage)
+            } else if store.isEmpty || fitsWithoutScrolling {
+                content
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .onHorizontalSwipe(turnPage)
+            } else {
+                content
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .clipped()
+    }
+
+    /// Which page is showing, and a way to the other: one dot a page, at the foot of the shelf.
+    @ViewBuilder
+    private var pageDots: some View {
+        if pages.count > 1 {
+            HStack(spacing: 6) {
+                ForEach(pages, id: \.self) { each in
+                    Circle()
+                        .fill(palette.ink(each == page ? 0.85 : 0.28))
+                        .frame(width: 5, height: 5)
+                        .padding(3)
+                        .contentShape(Circle())
+                        .onTapGesture { withAnimation(motion.expand) { page = each } }
+                        .accessibilityLabel(each == .files ? "Files" : "Today")
+                        .accessibilityAddTraits(each == page ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    /// The room the Today page's cards need under the header.
+    static let todayHeight: CGFloat = 168
+    static let todayWidth: CGFloat = 500
 
     /// What is playing in one corner, the way out in the other, both on the
     /// menu bar's own line.

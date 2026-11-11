@@ -124,6 +124,20 @@ struct NowPlayingWings<Centre: View>: View {
             // nothing to wait for.
             PillClickTarget(onSingle: nil, onDouble: like, toolTip: toolTip)
         }
+        // A focus period running under the music: a small ring on the cover's corner, so the music keeps
+        // the wings and the timer is still in sight.
+        .overlay(alignment: .bottomTrailing) {
+            if let focus = source.focus(), focus.isActive {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    FocusRing(focus: focus, now: context.date, diameter: 11)
+                        .padding(2)
+                        .background(Circle().fill(Color.black))
+                }
+                .offset(x: padding - 4, y: -(cutout.height - artSize) / 2 + 2)
+                .allowsHitTesting(false)
+                .help(focus.task.map { "\(focus.phase.title) — \($0)" } ?? focus.phase.title)
+            }
+        }
         // In from the outer wall by the shoulder the surface draws in over,
         // so the cover sits inside the visible body rather than under the
         // curve where the shape meets the bezel. Outside the click target:

@@ -57,6 +57,17 @@ struct NowPlayingSource {
     var arrivalJustEnded: @MainActor () -> Bool = { false }
     /// Whether an arrival draws the green line round the pill.
     var arrivalOutline: @MainActor () -> Bool = { true }
+
+    /// Mia's focus timer, while Mia is running and has said (see `MiaFocusLink`). Shown on the open shelf's
+    /// Today page and, while a period runs, in the closed pill.
+    var focus: @MainActor () -> MiaFocus? = { nil }
+    /// Works the timer's buttons in Mia.
+    var focusCommand: @MainActor (MiaFocusLink.Command) -> Void = { _ in }
+    /// Whether Mia is on this Mac, and opening it (in the background).
+    var miaInstalled: @MainActor () -> Bool = { false }
+    var openMia: @MainActor () -> Void = {}
+    /// The working hours the Today page measures.
+    var workday: @MainActor () -> Workday = { .standard }
     /// The covers' colours, kept for as long as the source is: the wings are
     /// rebuilt every time the shelf opens and closes, and a colour that had
     /// to be worked out again each time would flash white first.

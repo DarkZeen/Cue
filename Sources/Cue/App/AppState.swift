@@ -21,6 +21,8 @@ final class AppState {
     let updates: UpdateService
     /// AirPods connecting, or moving to this Mac, for the notch to show.
     let headphones = HeadphonesWatcher()
+    /// Mia's focus timer, for the shelf's Today page and the notch.
+    let miaFocus = MiaFocusLink()
     /// The shelf at the top of the screen — what was Tray.
     let shelf: ShelfState
 
@@ -50,7 +52,8 @@ final class AppState {
                 player: player,
                 thumbnails: thumbnails,
                 settings: settings,
-                headphones: headphones
+                headphones: headphones,
+                miaFocus: miaFocus
             )
         )
     }
@@ -65,7 +68,8 @@ final class AppState {
         player: PlayerService,
         thumbnails: ThumbnailProvider,
         settings: SettingsStore,
-        headphones: HeadphonesWatcher
+        headphones: HeadphonesWatcher,
+        miaFocus: MiaFocusLink
     ) -> NowPlayingSource {
         NowPlayingSource(
             track: {
@@ -101,7 +105,12 @@ final class AppState {
             party: { settings.partyIntensity },
             arrival: { headphones.arrival },
             arrivalJustEnded: { headphones.justEnded },
-            arrivalOutline: { settings.showsArrivalOutline }
+            arrivalOutline: { settings.showsArrivalOutline },
+            focus: { miaFocus.focus },
+            focusCommand: { miaFocus.send($0) },
+            miaInstalled: { miaFocus.isMiaInstalled },
+            openMia: { miaFocus.openMia() },
+            workday: { settings.workday }
         )
     }
 
@@ -137,6 +146,7 @@ final class AppState {
             self.headphones.isEnabled = self.settings.showsHeadphones
         }
         headphones.start()
+        miaFocus.start()
         shelf.start()
         configureStatusItem()
 

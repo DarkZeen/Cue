@@ -587,6 +587,25 @@ private struct NotchPane: View {
                     .hint(settings.showsHints)
             }
 
+            Section("Today page") {
+                LabeledContent("Working day") {
+                    HStack(spacing: 6) {
+                        DatePicker("Starts", selection: workdayTime(\.start), displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        Text("to").foregroundStyle(.secondary)
+                        DatePicker("Ends", selection: workdayTime(\.end), displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                }
+                Text("""
+                    Swipe across the open shelf for Today: how far through these \
+                    hours you are, Mia's focus timer, and how long you have \
+                    focused. The timer stays Mia's — Cue shows it and works its \
+                    buttons.
+                    """)
+                    .hint(settings.showsHints)
+            }
+
             Section("Headphones") {
                 Toggle("Show AirPods when they connect", isOn: $settings.showsHeadphones)
                 Toggle("Green outline while they connect", isOn: $settings.showsArrivalOutline)
@@ -635,6 +654,17 @@ private struct NotchPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// One end of the working day as a time of day, for a picker.
+    private func workdayTime(_ end: WritableKeyPath<Workday, Int>) -> Binding<Date> {
+        Binding {
+            let minutes = settings.workday[keyPath: end]
+            return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
+        } set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            settings.workday[keyPath: end] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
     }
 
     private var partyReadout: String {

@@ -32,6 +32,10 @@ final class SettingsStore {
         partyIntensity = Self.clampedParty(defaults.double(forKey: Key.partyIntensity))
         showsHeadphones = defaults.object(forKey: Key.showsHeadphones) as? Bool ?? true
         showsArrivalOutline = defaults.object(forKey: Key.showsArrivalOutline) as? Bool ?? true
+        workday = Workday(
+            start: defaults.object(forKey: Key.workdayStart) as? Int ?? Workday.standard.start,
+            end: defaults.object(forKey: Key.workdayEnd) as? Int ?? Workday.standard.end
+        )
 
         isExploring = defaults.bool(forKey: Key.isExploring)
         analysesAudio = defaults.bool(forKey: Key.analysesAudio)
@@ -277,6 +281,14 @@ final class SettingsStore {
 
     var onHeadphonesChange: (() -> Void)?
 
+    /// The working hours the shelf's Today page measures the day against.
+    var workday: Workday {
+        didSet {
+            defaults.set(workday.start, forKey: Key.workdayStart)
+            defaults.set(workday.end, forKey: Key.workdayEnd)
+        }
+    }
+
     /// Whether headphones arriving draw a green line round the notch.
     var showsArrivalOutline: Bool {
         didSet { defaults.set(showsArrivalOutline, forKey: Key.showsArrivalOutline) }
@@ -428,6 +440,8 @@ final class SettingsStore {
         static let partyIntensity = "partyIntensity"
         static let showsHeadphones = "showsHeadphones"
         static let showsArrivalOutline = "showsArrivalOutline"
+        static let workdayStart = "workdayStart"
+        static let workdayEnd = "workdayEnd"
         static let albumCollection = "albumCollection"
         static let isExploring = "isExploring"
         static let exploreGenre = "exploreGenre"
