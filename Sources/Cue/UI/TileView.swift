@@ -100,7 +100,7 @@ struct TileView: View {
             )
             .overlay(
                 Text("\(index + 1)")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.quaternary)
             )
             .padding(1)
@@ -111,7 +111,7 @@ struct TileView: View {
         if item == nil {
             Color.clear
         } else {
-            Rectangle().fill(.quaternary.opacity(isHovered ? 0.5 : 0.28))
+            Rectangle().fill(isHovered ? MiaLook.outline : MiaLook.card)
         }
     }
 

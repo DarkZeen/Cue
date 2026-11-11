@@ -16,20 +16,19 @@ struct CueMark: View {
     }
 }
 
-/// The colours the redesigned surfaces are drawn from.
+/// The colours the surfaces are drawn from: Mia's Milanote look (`MiaLook`).
 ///
-/// Small on purpose. The world is near-black grounds, one accent, and artwork —
-/// which means most of the colour on screen belongs to the album covers, and
-/// anything Cue adds competes with them.
+/// Small on purpose. Solid dark grounds, one accent, and artwork — which means
+/// most of the colour on screen belongs to the album covers, and anything Cue
+/// adds competes with them.
 enum CuePalette {
-    /// The single accent. Used for what is active, never for the mark itself:
-    /// the logo is white on black, and it stays that way.
-    static let accent = Color(red: 1.0, green: 0.13, blue: 0.24)
+    /// The single accent, Mia's blue. Used for what is active, never for the
+    /// mark itself: the logo is white on black, and it stays that way.
+    static let accent = MiaLook.accent
 
-    /// The panel's ground. Near-black rather than black: true black gives a
-    /// translucent surface nothing to be translucent against.
-    static let ground = Color(white: 0.07)
+    /// The panel's ground: Milanote's solid #1E1E1E.
+    static let ground = MiaLook.ground
 
-    /// The ground a tile sits on before its artwork arrives.
-    static let tileGround = Color(white: 0.14)
+    /// The ground a tile sits on before its artwork arrives: a Milanote card.
+    static let tileGround = MiaLook.card
 }

@@ -63,10 +63,10 @@ struct CueContentView: View {
         .background(surface)
         .clipShape(.rect(cornerRadius: CueLayout.cornerRadius))
         .overlay(
-            // A hairline, not a border: on a translucent surface the edge is
-            // what stops the panel dissolving into a bright desktop behind it.
+            // A hairline, not a border: Milanote's divider grey, so the solid
+            // panel still has an edge against a dark desktop.
             RoundedRectangle(cornerRadius: CueLayout.cornerRadius)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(MiaLook.divider, lineWidth: 1)
         )
         .overlay { if isEditing { editChrome } }
         .scaleEffect(isPresented ? 1 : CueAnimation.startScale)
@@ -257,14 +257,10 @@ struct CueContentView: View {
         }
     }
 
-    /// The panel's surface.
-    ///
-    /// `.ultraThinMaterial` rather than a colour, so the panel takes its
-    /// character from whatever is behind it — which over an album cover or a
-    /// bright document is the difference between an overlay and a grey box.
+    /// The panel's surface: Milanote's solid ground, as Mia's windows are.
     private var surface: some View {
         Rectangle()
-            .fill(.ultraThinMaterial)
+            .fill(MiaLook.ground)
     }
 }
 
@@ -282,7 +278,7 @@ private struct DisconnectedView: View {
                 .foregroundStyle(.tertiary)
 
             Text("Connect your YouTube account")
-                .font(.system(size: 14, weight: .medium))
+                .font(CueType.title(16))
 
             Text("Cue needs a Google OAuth client ID to search and to see your playlists.")
                 .font(.system(size: 12))

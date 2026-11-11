@@ -78,9 +78,15 @@ struct SettingsView: View {
         } detail: {
             detail
                 .frame(minWidth: SettingsMetrics.detailWidth)
+                // Mia's Milanote ground behind the panes, and its cards for the groups.
+                .scrollContentBackground(.hidden)
+                .background(MiaLook.ground)
                 .navigationTitle(selection?.title ?? "Settings")
         }
         .navigationSplitViewStyle(.balanced)
+        // Mia is dark, and so is Cue's notch: the settings match them rather than the system.
+        .preferredColorScheme(.dark)
+        .tint(MiaLook.accent)
     }
 
     @ViewBuilder
@@ -169,7 +175,7 @@ private struct GeneralPane: View {
                 Toggle("Explain each setting", isOn: $settings.showsHints)
             }
 
-            Section("Playback") {
+            Section {
                 Picker("When you pick something", selection: $settings.playbackDestination) {
                     ForEach(PlaybackDestination.allCases, id: \.self) { destination in
                         Text(destination.title).tag(destination)
@@ -236,9 +242,11 @@ private struct GeneralPane: View {
                         }
                     }
                 }
+            } header: {
+                SettingsHeader("Playback")
             }
 
-            Section("Panel") {
+            Section {
                 LabeledContent("Size and position") {
                     HStack(spacing: 10) {
                         Button("Edit Layout…", action: onEditLayout)
@@ -274,6 +282,8 @@ private struct GeneralPane: View {
                     Text("⌘1 to ⌘9 open a tile on the page you are looking at. ⌘R deals a different nine. ⌘E swaps between your own music and Explore.")
                         .hint(settings.showsHints)
                 }
+            } header: {
+                SettingsHeader("Panel")
             }
 
             Section {
@@ -285,7 +295,7 @@ private struct GeneralPane: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Keyboard shortcut") {
+            Section {
                 LabeledContent("Open Cue") {
                     ShortcutRecorder(combination: $settings.hotKey)
                 }
@@ -320,9 +330,11 @@ private struct GeneralPane: View {
                     says nothing about it. Pick a different one.
                     """)
                     .hint(settings.showsHints)
+            } header: {
+                SettingsHeader("Keyboard shortcut")
             }
 
-            Section("From a script") {
+            Section {
                 Text("""
                     Cue also answers a URL, for Shortcuts.app, a launcher you \
                     already use, or anything else that can run a command.
@@ -353,10 +365,14 @@ private struct GeneralPane: View {
                 Text("\(CueURL.scheme)://toggle closes the panel again if it is already open.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            } header: {
+                SettingsHeader("From a script")
             }
 
-            Section("Updates") {
+            Section {
                 UpdatesRow(updates: updates, settings: settings)
+            } header: {
+                SettingsHeader("Updates")
             }
 
             Section {
@@ -408,7 +424,7 @@ private struct AccountsPane: View {
 
     var body: some View {
         Form {
-            Section("YouTube account") {
+            Section {
                 if google.isConnected {
                     LabeledContent("Status") {
                         Label("Connected", systemImage: "checkmark.circle.fill")
@@ -470,9 +486,11 @@ private struct AccountsPane: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } header: {
+                SettingsHeader("YouTube account")
             }
 
-            Section("YouTube Music library") {
+            Section {
                 Toggle("Use my YouTube Music library", isOn: $settings.unofficialProviderEnabled)
 
                 Text("""
@@ -529,6 +547,8 @@ private struct AccountsPane: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } header: {
+                SettingsHeader("YouTube Music library")
             }
         }
         .formStyle(.grouped)
@@ -554,7 +574,7 @@ private struct NotchPane: View {
 
     var body: some View {
         Form {
-            Section("Waveform") {
+            Section {
                 Picker("Style", selection: $settings.plaqueAnimation) {
                     ForEach(PlaqueAnimation.allCases, id: \.self) { style in
                         Text(style.title).tag(style)
@@ -585,9 +605,11 @@ private struct NotchPane: View {
                     and in the search bar. The Record keeps its own colours.
                     """)
                     .hint(settings.showsHints)
+            } header: {
+                SettingsHeader("Waveform")
             }
 
-            Section("Today page") {
+            Section {
                 LabeledContent("Working day") {
                     HStack(spacing: 6) {
                         DatePicker("Starts", selection: workdayTime(\.start), displayedComponents: .hourAndMinute)
@@ -604,9 +626,11 @@ private struct NotchPane: View {
                     buttons.
                     """)
                     .hint(settings.showsHints)
+            } header: {
+                SettingsHeader("Today page")
             }
 
-            Section("Headphones") {
+            Section {
                 Toggle("Show AirPods when they connect", isOn: $settings.showsHeadphones)
                 Toggle("Green outline while they connect", isOn: $settings.showsArrivalOutline)
                     .disabled(!settings.showsHeadphones)
@@ -616,9 +640,11 @@ private struct NotchPane: View {
                     with their battery and a green outline.
                     """)
                     .hint(settings.showsHints)
+            } header: {
+                SettingsHeader("Headphones")
             }
 
-            Section("Party mode") {
+            Section {
                 LabeledContent("Strength") {
                     HStack(spacing: 10) {
                         Slider(value: $settings.partyIntensity, in: 0...1) {
@@ -651,6 +677,8 @@ private struct NotchPane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 }
+            } header: {
+                SettingsHeader("Party mode")
             }
         }
         .formStyle(.grouped)
@@ -699,7 +727,7 @@ private struct TilesPane: View {
                     .hint(settings.showsHints)
             }
 
-            Section("Kept") {
+            Section {
                 let kept = settings.pinnedTiles.enumerated().filter { $0.element != nil }
 
                 if kept.isEmpty {
@@ -711,7 +739,7 @@ private struct TilesPane: View {
                         if let item {
                             HStack {
                                 Text("\(index + 1)")
-                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 18)
 
@@ -732,9 +760,11 @@ private struct TilesPane: View {
                         }
                     }
                 }
+            } header: {
+                SettingsHeader("Kept")
             }
 
-            Section("Explore") {
+            Section {
                 Picker("Genre", selection: genreSelection) {
                     Text("Whatever YouTube Music suggests").tag("")
 
@@ -775,6 +805,8 @@ private struct TilesPane: View {
                     it where it can. New releases stay new releases.
                     """)
                     .hint(settings.showsHints)
+            } header: {
+                SettingsHeader("Explore")
             }
         }
         .formStyle(.grouped)
@@ -882,5 +914,21 @@ extension View {
     /// Styles a line as an explanation, and hides it when explanations are off.
     func hint(_ shows: Bool) -> some View {
         modifier(HintModifier(shows: shows))
+    }
+}
+
+/// A section's title in Mia's look: bold serif, as Mia's section names are.
+private struct SettingsHeader: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(CueType.title(13))
+            .foregroundStyle(.primary)
+            .textCase(nil)
     }
 }

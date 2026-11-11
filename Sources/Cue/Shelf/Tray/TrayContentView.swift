@@ -334,7 +334,7 @@ struct TrayContentView: View {
                 }
                 if store.count > 3 {
                     Text("\(store.count)")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(palette.ink(0.55))
                         .padding(.leading, 1)
                 }

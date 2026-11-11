@@ -64,7 +64,7 @@ struct GalleryView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text(presenter.page.title(exploring: coordinator.isExploring))
-                .font(.system(size: 13, weight: .semibold))
+                .font(CueType.title(15))
                 .foregroundStyle(.primary)
                 // Keyed on the page so the title crossfades with the slide
                 // rather than surviving it unchanged, which would read as the

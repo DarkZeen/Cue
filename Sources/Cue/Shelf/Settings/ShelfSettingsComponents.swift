@@ -35,7 +35,7 @@ struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 7) {
             if let title {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CueType.title(13))
                     .foregroundStyle(.secondary)
                     .padding(.leading, 2)
             }

@@ -26,20 +26,20 @@ enum CueLayout {
     /// that the panel does not start competing with the screen.
     static let panelWidthRange: ClosedRange<CGFloat> = 440...760
 
-    static let cornerRadius: CGFloat = 20
+    static let cornerRadius: CGFloat = 12
     static let outerPadding: CGFloat = 12
     /// Between the search field and whatever is under it.
     static let sectionGap: CGFloat = 8
 
     static let searchHeight: CGFloat = 48
-    static let searchCornerRadius: CGFloat = 12
+    static let searchCornerRadius: CGFloat = MiaLook.pillRadius
 
     // MARK: - Grid
 
     static let gridColumns = 3
     static let gridRows = 3
     static let tileSpacing: CGFloat = 10
-    static let tileCornerRadius: CGFloat = 12
+    static let tileCornerRadius: CGFloat = MiaLook.sectionRadius
     static let tileHeight: CGFloat = 128
     /// Square, and as tall as the tile allows once the two lines of label are
     /// taken out. Artwork is the thing being aimed at; the words are
@@ -63,7 +63,7 @@ enum CueLayout {
     /// because both designs ship and the window has to be built tall enough for
     /// whichever one is switched on.
     enum Gallery {
-        static let tileCornerRadius: CGFloat = 10
+        static let tileCornerRadius: CGFloat = MiaLook.cardRadius
         static let tileSpacing: CGFloat = 10
 
         /// The page's name and its randomize control.

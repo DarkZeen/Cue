@@ -1,234 +1,295 @@
 import SwiftUI
 
-/// The open shelf's second page: how far through the working day you are, Mia's focus timer, and how long
-/// you have focused.
+/// The open shelf's second page, as numerals: the one number that matters now, large, and the day beside it.
 ///
-/// Reached by swiping across the open shelf. Everything on it is a glance and a press or two — the timer's
-/// buttons work Mia's timer, which stays Mia's (`MiaFocusLink`) — and nothing here needs the keyboard.
+/// No buttons. The big number is the countdown while a period runs (amber for focus, green for a break),
+/// the period's length while the timer is ready, and the day's focused total once the working day is over.
+/// The small number on the right is the day: how much of it is gone, or what you have focused, or when it
+/// starts again. The whole page is the control — a click starts, pauses, resumes or skips, a hold stops —
+/// which keeps it as quiet as the pill it opens out of. Mia keeps the timer (`MiaFocusLink`); type is Mia's
+/// own (`CueType`).
 struct TodayPage: View {
     let source: NowPlayingSource
 
     @Environment(\.trayPalette) private var palette
+    @State private var isHovering = false
+    @State private var isPressing = false
 
     var body: some View {
-        // Once a second for the countdown and the bar; nothing else here moves.
+        // Once a second for the countdown and the day; nothing else here moves.
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            VStack(alignment: .leading, spacing: 12) {
-                DayBar(workday: source.workday(), now: context.date)
-                HStack(alignment: .top, spacing: 12) {
-                    focusCard(now: context.date)
-                    focusedCard
+            let face = TodayFace(
+                focus: source.focus(),
+                starting: source.focusStarting(),
+                miaInstalled: source.miaInstalled(),
+                workday: source.workday(),
+                now: context.date
+            )
+            content(face)
+                .contentShape(.rect)
+                .onTapGesture { perform(face.click) }
+                .onLongPressGesture(minimumDuration: 0.6) {
+                    perform(face.hold)
+                } onPressingChanged: { pressing in
+                    isPressing = pressing && face.hold != nil
                 }
-            }
+                .onHover { isHovering = $0 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(face.accessibilityLabel)
+                .accessibilityActions {
+                    if let click = face.click {
+                        Button(click.title) { perform(click) }
+                    }
+                    if let hold = face.hold {
+                        Button(hold.title) { perform(hold) }
+                    }
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    // MARK: The timer
-
-    @ViewBuilder
-    private func focusCard(now: Date) -> some View {
-        TodayCard {
-            if let focus = source.focus(), focus.enabled {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(focusHeading(focus))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(palette.ink(0.55))
-                    Text(focus.state == .idle ? MiaFocus.clock(focus.length * 60) : MiaFocus.clock(focus.left(at: now)))
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(focus.isPaused ? palette.ink(0.55) : palette.primaryInk)
+    private func content(_ face: TodayFace) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(face.big)
+                        .font(CueType.numerals(46))
+                        .foregroundStyle(colour(face.bigTone))
                         .contentTransition(.numericText(countsDown: true))
-                    if let task = focus.task {
-                        Text(task)
-                            .font(.system(size: 11))
-                            .foregroundStyle(palette.ink(0.7))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    buttons(for: focus)
+                        .scaleEffect(isPressing ? 0.96 : 1, anchor: .leading)
+                        .animation(.easeOut(duration: 0.6), value: isPressing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(face.caption)
+                        .font(CueType.body(12))
+                        .foregroundStyle(palette.ink(0.55))
+                        .lineLimit(1)
                 }
-            } else if let focus = source.focus(), !focus.enabled {
-                placeholder("Mia's focus timer is switched off in its Settings → Extensions.", action: nil)
-            } else if source.miaInstalled() {
-                startCard
-            } else {
-                placeholder("The focus timer comes from Mia, which isn't on this Mac.", action: nil)
-            }
-        }
-    }
-
-    private func focusHeading(_ focus: MiaFocus) -> String {
-        switch focus.state {
-        case .idle: return "Focus"
-        case .done: return "\(focus.phase.title) done"
-        case .running, .paused:
-            let round = focus.phase == .focus && focus.round > 0 ? " · round \(focus.round) of \(focus.rounds)" : ""
-            return focus.phase.title + (focus.isPaused ? " · paused" : "") + round
-        }
-    }
-
-    @ViewBuilder
-    private func buttons(for focus: MiaFocus) -> some View {
-        HStack(spacing: 2) {
-            switch focus.state {
-            case .idle:
-                TrayIconButton(symbol: "play.fill", title: "Start focus", size: 26) { source.startFocus() }
-            case .done:
-                TrayIconButton(symbol: "play.fill", title: "Start the next period", size: 26) { source.startFocus() }
-                TrayIconButton(symbol: "stop.fill", title: "Stop", size: 26) { source.focusCommand(.stop) }
-            case .running:
-                TrayIconButton(symbol: "pause.fill", title: "Pause", size: 26) { source.focusCommand(.pause) }
-                TrayIconButton(symbol: "forward.end.fill", title: "Skip", size: 26) { source.focusCommand(.skip) }
-                TrayIconButton(symbol: "stop.fill", title: "Stop", size: 26) { source.focusCommand(.stop) }
-            case .paused:
-                TrayIconButton(symbol: "play.fill", title: "Resume", size: 26) { source.focusCommand(.resume) }
-                TrayIconButton(symbol: "forward.end.fill", title: "Skip", size: 26) { source.focusCommand(.skip) }
-                TrayIconButton(symbol: "stop.fill", title: "Stop", size: 26) { source.focusCommand(.stop) }
-            }
-        }
-    }
-
-    /// Mia isn't running (or hasn't said anything): Start opens it in the background and starts the timer.
-    @ViewBuilder
-    private var startCard: some View {
-        switch source.focusStarting() {
-        case .waiting:
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Focus")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(palette.ink(0.55))
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Starting Mia…")
-                        .font(.system(size: 12))
-                        .foregroundStyle(palette.ink(0.7))
+                Spacer(minLength: 16)
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text(face.side)
+                        .font(CueType.numerals(22))
+                        .foregroundStyle(colour(face.sideTone))
+                        .lineLimit(1)
+                    Text(face.sideCaption)
+                        .font(CueType.body(12))
+                        .foregroundStyle(palette.ink(0.55))
+                        .lineLimit(1)
                 }
-                Spacer(minLength: 0)
             }
-        case .noAnswer:
-            placeholder(
-                "Mia didn't answer. It needs its latest build to take orders from Cue.",
-                action: ("Open Mia", source.openMia)
-            )
-        case .none:
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Focus")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(palette.ink(0.55))
-                Text("Ready")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .foregroundStyle(palette.primaryInk)
-                Text("Mia runs the timer; it opens in the background.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(palette.ink(0.7))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                TrayIconButton(symbol: "play.fill", title: "Start focus", size: 26) { source.startFocus() }
-            }
-        }
-    }
-
-    // MARK: Hours
-
-    @ViewBuilder
-    private var focusedCard: some View {
-        TodayCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Focused today")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(palette.ink(0.55))
-                Text(MiaFocus.hours(source.focus()?.today ?? 0))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(palette.primaryInk)
-                Spacer(minLength: 0)
-                WeekBars(minutes: source.focus()?.week ?? [])
-            }
-        }
-    }
-
-    private func placeholder(_ words: String, action: (String, () -> Void)?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Focus")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(palette.ink(0.55))
-            Text(words)
-                .font(.system(size: 12))
-                .foregroundStyle(palette.ink(0.7))
-                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            if let action {
-                Button(action.0, action: action.1)
-                    .buttonStyle(TrayButtonStyle())
-                    .font(.system(size: 12, weight: .medium))
-            }
-        }
-    }
-}
-
-/// A rounded tile on the shelf, the island's own card.
-private struct TodayCard<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-
-    @Environment(\.trayPalette) private var palette
-
-    var body: some View {
-        content()
-            .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(palette.controlFill(selected: false), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-}
-
-/// How far through the working day it is: a slim bar, and the words for it.
-struct DayBar: View {
-    let workday: Workday
-    let now: Date
-
-    @Environment(\.trayPalette) private var palette
-
-    var body: some View {
-        let progress = workday.progress(at: now)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Today")
-                    .foregroundStyle(palette.ink(0.55))
-                Spacer()
-                Text(words(progress))
-                    .foregroundStyle(palette.ink(0.7))
-                    .monospacedDigit()
-            }
-            .font(.system(size: 11, weight: .medium))
-
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(palette.controlFill(selected: true))
-                    Capsule()
-                        .fill(Color.green.opacity(0.85))
-                        .frame(width: proxy.size.width * fraction(progress))
+            HStack(alignment: .bottom) {
+                footer(face)
+                Spacer(minLength: 16)
+                if let hint = face.hint {
+                    Text(hint)
+                        .font(CueType.label(11))
+                        .foregroundStyle(palette.ink(isHovering ? 0.6 : 0.35))
+                        .animation(.easeOut(duration: 0.15), value: isHovering)
                 }
             }
-            .frame(height: 5)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Today, \(words(progress))")
+        .padding(.horizontal, 6)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
     }
 
-    private func fraction(_ progress: Workday.Progress) -> Double {
-        switch progress {
-        case .before: 0
-        case .during(let fraction, _): fraction
-        case .after: 1
+    @ViewBuilder
+    private func footer(_ face: TodayFace) -> some View {
+        switch face.footer {
+        case .rounds(let dots):
+            HStack(spacing: 6) {
+                ForEach(dots.indices, id: \.self) { index in
+                    Circle()
+                        .fill(dotColour(dots[index]))
+                        .frame(width: 7, height: 7)
+                }
+            }
+            .accessibilityHidden(true)
+        case .week(let minutes):
+            WeekBars(minutes: minutes)
+        case .none:
+            EmptyView()
         }
     }
 
-    private func words(_ progress: Workday.Progress) -> String {
-        switch progress {
-        case .before(let starts): "Starts at \(Workday.time(starts))"
-        case .during(let fraction, let ends): "\(Int((fraction * 100).rounded(.down)))% of your day · ends \(Workday.time(ends))"
-        case .after: "Your day is done"
+    private func perform(_ action: TodayFace.Action?) {
+        switch action {
+        case .command(let command, _): source.focusCommand(command)
+        case .start: source.startFocus()
+        case .openMia: source.openMia()
+        case nil: break
+        }
+    }
+
+    private func colour(_ tone: TodayFace.Tone) -> Color {
+        switch tone {
+        case .focus: .orange
+        case .rest: .green
+        case .plain: palette.ink(0.88)
+        case .dim: palette.ink(0.4)
+        }
+    }
+
+    private func dotColour(_ dot: TodayFace.Dot) -> Color {
+        switch dot {
+        case .done: .orange
+        case .current: .orange.opacity(0.5)
+        case .rest: .green
+        case .ahead: palette.ink(0.2)
+        }
+    }
+}
+
+/// What the page says at one moment: the numbers, their words and tones, and what a click and a hold do.
+///
+/// Worked out here, away from the view, so every state can be tested without drawing anything.
+struct TodayFace: Equatable {
+    enum Tone: Equatable { case focus, rest, plain, dim }
+    enum Dot: Equatable { case done, current, rest, ahead }
+    enum Footer: Equatable { case rounds([Dot]), week([Int]), none }
+
+    enum Action: Equatable {
+        case command(MiaFocusLink.Command, title: String)
+        case start
+        case openMia
+
+        var title: String {
+            switch self {
+            case .command(_, let title): title
+            case .start: "Start focus"
+            case .openMia: "Open Mia"
+            }
+        }
+    }
+
+    var big: String
+    var bigTone: Tone
+    var caption: String
+    var side: String
+    var sideTone: Tone
+    var sideCaption: String
+    var footer: Footer
+    var hint: String?
+    var click: Action?
+    var hold: Action?
+
+    var accessibilityLabel: String {
+        "\(caption), \(big). \(sideCaption), \(side)."
+    }
+
+    init(focus: MiaFocus?, starting: MiaFocusLink.Starting, miaInstalled: Bool, workday: Workday, now: Date,
+         calendar: Calendar = .current) {
+        let day = workday.progress(at: now, calendar: calendar)
+        let today = focus?.today ?? 0
+
+        // The right-hand number: the day.
+        switch day {
+        case .before(let starts):
+            side = Workday.time(starts, calendar: calendar); sideTone = .plain; sideCaption = "your day starts"
+        case .during(let fraction, _):
+            side = "\(Int((fraction * 100).rounded(.down)))%"; sideTone = .rest; sideCaption = "of your day"
+        case .after:
+            side = "Done"; sideTone = .dim; sideCaption = "see you at \(Workday.time(workday.start, calendar: calendar))"
+        }
+
+        footer = .none
+        hint = nil
+        click = nil
+        hold = nil
+
+        guard let focus, focus.enabled else {
+            // No timer to show: Mia isn't answering, is switched off, or isn't here.
+            bigTone = .dim
+            if let focus, !focus.enabled {
+                big = MiaFocus.hours(today); caption = "Mia's focus timer is switched off"
+            } else if !miaInstalled {
+                big = "—"; caption = "The focus timer comes from Mia"
+            } else {
+                switch starting {
+                case .waiting:
+                    big = "…"; caption = "Starting Mia"
+                case .noAnswer:
+                    big = "—"; caption = "Mia didn't answer. It needs its latest build."
+                    hint = "click to open Mia"; click = .openMia
+                case .none:
+                    big = "Focus"; bigTone = .plain; caption = "Mia opens in the background"
+                    hint = "click to start"; click = .start
+                }
+            }
+            return
+        }
+
+        let rounds = Self.dots(focus)
+        switch focus.state {
+        case .running:
+            big = MiaFocus.clock(focus.left(at: now))
+            if focus.phase.isBreak {
+                bigTone = .rest
+                caption = focus.phase.title
+                // On a break the right-hand side turns to what you've done.
+                side = MiaFocus.hours(today); sideTone = .plain; sideCaption = "focused today"
+                hint = "click to skip · hold to stop"
+                click = .command(.skip, title: "Skip the break")
+            } else {
+                bigTone = .focus
+                caption = focus.task ?? "Focus · round \(focus.round) of \(focus.rounds)"
+                hint = "click to pause · hold to stop"
+                click = .command(.pause, title: "Pause")
+            }
+            hold = .command(.stop, title: "Stop")
+            footer = .rounds(rounds)
+        case .paused:
+            big = MiaFocus.clock(focus.left(at: now)); bigTone = .dim
+            caption = "Paused" + (focus.task.map { " · \($0)" } ?? "")
+            hint = "click to resume · hold to stop"
+            click = .command(.resume, title: "Resume")
+            hold = .command(.stop, title: "Stop")
+            footer = .rounds(rounds)
+        case .done:
+            big = "0:00"; bigTone = .dim
+            caption = "\(focus.phase.title) done"
+            hint = focus.phase == .focus ? "click for a break · hold to stop" : "click to focus · hold to stop"
+            click = .command(.next, title: focus.phase == .focus ? "Start the break" : "Start focus")
+            hold = .command(.stop, title: "Stop")
+            footer = .rounds(rounds)
+        case .idle:
+            if case .after = day {
+                // The working day is over: what it came to is the number now.
+                big = MiaFocus.hours(today); bigTone = .plain
+                caption = "focused today"
+                hint = "click to start anyway"
+                footer = .week(focus.week)
+            } else {
+                big = MiaFocus.clock(focus.length * 60); bigTone = .dim
+                caption = focus.task ?? "Ready to focus"
+                hint = "click to start"
+                footer = .rounds(rounds)
+            }
+            click = .start
+        }
+    }
+
+    /// The cycle's rounds: finished ones lit, the one under way half-lit, a break green.
+    static func dots(_ focus: MiaFocus) -> [Dot] {
+        let count = max(1, focus.rounds)
+        let active = focus.isActive || focus.state == .done
+        // During or after a break the round it followed is finished; during a focus round, the ones before it.
+        let finished: Int
+        if !active || focus.phase == .idle {
+            finished = 0
+        } else if focus.phase.isBreak || focus.state == .done {
+            finished = min(count, focus.round)
+        } else {
+            finished = min(count, max(0, focus.round - 1))
+        }
+        return (0..<count).map { index in
+            if index < finished { return .done }
+            if active, index == finished {
+                if focus.phase.isBreak, focus.state != .done { return .rest }
+                if focus.phase == .focus, focus.state != .done { return .current }
+            }
+            return .ahead
         }
     }
 }
@@ -245,12 +306,12 @@ private struct WeekBars: View {
         let today = (Calendar.current.component(.weekday, from: Date()) + 5) % 7
         HStack(alignment: .bottom, spacing: 4) {
             ForEach(0..<7, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(index == today ? Color.green.opacity(0.85) : palette.ink(0.25))
-                    .frame(width: 8, height: max(3, 26 * CGFloat(days[index]) / CGFloat(most)))
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(index == today ? Color.green : palette.ink(0.25))
+                    .frame(width: 5, height: max(2, 18 * CGFloat(days[index]) / CGFloat(most)))
             }
         }
-        .frame(height: 26, alignment: .bottom)
+        .frame(height: 18, alignment: .bottom)
         .accessibilityHidden(true)
     }
 }

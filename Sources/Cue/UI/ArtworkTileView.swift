@@ -130,7 +130,7 @@ struct ArtworkTileView: View {
             .strokeBorder(.white.opacity(0.09), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
             .overlay(
                 Text("\(index + 1)")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.22))
             )
     }

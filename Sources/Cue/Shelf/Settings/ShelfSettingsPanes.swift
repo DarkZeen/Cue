@@ -529,7 +529,7 @@ struct AboutPane: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Cue")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(CueType.title(20))
                         Text(Self.versionString)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)

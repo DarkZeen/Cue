@@ -125,3 +125,70 @@ struct MiaFocusStartTests {
         #expect(sent() == [.pause])
     }
 }
+
+/// The Numerals page: what it says and what a click and a hold do, in every state.
+struct TodayFaceTests {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    private func at(_ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: hour, minute: minute))!
+    }
+
+    private func face(_ focus: MiaFocus?, at date: Date, starting: MiaFocusLink.Starting = .none,
+                      installed: Bool = true) -> TodayFace {
+        TodayFace(focus: focus, starting: starting, miaInstalled: installed, workday: .standard, now: date,
+                  calendar: calendar)
+    }
+
+    @Test func focusingCountsDownInAmberWithTheDayBeside() {
+        let now = at(13, 30)
+        let face = face(MiaFocus(phase: .focus, state: .running(endsAt: now.addingTimeInterval(924)), length: 25,
+                                 round: 2, task: "Write the README"), at: now)
+        #expect(face.big == "15:24")
+        #expect(face.bigTone == .focus)
+        #expect(face.caption == "Write the README")
+        #expect(face.side == "50%")
+        #expect(face.click == .command(.pause, title: "Pause"))
+        #expect(face.hold == .command(.stop, title: "Stop"))
+        #expect(face.footer == .rounds([.done, .current, .ahead, .ahead]))
+    }
+
+    @Test func aBreakTurnsTheSideToWhatYouveDone() {
+        let now = at(15)
+        let face = face(MiaFocus(phase: .shortBreak, state: .running(endsAt: now.addingTimeInterval(252)), length: 5,
+                                 round: 2, today: 130), at: now)
+        #expect(face.bigTone == .rest)
+        #expect(face.side == "2h 10m")
+        #expect(face.sideCaption == "focused today")
+        #expect(face.click == .command(.skip, title: "Skip the break"))
+        #expect(face.footer == .rounds([.done, .done, .rest, .ahead]))
+    }
+
+    @Test func readyShowsThePeriodDimmedAndStarts() {
+        let face = face(MiaFocus(phase: .idle, state: .idle, length: 25), at: at(10))
+        #expect(face.big == "25:00")
+        #expect(face.bigTone == .dim)
+        #expect(face.click == .start)
+        #expect(face.hold == nil)
+    }
+
+    @Test func afterHoursTheTotalIsTheNumber() {
+        let face = face(MiaFocus(phase: .idle, state: .idle, length: 25, today: 275, week: [1, 2, 3, 275, 0, 0, 0]),
+                        at: at(19))
+        #expect(face.big == "4h 35m")
+        #expect(face.side == "Done")
+        #expect(face.footer == .week([1, 2, 3, 275, 0, 0, 0]))
+        #expect(face.click == .start)
+    }
+
+    @Test func withoutMiasStateAClickStartsIt() {
+        #expect(face(nil, at: at(10)).click == .start)
+        #expect(face(nil, at: at(10), starting: .waiting).click == nil)
+        #expect(face(nil, at: at(10), starting: .noAnswer).click == .openMia)
+        #expect(face(nil, at: at(10), installed: false).click == nil)
+    }
+}

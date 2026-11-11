@@ -72,7 +72,7 @@ struct SearchBarView: View {
         .frame(height: CueLayout.searchHeight)
         .background(
             RoundedRectangle(cornerRadius: CueLayout.searchCornerRadius)
-                .fill(.quaternary.opacity(0.4))
+                .fill(MiaLook.card)
         )
         .animation(.easeOut(duration: 0.12), value: isSearching)
         .animation(.easeOut(duration: 0.12), value: text.isEmpty)

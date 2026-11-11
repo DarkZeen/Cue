@@ -32,8 +32,7 @@ struct FocusWings<Centre: View>: View {
                     .overlay { centre() }
 
                 Text(MiaFocus.clock(focus.left(at: context.date)))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .font(CueType.numerals(13, weight: .regular))
                     .foregroundStyle(FocusRing.colour(focus).opacity(focus.isPaused ? 0.55 : 1))
                     .fixedSize()
                     .frame(width: artSize, height: cutout.height)
