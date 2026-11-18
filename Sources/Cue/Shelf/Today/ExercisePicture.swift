@@ -7,7 +7,7 @@ struct ExercisePicture: View {
 
     @State private var frames: Frames?
 
-    struct Frames: Equatable {
+    nonisolated struct Frames: Equatable, Sendable {
         var images: [CGImage]
         var delays: [Double]
         var total: Double { delays.reduce(0, +) }
@@ -36,7 +36,7 @@ struct ExercisePicture: View {
     }
 
     /// Up to 300 frames at 240 px; nil when the file can't be read.
-    static func load(_ url: URL?) async -> Frames? {
+    nonisolated static func load(_ url: URL?) async -> Frames? {
         guard let url else { return nil }
         return await Task.detached(priority: .utility) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }

@@ -197,6 +197,7 @@ struct TodayFaceTests {
         #expect(face.caption == "Push-ups · 20 reps · 1 of 2")
         #expect(face.controls.first == .command(.next, title: "Done"))
         #expect(face.controls.contains(.command(.stop, title: "Stop")))
+        #expect(face.click == .command(.pause, title: "Pause"))      // a click pauses, as in any break
     }
 
     @Test func aFinishedRoutineSaysSo() {
@@ -214,6 +215,8 @@ struct TodayFaceTests {
         #expect(face.controls == [.command(.next, title: "Done"), .command(.resume, title: "Resume"),
                                   .command(.stop, title: "Stop")])
         #expect(face.bigTone == .dim)
+        #expect(face.click == .command(.resume, title: "Resume"))
+        #expect(face.caption == "Paused · Plank · 60 s · 2 of 2")
     }
 
     @Test func readyShowsThePeriodDimmedAndStarts() {

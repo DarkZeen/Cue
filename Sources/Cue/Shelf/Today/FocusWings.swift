@@ -64,7 +64,7 @@ struct FocusWings<Centre: View>: View {
     }
 
     private var toolTip: String {
-        let what = (focus.phase.isBreak ? focus.exercise.map { "\($0.name) · \($0.amount)" } : nil)
+        let what = (focus.phase.isBreak ? focus.exercise.flatMap { $0.done ? nil : "\($0.name) · \($0.amount)" } : nil)
             ?? focus.task.map { "\(focus.phase.title) — \($0)" } ?? focus.phase.title
         return focus.isPaused ? "\(what) (paused). Click to resume." : "\(what). Click to pause."
     }

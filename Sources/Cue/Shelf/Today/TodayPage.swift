@@ -279,12 +279,12 @@ struct TodayFace: Equatable {
             controls = [.start]
         }
 
-        // A break with a routine: the exercise, Done to move on.
+        // A break with a routine: the exercise, Done to move on (a click still pauses or resumes, as always).
         if focus.isActive, focus.phase.isBreak, let item = focus.exercise {
             exercise = item
-            caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
+            let what = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
+            caption = (focus.isPaused ? "Paused · " : "") + what
             let done = TodayFace.Action.command(.next, title: "Done")
-            click = done
             controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
                         .command(.stop, title: "Stop")]
         }
