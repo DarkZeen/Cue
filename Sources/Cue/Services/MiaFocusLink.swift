@@ -42,6 +42,33 @@ nonisolated struct MiaFocus: Equatable, Sendable {
     var today: Int
     var week: [Int]
 
+    /// The exercise of Mia's break routine while a break with one is on.
+    struct Exercise: Equatable, Sendable {
+        var name: String
+        var amount: String
+        var step: Int
+        var steps: Int
+        var done: Bool
+        /// Mia's copy of the picture on this Mac (GIF, APNG, PNG, JPEG); nil until Mia has it.
+        var picture: URL?
+
+        init(name: String, amount: String, step: Int, steps: Int, done: Bool, picture: URL?) {
+            self.name = name; self.amount = amount; self.step = step; self.steps = steps; self.done = done; self.picture = picture
+        }
+
+        init?(_ value: Any?) {
+            guard let value = value as? [String: Any] else { return nil }
+            name = value["name"] as? String ?? ""
+            amount = value["amount"] as? String ?? ""
+            step = value["step"] as? Int ?? 1
+            steps = value["steps"] as? Int ?? 1
+            done = value["done"] as? Bool ?? false
+            picture = (value["picture"] as? String).map { URL(fileURLWithPath: $0) }
+        }
+    }
+
+    var exercise: Exercise?
+
     /// A running or paused period: something the notch and the shelf show.
     var isActive: Bool {
         guard enabled else { return false }
@@ -111,10 +138,11 @@ nonisolated struct MiaFocus: Equatable, Sendable {
         task = payload["task"] as? String
         today = payload["today"] as? Int ?? 0
         week = payload["week"] as? [Int] ?? []
+        exercise = Exercise(payload["exercise"])
     }
 
     init(enabled: Bool = true, phase: Phase, state: State, length: Int, round: Int = 1, rounds: Int = 4,
-         task: String? = nil, today: Int = 0, week: [Int] = []) {
+         task: String? = nil, today: Int = 0, week: [Int] = [], exercise: Exercise? = nil) {
         self.enabled = enabled
         self.phase = phase
         self.state = state
@@ -124,6 +152,7 @@ nonisolated struct MiaFocus: Equatable, Sendable {
         self.task = task
         self.today = today
         self.week = week
+        self.exercise = exercise
     }
 }
 

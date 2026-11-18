@@ -21,7 +21,15 @@ struct FocusWings<Centre: View>: View {
 
         TimelineView(.periodic(from: .now, by: 1)) { context in
             HStack(spacing: 0) {
-                FocusRing(focus: focus, now: context.date, diameter: artSize * 0.86)
+                Group {
+                    if focus.phase.isBreak, let exercise = focus.exercise, !exercise.done {
+                        ExercisePicture(url: exercise.picture)
+                            .frame(width: artSize * 0.86, height: artSize * 0.86)
+                            .clipShape(.circle)
+                    } else {
+                        FocusRing(focus: focus, now: context.date, diameter: artSize * 0.86)
+                    }
+                }
                     .frame(width: artSize, height: cutout.height)
                     .padding(.horizontal, padding)
                     .overlay { PillClickTarget(onSingle: nil, onDouble: {}, toolTip: toolTip) }
@@ -56,7 +64,8 @@ struct FocusWings<Centre: View>: View {
     }
 
     private var toolTip: String {
-        let what = focus.task.map { "\(focus.phase.title) — \($0)" } ?? focus.phase.title
+        let what = (focus.phase.isBreak ? focus.exercise.map { "\($0.name) · \($0.amount)" } : nil)
+            ?? focus.task.map { "\(focus.phase.title) — \($0)" } ?? focus.phase.title
         return focus.isPaused ? "\(what) (paused). Click to resume." : "\(what). Click to pause."
     }
 

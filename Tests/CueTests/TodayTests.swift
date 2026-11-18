@@ -41,6 +41,26 @@ struct MiaFocusTests {
         #expect(!focus.isActive)
     }
 
+    @Test func aBreakCarriesItsExercise() throws {
+        let focus = try #require(MiaFocus(payload: [
+            "v": 1, "phase": "shortBreak", "state": "running", "endsAt": now.addingTimeInterval(600).timeIntervalSince1970,
+            "length": 15,
+            "exercise": ["name": "Push-ups", "amount": "20 reps", "step": 1, "steps": 2, "done": false,
+                         "picture": "/tmp/files/ab/abc"] as [String: Any],
+        ]))
+        #expect(focus.exercise == MiaFocus.Exercise(name: "Push-ups", amount: "20 reps", step: 1, steps: 2, done: false,
+                                                    picture: URL(fileURLWithPath: "/tmp/files/ab/abc")))
+    }
+
+    @Test func anExerciseWithoutAPictureStillShows() throws {
+        let focus = try #require(MiaFocus(payload: [
+            "v": 1, "phase": "shortBreak", "state": "paused", "left": 90, "length": 15,
+            "exercise": ["name": "Plank", "amount": "60 s", "step": 2, "steps": 2, "done": false] as [String: Any],
+        ]))
+        #expect(focus.exercise?.picture == nil && focus.exercise?.name == "Plank")
+        #expect(try #require(MiaFocus(payload: ["v": 1, "phase": "focus", "state": "idle"])).exercise == nil)
+    }
+
     @Test func somethingElseIsNotAPayload() {
         #expect(MiaFocus(payload: nil) == nil)
         #expect(MiaFocus(payload: ["v": 2, "phase": "focus", "state": "idle"]) == nil)
@@ -166,6 +186,17 @@ struct TodayFaceTests {
         #expect(face.sideCaption == "focused today")
         #expect(face.controls.contains(.command(.skip, title: "Skip the break")))
         #expect(face.footer == .rounds([.done, .done, .rest, .ahead]))
+    }
+
+    @Test func aBreakWithAnExerciseOffersDone() {
+        let now = at(13, 30)
+        var focus = MiaFocus(phase: .shortBreak, state: .running(endsAt: now.addingTimeInterval(600)), length: 15)
+        focus.exercise = MiaFocus.Exercise(name: "Push-ups", amount: "20 reps", step: 1, steps: 2, done: false, picture: nil)
+        let face = face(focus, at: now)
+        #expect(face.exercise?.name == "Push-ups")
+        #expect(face.caption == "Push-ups · 20 reps · 1 of 2")
+        #expect(face.controls.first == .command(.next, title: "Done"))
+        #expect(face.controls.contains(.command(.stop, title: "Stop")))
     }
 
     @Test func readyShowsThePeriodDimmedAndStarts() {

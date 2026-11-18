@@ -34,29 +34,37 @@ struct TodayPage: View {
 
     private func content(_ face: TodayFace) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(face.big)
-                        .font(CueType.numerals(36))
-                        .foregroundStyle(colour(face.bigTone))
-                        .contentTransition(.numericText(countsDown: true))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Text(face.caption)
-                        .font(CueType.body(11))
-                        .foregroundStyle(palette.ink(0.55))
-                        .lineLimit(1)
+            HStack(alignment: .center, spacing: 12) {
+                if let exercise = face.exercise, !exercise.done {
+                    ExercisePicture(url: exercise.picture)
+                        .frame(width: 56, height: 56)
+                        .clipShape(.rect(cornerRadius: 10))
+                        .accessibilityHidden(true)
                 }
-                Spacer(minLength: 16)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(face.side)
-                        .font(CueType.numerals(19))
-                        .foregroundStyle(colour(face.sideTone))
-                        .lineLimit(1)
-                    Text(face.sideCaption)
-                        .font(CueType.body(11))
-                        .foregroundStyle(palette.ink(0.55))
-                        .lineLimit(1)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(face.big)
+                            .font(CueType.numerals(36))
+                            .foregroundStyle(colour(face.bigTone))
+                            .contentTransition(.numericText(countsDown: true))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        Text(face.caption)
+                            .font(CueType.body(11))
+                            .foregroundStyle(palette.ink(0.55))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 16)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(face.side)
+                            .font(CueType.numerals(19))
+                            .foregroundStyle(colour(face.sideTone))
+                            .lineLimit(1)
+                        Text(face.sideCaption)
+                            .font(CueType.body(11))
+                            .foregroundStyle(palette.ink(0.55))
+                            .lineLimit(1)
+                    }
                 }
             }
             Spacer(minLength: 6)
@@ -152,13 +160,16 @@ struct TodayFace: Equatable {
             case .command(.pause, _): "pause.fill"
             case .command(.skip, _): "forward.end.fill"
             case .command(.stop, _): "stop.fill"
-            case .command(.start, _), .command(.resume, _), .command(.next, _), .start: "play.fill"
+            case .command(.next, let title): title == "Done" ? "checkmark" : "play.fill"
+            case .command(.start, _), .command(.resume, _), .start: "play.fill"
             case .openMia: "arrow.up.forward.app"
             }
         }
     }
 
     var big: String
+    /// Mia's break exercise, while a break with a routine is on.
+    var exercise: MiaFocus.Exercise?
     var bigTone: Tone
     var caption: String
     var side: String
@@ -190,6 +201,7 @@ struct TodayFace: Equatable {
         }
 
         footer = .none
+        exercise = nil
         click = nil
         controls = []
 
@@ -235,6 +247,14 @@ struct TodayFace: Equatable {
                 .command(.stop, title: "Stop"),
             ]
             footer = .rounds(rounds)
+            if focus.phase.isBreak, let item = focus.exercise {
+                exercise = item
+                caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
+                let done = TodayFace.Action.command(.next, title: "Done")
+                click = done
+                controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
+                            .command(.stop, title: "Stop")]
+            }
         case .paused:
             big = MiaFocus.clock(focus.left(at: now)); bigTone = .dim
             caption = "Paused" + (focus.task.map { " · \($0)" } ?? "")
@@ -245,6 +265,14 @@ struct TodayFace: Equatable {
                 .command(.stop, title: "Stop"),
             ]
             footer = .rounds(rounds)
+            if focus.phase.isBreak, let item = focus.exercise {
+                exercise = item
+                caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
+                let done = TodayFace.Action.command(.next, title: "Done")
+                click = done
+                controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
+                            .command(.stop, title: "Stop")]
+            }
         case .done:
             big = "0:00"; bigTone = .dim
             caption = "\(focus.phase.title) done"
