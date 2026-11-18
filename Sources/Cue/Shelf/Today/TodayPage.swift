@@ -35,7 +35,7 @@ struct TodayPage: View {
     private func content(_ face: TodayFace) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
-                if let exercise = face.exercise, !exercise.done {
+                if let exercise = face.exercise, !exercise.done, exercise.picture != nil {
                     ExercisePicture(url: exercise.picture)
                         .frame(width: 56, height: 56)
                         .clipShape(.rect(cornerRadius: 10))
@@ -247,14 +247,6 @@ struct TodayFace: Equatable {
                 .command(.stop, title: "Stop"),
             ]
             footer = .rounds(rounds)
-            if focus.phase.isBreak, let item = focus.exercise {
-                exercise = item
-                caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
-                let done = TodayFace.Action.command(.next, title: "Done")
-                click = done
-                controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
-                            .command(.stop, title: "Stop")]
-            }
         case .paused:
             big = MiaFocus.clock(focus.left(at: now)); bigTone = .dim
             caption = "Paused" + (focus.task.map { " · \($0)" } ?? "")
@@ -265,14 +257,6 @@ struct TodayFace: Equatable {
                 .command(.stop, title: "Stop"),
             ]
             footer = .rounds(rounds)
-            if focus.phase.isBreak, let item = focus.exercise {
-                exercise = item
-                caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
-                let done = TodayFace.Action.command(.next, title: "Done")
-                click = done
-                controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
-                            .command(.stop, title: "Stop")]
-            }
         case .done:
             big = "0:00"; bigTone = .dim
             caption = "\(focus.phase.title) done"
@@ -293,6 +277,16 @@ struct TodayFace: Equatable {
             }
             click = .start
             controls = [.start]
+        }
+
+        // A break with a routine: the exercise, Done to move on.
+        if focus.isActive, focus.phase.isBreak, let item = focus.exercise {
+            exercise = item
+            caption = item.done ? "Routine done ✓" : "\(item.name) · \(item.amount) · \(item.step) of \(item.steps)"
+            let done = TodayFace.Action.command(.next, title: "Done")
+            click = done
+            controls = [done, focus.isPaused ? .command(.resume, title: "Resume") : .command(.pause, title: "Pause"),
+                        .command(.stop, title: "Stop")]
         }
     }
 

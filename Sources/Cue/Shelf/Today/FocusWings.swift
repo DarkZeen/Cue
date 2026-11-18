@@ -22,7 +22,7 @@ struct FocusWings<Centre: View>: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             HStack(spacing: 0) {
                 Group {
-                    if focus.phase.isBreak, let exercise = focus.exercise, !exercise.done {
+                    if focus.phase.isBreak, let exercise = focus.exercise, !exercise.done, exercise.picture != nil {
                         ExercisePicture(url: exercise.picture)
                             .frame(width: artSize * 0.86, height: artSize * 0.86)
                             .clipShape(.circle)

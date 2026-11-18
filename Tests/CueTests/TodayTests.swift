@@ -199,6 +199,23 @@ struct TodayFaceTests {
         #expect(face.controls.contains(.command(.stop, title: "Stop")))
     }
 
+    @Test func aFinishedRoutineSaysSo() {
+        let now = at(13, 30)
+        var focus = MiaFocus(phase: .shortBreak, state: .running(endsAt: now.addingTimeInterval(600)), length: 15)
+        focus.exercise = MiaFocus.Exercise(name: "Plank", amount: "60 s", step: 2, steps: 2, done: true, picture: nil)
+        #expect(face(focus, at: now).caption == "Routine done ✓")
+    }
+
+    @Test func aPausedBreakWithAnExerciseOffersResume() {
+        let now = at(13, 30)
+        var focus = MiaFocus(phase: .longBreak, state: .paused(left: 300), length: 15)
+        focus.exercise = MiaFocus.Exercise(name: "Plank", amount: "60 s", step: 2, steps: 2, done: false, picture: nil)
+        let face = face(focus, at: now)
+        #expect(face.controls == [.command(.next, title: "Done"), .command(.resume, title: "Resume"),
+                                  .command(.stop, title: "Stop")])
+        #expect(face.bigTone == .dim)
+    }
+
     @Test func readyShowsThePeriodDimmedAndStarts() {
         let face = face(MiaFocus(phase: .idle, state: .idle, length: 25), at: at(10))
         #expect(face.big == "25:00")
