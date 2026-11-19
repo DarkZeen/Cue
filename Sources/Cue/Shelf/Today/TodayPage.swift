@@ -79,12 +79,14 @@ struct TodayPage: View {
                     }
                 }
                 // Level with the dots and the bars beside them, not a row of its own.
-                .padding(.bottom, -8)
+                .padding(.bottom, -4)
                 .padding(.trailing, -6)
             }
         }
         .padding(.horizontal, 6)
         .padding(.top, 2)
+        // Clear of the shelf's rounded bottom corners and its page dots.
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder

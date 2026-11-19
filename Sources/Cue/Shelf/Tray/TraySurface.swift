@@ -14,7 +14,7 @@ import SwiftUI
 /// whole trick — it is what the hardware does where the housing meets the
 /// bezel, and it is why the shape reads as carved out of the display rather
 /// than hung underneath it.
-struct TraySurface: InsettableShape {
+nonisolated struct TraySurface: InsettableShape {
     var cornerRadius: CGFloat
 
     /// How far each side draws in from the top edge. Zero gives a plain
