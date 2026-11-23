@@ -243,3 +243,29 @@ struct TodayFaceTests {
         #expect(face(nil, at: at(10), installed: false).click == nil)
     }
 }
+
+/// The Today page's ordered dither: plain at the top, the period's colour taking over toward the bottom.
+struct OrderedDitherTests {
+    private func share(row: Int, rows: Int) -> Double {
+        let lit = (0..<16).filter { OrderedDither.isLit(column: $0, row: row, rows: rows) }.count
+        return Double(lit) / 16
+    }
+
+    @Test func theTopQuarterStaysPlain() {
+        for row in 0..<10 { #expect(share(row: row, rows: 40) == 0) }
+    }
+
+    @Test func theBottomIsAlmostAllColour() {
+        #expect(share(row: 39, rows: 40) >= 0.75)
+    }
+
+    @Test func theColourGrowsDownTheNumber() {
+        let quarters = [12, 20, 28, 36].map { share(row: $0, rows: 40) }
+        #expect(quarters == quarters.sorted())
+        #expect(quarters.first! < quarters.last!)
+    }
+
+    @Test func noRowsMeansNoColour() {
+        #expect(OrderedDither.tone(row: 0, rows: 0) == 0)
+    }
+}

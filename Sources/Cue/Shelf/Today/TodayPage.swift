@@ -30,6 +30,37 @@ struct TodayPage: View {
                 .accessibilityLabel(face.accessibilityLabel)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background { DotField() }
+    }
+
+    /// The big number in the serif, filled with an ordered dither from the ink down to the period's colour;
+    /// a dim number (paused, waiting) stays flat.
+    @ViewBuilder
+    private func bigNumber(_ face: TodayFace) -> some View {
+        let number = Text(face.big)
+            .font(CueType.numerals(36))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .contentTransition(.numericText(countsDown: true))
+        if let lower = ditherColour(face.bigTone) {
+            number
+                .foregroundStyle(.clear)
+                .overlay {
+                    DitherGradient(top: palette.primaryInk, bottom: lower)
+                        .mask { number }
+                }
+        } else {
+            number.foregroundStyle(colour(face.bigTone))
+        }
+    }
+
+    private func ditherColour(_ tone: TodayFace.Tone) -> Color? {
+        switch tone {
+        case .focus: MiaLook.accent
+        case .rest: .green
+        case .plain: palette.ink(0.45)
+        case .dim: nil
+        }
     }
 
     private func content(_ face: TodayFace) -> some View {
@@ -43,12 +74,7 @@ struct TodayPage: View {
                 }
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(face.big)
-                            .font(CueType.numerals(36))
-                            .foregroundStyle(colour(face.bigTone))
-                            .contentTransition(.numericText(countsDown: true))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                        bigNumber(face)
                         Text(face.caption)
                             .font(CueType.body(11))
                             .foregroundStyle(palette.ink(0.55))
