@@ -30,36 +30,29 @@ struct TodayPage: View {
                 .accessibilityLabel(face.accessibilityLabel)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background { DotField() }
     }
 
-    /// The big number in the serif, filled with an ordered dither from the ink down to the period's colour;
-    /// a dim number (paused, waiting) stays flat.
+    /// The big number: the SmallTV's square pixels when it is a clock, the serif otherwise ("Focus", "—").
     @ViewBuilder
     private func bigNumber(_ face: TodayFace) -> some View {
-        let number = Text(face.big)
-            .font(CueType.numerals(36))
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .contentTransition(.numericText(countsDown: true))
-        if let lower = ditherColour(face.bigTone) {
-            number
-                .foregroundStyle(.clear)
-                .overlay {
-                    DitherGradient(top: palette.primaryInk, bottom: lower)
-                        .mask { number }
-                }
+        if PixelFont.canDraw(face.big) {
+            PixelDigits(text: face.big, lit: colour(face.bigTone), unlit: palette.ink(0.1))
+                .padding(.vertical, 2)
         } else {
-            number.foregroundStyle(colour(face.bigTone))
+            Text(face.big)
+                .font(CueType.numerals(36))
+                .foregroundStyle(colour(face.bigTone))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
     }
 
-    private func ditherColour(_ tone: TodayFace.Tone) -> Color? {
+    /// A period's colour: Mia blue while focusing, green on a break, grey when paused.
+    private func periodColour(_ tone: TodayFace.Tone) -> Color {
         switch tone {
-        case .focus: MiaLook.accent
+        case .focus, .plain: MiaLook.accent
         case .rest: .green
-        case .plain: palette.ink(0.45)
-        case .dim: nil
+        case .dim: palette.ink(0.4)
         }
     }
 
@@ -72,8 +65,14 @@ struct TodayPage: View {
                         .clipShape(.rect(cornerRadius: 10))
                         .accessibilityHidden(true)
                 }
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: face.field == nil ? .firstTextBaseline : .top) {
                     VStack(alignment: .leading, spacing: 2) {
+                        if let label = face.label {
+                            Text(label)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(palette.ink(0.55))
+                                .lineLimit(1)
+                        }
                         bigNumber(face)
                         Text(face.caption)
                             .font(CueType.body(11))
@@ -81,6 +80,15 @@ struct TodayPage: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 16)
+                    if let field = face.field {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            MinuteField(field: field, colour: periodColour(face.fieldTone), spent: palette.ink(0.12))
+                            Text(face.side.hasSuffix("%") ? "\(face.side) \(face.sideCaption)" : "\(face.side) · \(face.sideCaption)")
+                                .font(CueType.body(11))
+                                .foregroundStyle(palette.ink(0.55))
+                                .lineLimit(1)
+                        }
+                    } else {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(face.side)
                             .font(CueType.numerals(19))
@@ -91,11 +99,13 @@ struct TodayPage: View {
                             .foregroundStyle(palette.ink(0.55))
                             .lineLimit(1)
                     }
+                    }
                 }
             }
             Spacer(minLength: 6)
             HStack(alignment: .bottom) {
                 footer(face)
+                    .frame(maxWidth: face.left == nil ? nil : .infinity, alignment: .leading)
                 Spacer(minLength: 16)
                 HStack(spacing: 0) {
                     ForEach(face.controls, id: \.title) { control in
@@ -119,13 +129,31 @@ struct TodayPage: View {
     private func footer(_ face: TodayFace) -> some View {
         switch face.footer {
         case .rounds(let dots):
-            HStack(spacing: 6) {
-                ForEach(dots.indices, id: \.self) { index in
-                    Circle()
-                        .fill(dotColour(dots[index]))
-                        .frame(width: 6, height: 6)
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    ForEach(dots.indices, id: \.self) { index in
+                        if dots[index] == .current {
+                            MarchingSquare(colour: periodColour(face.fieldTone))
+                        } else {
+                            Rectangle()
+                                .fill(dotColour(dots[index]))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+                if let left = face.left {
+                    // The SmallTV's hairline: what is left of the period.
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(palette.ink(0.12))
+                            Rectangle().fill(periodColour(face.fieldTone))
+                                .frame(width: geometry.size.width * left)
+                        }
+                    }
+                    .frame(height: 1.4)
                 }
             }
+            .frame(height: 10)
             .accessibilityHidden(true)
         case .week(let minutes):
             WeekBars(minutes: minutes)
@@ -153,8 +181,8 @@ struct TodayPage: View {
 
     private func dotColour(_ dot: TodayFace.Dot) -> Color {
         switch dot {
-        case .done: .orange
-        case .current: .orange.opacity(0.5)
+        case .done: MiaLook.accent
+        case .current: MiaLook.accent
         case .rest: .green
         case .ahead: palette.ink(0.2)
         }
@@ -195,7 +223,21 @@ struct TodayFace: Equatable {
         }
     }
 
+    /// The SmallTV's pixel field: the period as squares, `gone` of them used (fractional for the one under way).
+    struct Field: Equatable {
+        var count: Int
+        var gone: Double
+    }
+
     var big: String
+    /// The small mono line over the countdown while a period is on: "FOCUS · 2 OF 4".
+    var label: String?
+    /// The period as squares while one is on; the day moves under it.
+    var field: Field?
+    /// The period's colour for the field, the hairline and the round under way.
+    var fieldTone: Tone = .focus
+    /// How much of the period is left, 0 to 1, while one is on.
+    var left: Double?
     /// Mia's break exercise, while a break with a routine is on.
     var exercise: MiaFocus.Exercise?
     var bigTone: Tone
@@ -305,6 +347,18 @@ struct TodayFace: Equatable {
             }
             click = .start
             controls = [.start]
+        }
+
+        // A period on: its label, its squares and the hairline of what's left.
+        if focus.isActive || focus.state == .done {
+            let gone = focus.state == .done ? 1 : focus.progress(at: now)
+            let count = min(25, max(1, focus.length))
+            let what = focus.state == .done ? "\(focus.phase.title.uppercased()) DONE"
+                : "\(focus.phase.title.uppercased()) · \(focus.round) OF \(focus.rounds)"
+            label = (focus.isPaused ? "PAUSED · " : "") + what
+            field = Field(count: count, gone: gone * Double(count))
+            fieldTone = focus.isPaused ? .dim : focus.phase.isBreak ? .rest : .focus
+            left = 1 - gone
         }
 
         // A break with a routine: the exercise, Done to move on (a click still pauses or resumes, as always).

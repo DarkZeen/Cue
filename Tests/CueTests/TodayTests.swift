@@ -244,28 +244,66 @@ struct TodayFaceTests {
     }
 }
 
-/// The Today page's ordered dither: plain at the top, the period's colour taking over toward the bottom.
-struct OrderedDitherTests {
-    private func share(row: Int, rows: Int) -> Double {
-        let lit = (0..<16).filter { OrderedDither.isLit(column: $0, row: row, rows: rows) }.count
-        return Double(lit) / 16
+/// The Today page's pixel look: the SmallTV digits, the minute field, the label and the hairline.
+struct TodayPixelTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func face(_ focus: MiaFocus) -> TodayFace {
+        TodayFace(focus: focus, starting: .none, miaInstalled: true, workday: .standard, now: now)
     }
 
-    @Test func theTopQuarterStaysPlain() {
-        for row in 0..<10 { #expect(share(row: row, rows: 40) == 0) }
+    @Test func clocksDrawInPixelsAndWordsDoNot() {
+        #expect(PixelFont.canDraw("18:42"))
+        #expect(PixelFont.canDraw("1:05:00"))
+        #expect(!PixelFont.canDraw("Focus"))
+        #expect(!PixelFont.canDraw("—"))
+        #expect(!PixelFont.canDraw(""))
+        // Five columns a digit, one for the colon, a gap between each.
+        #expect(PixelFont.columns("18:42") == 5 * 4 + 1 + 4)
     }
 
-    @Test func theBottomIsAlmostAllColour() {
-        #expect(share(row: 39, rows: 40) >= 0.75)
+    @Test func everyGlyphIsSevenRowsOfEvenWidth() {
+        for (_, rows) in PixelFont.glyphs {
+            #expect(rows.count == 7)
+            #expect(Set(rows.map(\.count)).count == 1)
+        }
     }
 
-    @Test func theColourGrowsDownTheNumber() {
-        let quarters = [12, 20, 28, 36].map { share(row: $0, rows: 40) }
-        #expect(quarters == quarters.sorted())
-        #expect(quarters.first! < quarters.last!)
+    @Test func aRunningRoundHasItsLabelSquaresAndHairline() {
+        let focus = MiaFocus(phase: .focus, state: .running(endsAt: now.addingTimeInterval(600)), length: 25,
+                             round: 2, task: "Write the README")
+        let face = face(focus)
+        #expect(face.label == "FOCUS · 2 OF 4")
+        #expect(face.field?.count == 25)
+        #expect(abs((face.field?.gone ?? 0) - 15) < 0.001)
+        #expect(abs((face.left ?? 0) - 0.4) < 0.001)
+        #expect(face.fieldTone == .focus)
     }
 
-    @Test func noRowsMeansNoColour() {
-        #expect(OrderedDither.tone(row: 0, rows: 0) == 0)
+    @Test func aPausedBreakSaysSoAndGoesGrey() {
+        let focus = MiaFocus(phase: .shortBreak, state: .paused(left: 120), length: 5, round: 1)
+        let face = face(focus)
+        #expect(face.label == "PAUSED · BREAK · 1 OF 4")
+        #expect(face.field?.count == 5)
+        #expect(face.fieldTone == .dim)
+    }
+
+    @Test func noPeriodMeansNoField() {
+        let face = face(MiaFocus(phase: .idle, state: .idle, length: 25))
+        #expect(face.label == nil)
+        #expect(face.field == nil)
+        #expect(face.left == nil)
+    }
+
+    @Test func aLongPeriodStillFitsTwentyFiveSquares() {
+        let face = face(MiaFocus(phase: .focus, state: .running(endsAt: now.addingTimeInterval(3000)), length: 60))
+        #expect(face.field?.count == 25)
+    }
+
+    @Test func theEmptyingSquareDithersByLevel() {
+        let lit = { (level: Double) in (0..<64).filter { OrderedDither.isLit(column: $0 % 8, row: $0 / 8, level: level) }.count }
+        #expect(lit(0) == 0)
+        #expect(lit(0.5) == 32)
+        #expect(lit(1) == 64)
     }
 }
