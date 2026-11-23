@@ -157,17 +157,3 @@ struct MarchingSquare: View {
     }
 }
 
-/// The working day as ten squares in a row: the gone ones dark, the rest lit, the one under way dithered.
-struct DayStrip: View {
-    let gone: Double
-    let lit: Color
-    let spent: Color
-    var count = 10
-    var pitch: CGFloat = 6
-    var square: CGFloat = 4
-
-    var body: some View {
-        MinuteField(field: .init(count: count, gone: min(1, max(0, gone)) * Double(count)), colour: lit, spent: spent,
-                    pitch: pitch, square: square, columns: count)
-    }
-}

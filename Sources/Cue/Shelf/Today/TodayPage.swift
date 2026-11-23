@@ -48,9 +48,9 @@ struct TodayPage: View {
         }
     }
 
-    /// The day's number is ink, not a colour: colour belongs to the timer.
+    /// The day's number, small: green while the day runs, ink before it starts, dim once it's over.
     private func sideInk(_ tone: TodayFace.Tone) -> Color {
-        tone == .dim ? palette.ink(0.4) : palette.primaryInk
+        colour(tone)
     }
 
     /// A period's colour: Mia blue while focusing, green on a break, grey when paused.
@@ -96,11 +96,8 @@ struct TodayPage: View {
                         }
                     } else if PixelFont.canDraw(face.side) {
                         VStack(alignment: .trailing, spacing: 4) {
-                            PixelDigits(text: face.side, lit: sideInk(face.sideTone), unlit: palette.ink(0.1),
-                                        cell: 3, pixel: 2.4)
-                            if let gone = face.dayGone {
-                                DayStrip(gone: gone, lit: palette.ink(0.8), spent: palette.ink(0.12))
-                            }
+                            PixelDigits(text: face.side, lit: sideInk(face.sideTone), unlit: palette.ink(0.08),
+                                        cell: 2.4, pixel: 2)
                             Text(face.sideCaption)
                                 .font(CueType.body(11))
                                 .foregroundStyle(palette.ink(0.55))
@@ -240,8 +237,6 @@ struct TodayFace: Equatable {
     var field: Field?
     /// The period's colour for the field, the hairline and the round under way.
     var fieldTone: Tone = .focus
-    /// How much of the working day is gone, 0 to 1, while it runs.
-    var dayGone: Double?
     /// Mia's break exercise, while a break with a routine is on.
     var exercise: MiaFocus.Exercise?
     var bigTone: Tone
@@ -270,7 +265,6 @@ struct TodayFace: Equatable {
             side = Workday.time(starts, calendar: calendar); sideTone = .plain; sideCaption = "your day starts"
         case .during(let fraction, _):
             side = "\(Int((fraction * 100).rounded(.down)))%"; sideTone = .rest; sideCaption = "of your day"
-            dayGone = fraction
         case .after:
             side = "Done"; sideTone = .dim; sideCaption = "see you at \(Workday.time(workday.start, calendar: calendar))"
         }

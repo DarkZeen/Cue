@@ -172,6 +172,7 @@ struct TodayFaceTests {
         #expect(face.bigTone == .focus)
         #expect(face.caption == "Write the README")
         #expect(face.side == "50%")
+        #expect(PixelFont.canDraw(face.side))
         #expect(face.click == .command(.pause, title: "Pause"))
         #expect(face.controls.map(\.symbol) == ["pause.fill", "forward.end.fill", "stop.fill"])
         #expect(face.footer == .rounds([.done, .current, .ahead, .ahead]))
@@ -294,14 +295,14 @@ struct TodayPixelTests {
         #expect(face.field == nil)
     }
 
-    @Test func theDayKnowsHowMuchIsGone() {
+    @Test func theDayIsAPercentageThePixelsCanDraw() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
         let noon = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 13, minute: 30))!
         let face = TodayFace(focus: nil, starting: .none, miaInstalled: true, workday: .standard, now: noon,
                              calendar: calendar)
         #expect(face.side == "50%")
-        #expect(abs((face.dayGone ?? 0) - 0.5) < 0.001)
+        #expect(PixelFont.canDraw(face.side))
     }
 
     @Test func aLongPeriodStillFitsTwentyFiveSquares() {
