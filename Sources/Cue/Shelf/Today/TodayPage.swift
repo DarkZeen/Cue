@@ -36,7 +36,8 @@ struct TodayPage: View {
     @ViewBuilder
     private func bigNumber(_ face: TodayFace) -> some View {
         if PixelFont.canDraw(face.big) {
-            PixelDigits(text: face.big, lit: colour(face.bigTone), unlit: palette.ink(0.1))
+            PixelDigits(text: face.big, lit: face.bigTone == .dim ? palette.ink(0.6) : colour(face.bigTone),
+                        unlit: palette.ink(0.1))
                 .padding(.vertical, 2)
         } else {
             Text(face.big)
@@ -45,6 +46,11 @@ struct TodayPage: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
+    }
+
+    /// The day's number is ink, not a colour: colour belongs to the timer.
+    private func sideInk(_ tone: TodayFace.Tone) -> Color {
+        tone == .dim ? palette.ink(0.4) : palette.primaryInk
     }
 
     /// A period's colour: Mia blue while focusing, green on a break, grey when paused.
@@ -88,6 +94,18 @@ struct TodayPage: View {
                                 .foregroundStyle(palette.ink(0.55))
                                 .lineLimit(1)
                         }
+                    } else if PixelFont.canDraw(face.side) {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            PixelDigits(text: face.side, lit: sideInk(face.sideTone), unlit: palette.ink(0.1),
+                                        cell: 3, pixel: 2.4)
+                            if let gone = face.dayGone {
+                                DayStrip(gone: gone, lit: palette.ink(0.8), spent: palette.ink(0.12))
+                            }
+                            Text(face.sideCaption)
+                                .font(CueType.body(11))
+                                .foregroundStyle(palette.ink(0.55))
+                                .lineLimit(1)
+                        }
                     } else {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(face.side)
@@ -105,7 +123,6 @@ struct TodayPage: View {
             Spacer(minLength: 6)
             HStack(alignment: .bottom) {
                 footer(face)
-                    .frame(maxWidth: face.left == nil ? nil : .infinity, alignment: .leading)
                 Spacer(minLength: 16)
                 HStack(spacing: 0) {
                     ForEach(face.controls, id: \.title) { control in
@@ -129,28 +146,15 @@ struct TodayPage: View {
     private func footer(_ face: TodayFace) -> some View {
         switch face.footer {
         case .rounds(let dots):
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    ForEach(dots.indices, id: \.self) { index in
-                        if dots[index] == .current {
-                            MarchingSquare(colour: periodColour(face.fieldTone))
-                        } else {
-                            Rectangle()
-                                .fill(dotColour(dots[index]))
-                                .frame(width: 6, height: 6)
-                        }
+            HStack(spacing: 6) {
+                ForEach(dots.indices, id: \.self) { index in
+                    if dots[index] == .current {
+                        MarchingSquare(colour: periodColour(face.fieldTone))
+                    } else {
+                        Rectangle()
+                            .fill(dotColour(dots[index]))
+                            .frame(width: 6, height: 6)
                     }
-                }
-                if let left = face.left {
-                    // The SmallTV's hairline: what is left of the period.
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(palette.ink(0.12))
-                            Rectangle().fill(periodColour(face.fieldTone))
-                                .frame(width: geometry.size.width * left)
-                        }
-                    }
-                    .frame(height: 1.4)
                 }
             }
             .frame(height: 10)
@@ -236,8 +240,8 @@ struct TodayFace: Equatable {
     var field: Field?
     /// The period's colour for the field, the hairline and the round under way.
     var fieldTone: Tone = .focus
-    /// How much of the period is left, 0 to 1, while one is on.
-    var left: Double?
+    /// How much of the working day is gone, 0 to 1, while it runs.
+    var dayGone: Double?
     /// Mia's break exercise, while a break with a routine is on.
     var exercise: MiaFocus.Exercise?
     var bigTone: Tone
@@ -266,6 +270,7 @@ struct TodayFace: Equatable {
             side = Workday.time(starts, calendar: calendar); sideTone = .plain; sideCaption = "your day starts"
         case .during(let fraction, _):
             side = "\(Int((fraction * 100).rounded(.down)))%"; sideTone = .rest; sideCaption = "of your day"
+            dayGone = fraction
         case .after:
             side = "Done"; sideTone = .dim; sideCaption = "see you at \(Workday.time(workday.start, calendar: calendar))"
         }
@@ -358,7 +363,6 @@ struct TodayFace: Equatable {
             label = (focus.isPaused ? "PAUSED · " : "") + what
             field = Field(count: count, gone: gone * Double(count))
             fieldTone = focus.isPaused ? .dim : focus.phase.isBreak ? .rest : .focus
-            left = 1 - gone
         }
 
         // A break with a routine: the exercise, Done to move on (a click still pauses or resumes, as always).

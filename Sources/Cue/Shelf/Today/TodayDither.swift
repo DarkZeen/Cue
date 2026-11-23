@@ -3,7 +3,7 @@ import SwiftUI
 // The Today page's pixel look, as chosen in the Cue dither league (2026-11-23): the SmallTV's square-pixel
 // countdown, its minute field on the right, and a marching checker round for "now".
 
-/// 5×7 pixel glyphs for the countdown: the digits and the colon, as on the SmallTV.
+/// 5×7 pixel glyphs for the countdown and the day: the digits, the colon and %, as on the SmallTV.
 enum PixelFont {
     static let glyphs: [Character: [String]] = [
         "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
@@ -17,6 +17,7 @@ enum PixelFont {
         "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
         "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
         ":": ["0", "0", "1", "0", "1", "0", "0"],
+        "%": ["11001", "11010", "00010", "00100", "01000", "01011", "10011"],
     ]
 
     /// Whether every character has a glyph, so the text can be drawn in pixels.
@@ -90,16 +91,15 @@ struct MinuteField: View {
     let spent: Color
     var pitch: CGFloat = 9
     var square: CGFloat = 7
-
-    static let columns = 5
+    var columns = 5
 
     var body: some View {
-        let rows = (field.count + Self.columns - 1) / Self.columns
+        let rows = (field.count + columns - 1) / columns
         Canvas { context, _ in
             let done = Int(field.gone.rounded(.down))
             var dark = Path(), lit = Path(), speck = Path()
             for index in 0..<field.count {
-                let origin = CGPoint(x: CGFloat(index % Self.columns) * pitch, y: CGFloat(index / Self.columns) * pitch)
+                let origin = CGPoint(x: CGFloat(index % columns) * pitch, y: CGFloat(index / columns) * pitch)
                 let rect = CGRect(origin: origin, size: CGSize(width: square, height: square))
                 if index < done {
                     dark.addRect(rect)
@@ -120,7 +120,7 @@ struct MinuteField: View {
             context.fill(lit, with: .color(colour))
             context.fill(speck, with: .color(colour))
         }
-        .frame(width: CGFloat(Self.columns - 1) * pitch + square,
+        .frame(width: CGFloat(columns - 1) * pitch + square,
                height: CGFloat(max(0, rows - 1)) * pitch + square)
         .accessibilityHidden(true)
     }
@@ -154,5 +154,20 @@ struct MarchingSquare: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+}
+
+/// The working day as ten squares in a row: the gone ones dark, the rest lit, the one under way dithered.
+struct DayStrip: View {
+    let gone: Double
+    let lit: Color
+    let spent: Color
+    var count = 10
+    var pitch: CGFloat = 6
+    var square: CGFloat = 4
+
+    var body: some View {
+        MinuteField(field: .init(count: count, gone: min(1, max(0, gone)) * Double(count)), colour: lit, spent: spent,
+                    pitch: pitch, square: square, columns: count)
     }
 }

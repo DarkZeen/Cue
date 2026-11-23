@@ -258,6 +258,7 @@ struct TodayPixelTests {
         #expect(!PixelFont.canDraw("Focus"))
         #expect(!PixelFont.canDraw("—"))
         #expect(!PixelFont.canDraw(""))
+        #expect(PixelFont.canDraw("94%"))
         // Five columns a digit, one for the colon, a gap between each.
         #expect(PixelFont.columns("18:42") == 5 * 4 + 1 + 4)
     }
@@ -276,7 +277,6 @@ struct TodayPixelTests {
         #expect(face.label == "FOCUS · 2 OF 4")
         #expect(face.field?.count == 25)
         #expect(abs((face.field?.gone ?? 0) - 15) < 0.001)
-        #expect(abs((face.left ?? 0) - 0.4) < 0.001)
         #expect(face.fieldTone == .focus)
     }
 
@@ -292,7 +292,16 @@ struct TodayPixelTests {
         let face = face(MiaFocus(phase: .idle, state: .idle, length: 25))
         #expect(face.label == nil)
         #expect(face.field == nil)
-        #expect(face.left == nil)
+    }
+
+    @Test func theDayKnowsHowMuchIsGone() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let noon = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 13, minute: 30))!
+        let face = TodayFace(focus: nil, starting: .none, miaInstalled: true, workday: .standard, now: noon,
+                             calendar: calendar)
+        #expect(face.side == "50%")
+        #expect(abs((face.dayGone ?? 0) - 0.5) < 0.001)
     }
 
     @Test func aLongPeriodStillFitsTwentyFiveSquares() {
