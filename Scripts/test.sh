@@ -20,13 +20,15 @@ RUNNER=".build/testrunner/run-tests"
 
 [[ $# -eq 0 ]] || { echo "error: unknown option '$1'" >&2; exit 2; }
 
-echo "▸ Building tests"
-swift build --build-tests
+# The hand-rolled runner is for the Command Line Tools alone. With Xcode
+# selected, `swift test` works and the older Testing here would not match it.
+if [[ "$(xcode-select -p)" == *CommandLineTools* && -d "$FRAMEWORKS/Testing.framework" ]]; then
+    echo "▸ Building tests"
+    swift build --build-tests
 
-BUNDLE="$(swift build --show-bin-path)/CuePackageTests.xctest/Contents/MacOS/CuePackageTests"
-[[ -f "$BUNDLE" ]] || { echo "error: no test bundle at $BUNDLE" >&2; exit 1; }
+    BUNDLE="$(swift build --show-bin-path)/CuePackageTests.xctest/Contents/MacOS/CuePackageTests"
+    [[ -f "$BUNDLE" ]] || { echo "error: no test bundle at $BUNDLE" >&2; exit 1; }
 
-if [[ -d "$FRAMEWORKS/Testing.framework" ]]; then
     if [[ ! -x "$RUNNER" || Scripts/run-tests.swift -nt "$RUNNER" ]]; then
         echo "▸ Building the test runner"
         mkdir -p "$(dirname "$RUNNER")"

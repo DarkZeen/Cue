@@ -6,8 +6,8 @@ import PackageDescription
 // Swift Testing ships inside the Command Line Tools as a *framework*, and on a
 // machine with no Xcode SwiftPM passes its directory as a header search path
 // rather than a framework search path — so `import Testing` cannot be resolved.
-// Adding `-F` fixes it. The path is only added when it actually exists, so a
-// machine with Xcode (and CI) is untouched.
+// Adding `-F` fixes it. The path is only added when the Command Line Tools are
+// in use and it actually exists, so a machine with Xcode (and CI) is untouched.
 let commandLineToolsFrameworks =
     "/Library/Developer/CommandLineTools/Library/Developer/Frameworks"
 
@@ -16,8 +16,21 @@ let commandLineToolsFrameworks =
 let commandLineToolsLibraries =
     "/Library/Developer/CommandLineTools/Library/Developer/usr/lib"
 
-let hasCommandLineToolsFrameworks =
-    FileManager.default.fileExists(atPath: commandLineToolsFrameworks)
+// Only when the Command Line Tools are the *selected* developer directory. A Mac
+// can have both, and with Xcode selected its compiler's `@Test` macro expands
+// against Xcode's own Testing — so pointing it at the older copy in the Command
+// Line Tools breaks every test with a mismatched `__SourceBounds`. Selected
+// means what `xcrun` would use: `DEVELOPER_DIR`, else `xcode-select`'s link,
+// and with neither set the Command Line Tools are all there is.
+let selectedDeveloperDirectory =
+    ProcessInfo.processInfo.environment["DEVELOPER_DIR"]
+    ?? (try? FileManager.default.destinationOfSymbolicLink(atPath: "/var/db/xcode_select_link"))
+
+let selectsCommandLineTools =
+    selectedDeveloperDirectory.map { $0.contains("CommandLineTools") } ?? true
+
+let hasCommandLineToolsFrameworks = selectsCommandLineTools
+    && FileManager.default.fileExists(atPath: commandLineToolsFrameworks)
 
 let testingCompileFlags: [String] =
     hasCommandLineToolsFrameworks ? ["-F", commandLineToolsFrameworks] : []
