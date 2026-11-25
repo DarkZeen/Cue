@@ -17,8 +17,8 @@ final class OtherAudioWatcher {
     private var policy = OtherAudioPolicy()
     private var loop: Task<Void, Never>?
 
-    /// Which apps were sounding at the last reading, so the log can say who
-    /// Cue made way for.
+    /// Which apps last counted as sounding, so the log can say who Cue made
+    /// way for and who it was waiting on.
     private var lastSounding: [String] = []
 
     private let logger = Diagnostics.logger("other-audio")
@@ -62,12 +62,16 @@ final class OtherAudioWatcher {
         // none is taken. The next reading that matters is the one where Cue
         // starts, and that one is taken.
         let sounding = (cuePlaying || policy.isEngaged) ? Self.appsPlayingSound() : []
-        if !sounding.isEmpty { lastSounding = sounding }
 
         let now = ProcessInfo.processInfo.systemUptime
-        switch policy.update(otherAudio: !sounding.isEmpty, cuePlaying: cuePlaying, at: now) {
+        let action = policy.update(sounding: Set(sounding), cuePlaying: cuePlaying, at: now)
+        // Only the apps that count: Haptyk sounds on every reading, and naming
+        // it every time would say nothing about why Cue stopped.
+        if !policy.intruding.isEmpty { lastSounding = policy.intruding.sorted() }
+
+        switch action {
         case .pause:
-            logger.notice("Paused for \(sounding.joined(separator: ", "), privacy: .public).")
+            logger.notice("Paused for \(self.lastSounding.joined(separator: ", "), privacy: .public).")
             player.pause()
         case .resume:
             logger.notice("Resumed: \(self.lastSounding.joined(separator: ", "), privacy: .public) went quiet.")

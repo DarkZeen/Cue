@@ -5,18 +5,34 @@ import Testing
 @Suite("Making way for other audio")
 struct OtherAudioPolicyTests {
     /// One reading of the world: whether another app is sounding, whether Cue
-    /// says it is playing, and when.
+    /// says it is playing, and when. "Another app" is always the same one, a
+    /// video in a browser — the readings with several apps use `Reading`.
     private typealias Tick = (other: Bool, cue: Bool, at: Double)
 
+    /// One reading naming which apps are sounding.
+    private typealias Reading = (sounding: Set<String>, cue: Bool, at: Double)
+
     /// Feeds readings in order and collects every action, with its time.
+    private func run(
+        _ readings: [Reading],
+        policy: inout OtherAudioPolicy
+    ) -> [(OtherAudioPolicy.Action, Double)] {
+        readings.compactMap { reading in
+            policy.update(sounding: reading.sounding, cuePlaying: reading.cue, at: reading.at)
+                .map { ($0, reading.at) }
+        }
+    }
+
+    private func run(_ readings: [Reading]) -> [(OtherAudioPolicy.Action, Double)] {
+        var policy = OtherAudioPolicy()
+        return run(readings, policy: &policy)
+    }
+
     private func run(
         _ ticks: [Tick],
         policy: inout OtherAudioPolicy
     ) -> [(OtherAudioPolicy.Action, Double)] {
-        ticks.compactMap { tick in
-            policy.update(otherAudio: tick.other, cuePlaying: tick.cue, at: tick.at)
-                .map { ($0, tick.at) }
-        }
+        run(ticks.map { (sounding: $0.other ? ["Browser"] : [], cue: $0.cue, at: $0.at) }, policy: &policy)
     }
 
     private func run(_ ticks: [Tick]) -> [(OtherAudioPolicy.Action, Double)] {
@@ -52,6 +68,7 @@ struct OtherAudioPolicyTests {
     @Test("Resumes once the other app has been quiet for two seconds")
     func resumesWhenQuiet() {
         let actions = run([
+            (false, true, -1),   // Cue playing on its own first
             (true, true, 0),
             (true, true, 1.0),   // pause
             (true, false, 1.5),  // Cue confirms it stopped
@@ -82,6 +99,7 @@ struct OtherAudioPolicyTests {
     func manualPlayWhileHeldSticks() {
         var policy = OtherAudioPolicy()
         let held = run([
+            (false, true, -1),   // Cue playing on its own first
             (true, true, 0),
             (true, true, 1),     // pause
             (true, false, 1.5),
@@ -117,6 +135,7 @@ struct OtherAudioPolicyTests {
     @Test("The page reporting late is not mistaken for the user pressing play")
     func reportLagAfterPause() {
         let actions = run([
+            (false, true, -1),   // Cue playing on its own first
             (true, true, 0),
             (true, true, 1),     // pause
             (true, true, 1.5),   // still says playing: the report is a second behind
@@ -132,6 +151,7 @@ struct OtherAudioPolicyTests {
     @Test("A pause that never takes is asked for once, not every half second")
     func pauseThatFailsIsNotRepeated() {
         let actions = run([
+            (false, true, -1),   // Cue playing on its own first
             (true, true, 0),
             (true, true, 1),     // pause
             (true, true, 2),
@@ -145,11 +165,62 @@ struct OtherAudioPolicyTests {
     @Test("Turning the setting off gives back what it took")
     func resetResumesOnlyWhatItPaused() {
         var holding = OtherAudioPolicy()
-        _ = run([(true, true, 0), (true, true, 1), (true, false, 1.5)], policy: &holding)
+        _ = run([(false, true, -1), (true, true, 0), (true, true, 1), (true, false, 1.5)], policy: &holding)
         #expect(holding.reset() == .resume)
 
         var idle = OtherAudioPolicy()
         _ = run([(false, true, 0), (false, false, 1)], policy: &idle)
         #expect(idle.reset() == nil)
+    }
+
+    // Haptyk holds an output stream open all the time, sounding or not, and
+    // Core Audio reports it as playing on every reading. Counted as one "other
+    // app", it made Cue's start an override that never cleared — so Cue made
+    // way for nothing at all.
+
+    @Test("An app that never goes quiet does not stop Cue making way for others")
+    func alwaysSoundingAppIsTolerated() {
+        let actions = run([
+            (["Haptyk"], false, 0),
+            (["Haptyk"], false, 1),
+            (["Haptyk"], true, 2),             // the user picks something in Cue
+            (["Haptyk"], true, 4),
+            (["Haptyk", "Browser"], true, 5),  // a video starts
+            (["Haptyk", "Browser"], true, 6),  // pause
+            (["Haptyk", "Browser"], false, 6.5),
+            (["Haptyk"], false, 8),            // the video ends
+            (["Haptyk"], false, 10),           // resume
+            (["Haptyk"], true, 10.5),
+        ] as [Reading])
+        #expect(actions.map(\.0) == [.pause, .resume])
+        #expect(actions.map(\.1) == [6, 10])
+    }
+
+    @Test("Whatever is sounding when Cue is first seen playing is left alone")
+    func firstReadingWhilePlayingIsABaseline() {
+        let actions = run([
+            (["Haptyk"], true, 0),             // the setting is switched on mid-song
+            (["Haptyk"], true, 2),
+            (["Haptyk"], true, 4),
+            (["Haptyk", "Browser"], true, 5),
+            (["Haptyk", "Browser"], true, 6),  // pause
+        ] as [Reading])
+        #expect(actions.map(\.0) == [.pause])
+        #expect(actions.first?.1 == 6)
+    }
+
+    @Test("An app Cue was chosen over is made way for again once it goes quiet")
+    func toleranceEndsWhenThatAppGoesQuiet() {
+        let actions = run([
+            (["Browser"], false, 0),
+            (["Browser"], true, 1),            // Cue chosen over the video
+            (["Browser"], true, 3),
+            ([], true, 4),                     // the video ends
+            ([], true, 6.5),                   // quiet long enough to forget it
+            (["Browser"], true, 7),            // the next video
+            (["Browser"], true, 8),            // pause
+        ] as [Reading])
+        #expect(actions.map(\.0) == [.pause])
+        #expect(actions.first?.1 == 8)
     }
 }

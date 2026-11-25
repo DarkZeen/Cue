@@ -46,22 +46,49 @@ struct OtherAudioPolicy {
     private var otherSince: TimeInterval?
     private var quietSince: TimeInterval?
     /// `nil` until the first reading, which is a starting point rather than a
-    /// change: Cue already playing when the setting is turned on did not just
-    /// start, and treating it as though it had would mean never making way.
+    /// change: Cue already playing when the setting is turned on was playing
+    /// alongside whatever else was sounding then, so those apps are tolerated.
     private var wasCuePlaying: Bool?
 
-    /// Set when the user chose Cue over whatever else is sounding — by
-    /// starting it while something was playing, or pressing play while Cue was
-    /// holding. Cleared when the other app goes quiet, so the *next* video is
-    /// still made way for.
-    private var isOverridden = false
+    /// The apps Cue was chosen over — sounding when the user started Cue, or
+    /// when they pressed play while Cue was holding — which therefore do not
+    /// count. Each is forgotten once it has been quiet for `resumeAfter`, so
+    /// the *next* video from the same browser is still made way for.
+    ///
+    /// Per app rather than one flag, because some apps never go quiet. Haptyk
+    /// holds an output stream open whether or not it is making a sound, and
+    /// Core Audio reports it as playing on every reading. As a single flag,
+    /// choosing Cue over it was an override nothing could ever clear, and Cue
+    /// stopped making way for anything at all.
+    private var tolerated: Set<String> = []
+
+    /// When each app was last heard, for forgetting the tolerated ones.
+    private var lastHeard: [String: TimeInterval] = [:]
+
+    /// The sounding apps that count, as of the last reading. For the log: who
+    /// Cue made way for, without the apps that were never the reason.
+    private(set) var intruding: Set<String> = []
 
     /// Whether Cue's music is currently stopped, or stopping, on this policy's
     /// account — which is to say whether there is anything to give back.
     var isEngaged: Bool { phase != .idle }
 
-    /// Takes one reading and says what, if anything, to do about it.
-    mutating func update(otherAudio: Bool, cuePlaying: Bool, at now: TimeInterval) -> Action? {
+    /// Takes one reading — which apps other than Cue are sounding — and says
+    /// what, if anything, to do about it.
+    mutating func update(sounding: Set<String>, cuePlaying: Bool, at now: TimeInterval) -> Action? {
+        for app in sounding { lastHeard[app] = now }
+        tolerated = tolerated.filter { app in
+            lastHeard[app].map { now - $0 < resumeAfter } ?? false
+        }
+
+        // Cue starting while something else is already sounding is the user
+        // choosing Cue over it. Pausing it a second later would be arguing.
+        // The first reading counts as a start for the same reason.
+        if phase == .idle, cuePlaying, wasCuePlaying != true { tolerated.formUnion(sounding) }
+
+        intruding = sounding.subtracting(tolerated)
+        let otherAudio = !intruding.isEmpty
+
         if otherAudio {
             quietSince = nil
             if otherSince == nil { otherSince = now }
@@ -72,17 +99,12 @@ struct OtherAudioPolicy {
 
         let otherIsSustained = otherSince.map { now - $0 >= pauseAfter } ?? false
         let otherIsQuiet = quietSince.map { now - $0 >= resumeAfter } ?? false
-        if otherIsQuiet { isOverridden = false }
 
         defer { wasCuePlaying = cuePlaying }
 
         switch phase {
         case .idle:
-            // Cue starting while something else is already sounding is the
-            // user choosing Cue. Pausing it a second later would be arguing.
-            if cuePlaying, wasCuePlaying == false, otherAudio { isOverridden = true }
-
-            guard cuePlaying, otherIsSustained, !isOverridden else { return nil }
+            guard cuePlaying, otherIsSustained else { return nil }
             phase = .pausing(since: now)
             return .pause
 
@@ -97,7 +119,7 @@ struct OtherAudioPolicy {
                 // be a fight with whatever stopped it; give up until the other
                 // app goes quiet and something new starts.
                 phase = .idle
-                isOverridden = true
+                tolerated.formUnion(sounding)
             }
             return nil
 
@@ -106,7 +128,7 @@ struct OtherAudioPolicy {
                 // Started while Cue was holding it: the user wants the music,
                 // other app or not.
                 phase = .idle
-                isOverridden = true
+                tolerated.formUnion(sounding)
                 return nil
             }
             guard otherIsQuiet else { return nil }
